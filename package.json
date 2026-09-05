@@ -1,0 +1,23 @@
+{
+  "name": "igreja",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma open source para gestão de comunidades, com Nuxt, NestJS e PostgreSQL RLS.",
+  "license": "MIT",
+  "packageManager": "pnpm@11.0.8",
+  "engines": {
+    "node": ">=22.19.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @igreja/api --filter @igreja/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:seed": "pnpm --filter @igreja/api db:seed"
+  }
+}

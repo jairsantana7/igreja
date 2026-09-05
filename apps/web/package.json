@@ -1,0 +1,24 @@
+{
+  "name": "@igreja/web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "nuxt dev --dotenv ../../.env --port 3000",
+    "build": "nuxt build --dotenv ../../.env",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run --passWithNoTests",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "nuxt": "4.5.2",
+    "vue": "3.5.42",
+    "vue-router": "5.3.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.0.18",
+    "vue-tsc": "3.3.11"
+  }
+}

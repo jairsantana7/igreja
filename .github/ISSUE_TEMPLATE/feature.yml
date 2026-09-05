@@ -1,0 +1,26 @@
+name: Proposta de funcionalidade
+description: Proponha uma regra de negócio ou capacidade nova.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual problema real precisa ser resolvido?
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Regras e invariantes
+      description: Descreva vocabulário, atores, permissões e situações inválidas.
+    validations:
+      required: true
+  - type: textarea
+    id: tenancy
+    attributes:
+      label: Impacto multi-tenant
+      description: Quais dados pertencem à comunidade e quais são globais?
+    validations:
+      required: true
