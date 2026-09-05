@@ -83,6 +83,26 @@ export class CompleteEventUseCase {
   }
 }
 
+export class UpdateEventCollaboratorsUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string, userIds: string[]) {
+    requirePermission(principal, PERMISSIONS.eventCollaboratorsManage);
+    const event = await this.events.setCollaborators(principal, eventId, [...new Set(userIds)]);
+    if (!event) throw new NotFoundError('Evento não encontrado ou sem acesso para compartilhar.');
+    return event;
+  }
+}
+
+export class ListEventCollaboratorCandidatesUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string) {
+    requirePermission(principal, PERMISSIONS.eventCollaboratorsManage);
+    const users = await this.events.listCollaboratorCandidates(principal, eventId);
+    if (!users) throw new NotFoundError('Evento não encontrado ou sem acesso para compartilhar.');
+    return users;
+  }
+}
+
 export class GetPublicEventUseCase {
   constructor(private readonly events: EventRepository) {}
   async execute(publicId: string) {

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
-import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
+import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
 import { CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
@@ -41,10 +41,13 @@ import { EventOperationsController } from './presentation/http/controllers/event
 import { PostgresSessionRepository } from './infrastructure/repositories/postgres-session.repository';
 import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from './application/use-cases/session.use-cases';
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
+import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
+import { ConversationsController } from './presentation/http/controllers/conversations.controller';
+import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -113,6 +116,11 @@ import { SessionsController } from './presentation/http/controllers/sessions.con
       inject: [PostgresDatabase],
     },
     {
+      provide: TOKENS.conversationRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresConversationRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
       provide: TOKENS.loginUseCase,
       useFactory: (auth: PostgresAuthenticationRepository, passwords: BcryptPasswordHasher, tokens: JoseTokenService, sessions: PostgresSessionRepository) =>
         new LoginUseCase(auth, passwords, tokens, sessions),
@@ -159,6 +167,16 @@ import { SessionsController } from './presentation/http/controllers/sessions.con
       inject: [TOKENS.eventRepository],
     },
     {
+      provide: TOKENS.updateEventCollaboratorsUseCase,
+      useFactory: (events: PostgresEventRepository) => new UpdateEventCollaboratorsUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.listEventCollaboratorCandidatesUseCase,
+      useFactory: (events: PostgresEventRepository) => new ListEventCollaboratorCandidatesUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
       provide: TOKENS.listEventRegistrationsUseCase,
       useFactory: (operations: PostgresEventOperationsRepository) => new ListEventRegistrationsUseCase(operations),
       inject: [TOKENS.eventOperationsRepository],
@@ -197,6 +215,41 @@ import { SessionsController } from './presentation/http/controllers/sessions.con
       provide: TOKENS.createEventTemplateUseCase,
       useFactory: (templates: PostgresEventTemplateRepository) => new CreateEventTemplateUseCase(templates),
       inject: [TOKENS.eventTemplateRepository],
+    },
+    {
+      provide: TOKENS.listConversationChannelsUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new ListConversationChannelsUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.createConversationChannelUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new CreateConversationChannelUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.listConversationsUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new ListConversationsUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.createConversationUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new CreateConversationUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.getConversationMessagesUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new GetConversationMessagesUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.replyConversationUseCase,
+      useFactory: (conversations: PostgresConversationRepository, queue: DisabledJobQueue) => new ReplyConversationUseCase(conversations, queue),
+      inject: [TOKENS.conversationRepository, TOKENS.jobQueue],
+    },
+    {
+      provide: TOKENS.updateConversationStatusUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new UpdateConversationStatusUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
     },
     {
       provide: TOKENS.publicEventUseCase,

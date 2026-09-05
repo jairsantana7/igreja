@@ -14,6 +14,7 @@ export interface DashboardEvent {
   capacity: number | null;
   registrations: number;
   attendance: number;
+  owner: { id: string; name: string };
 }
 
 export interface DashboardView {
@@ -27,6 +28,7 @@ export interface ManagedEventView extends DashboardEvent {
   mediaDisplayMode: EventMediaDisplayMode;
   fields: Array<EventFormField & { id: string }>;
   currentFormVersion: number;
+  collaborators: Array<{ id: string; name: string; email: string }>;
 }
 
 export interface PublicEventView {
@@ -54,6 +56,8 @@ export interface EventRepository {
   cancel(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null>;
   closeRegistrations(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null>;
   complete(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null>;
+  setCollaborators(principal: AuthenticatedPrincipal, eventId: string, userIds: string[]): Promise<ManagedEventView | null>;
+  listCollaboratorCandidates(principal: AuthenticatedPrincipal, eventId: string): Promise<Array<{ id: string; name: string; email: string }> | null>;
   findPublic(publicId: string): Promise<PublicEventView | null>;
 }
 

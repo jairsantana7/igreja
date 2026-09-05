@@ -1,10 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
-import type { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
+import type { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
 import { TOKENS } from '../../../application/ports/tokens';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateEventDto, UpdateEventDto } from '../dto/event.dto';
+import { CreateEventDto, UpdateEventCollaboratorsDto, UpdateEventDto } from '../dto/event.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -20,6 +20,8 @@ export class DashboardController {
     @Inject(TOKENS.cancelEventUseCase) private readonly cancelEvent: CancelEventUseCase,
     @Inject(TOKENS.closeEventRegistrationsUseCase) private readonly closeRegistrations: CloseEventRegistrationsUseCase,
     @Inject(TOKENS.completeEventUseCase) private readonly completeEvent: CompleteEventUseCase,
+    @Inject(TOKENS.updateEventCollaboratorsUseCase) private readonly updateCollaborators: UpdateEventCollaboratorsUseCase,
+    @Inject(TOKENS.listEventCollaboratorCandidatesUseCase) private readonly listCollaboratorCandidates: ListEventCollaboratorCandidatesUseCase,
   ) {}
 
   @Get('dashboard')
@@ -95,5 +97,24 @@ export class DashboardController {
     @Param('eventId', new ParseUUIDPipe()) eventId: string,
   ) {
     return this.completeEvent.execute(principal, eventId);
+  }
+
+  @Put('events/:eventId/collaborators')
+  @RequirePermissions(PERMISSIONS.eventCollaboratorsManage)
+  collaborators(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Body() dto: UpdateEventCollaboratorsDto,
+  ) {
+    return this.updateCollaborators.execute(principal, eventId, dto.userIds);
+  }
+
+  @Get('events/:eventId/collaborator-candidates')
+  @RequirePermissions(PERMISSIONS.eventCollaboratorsManage)
+  collaboratorCandidates(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.listCollaboratorCandidates.execute(principal, eventId);
   }
 }

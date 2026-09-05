@@ -50,7 +50,15 @@ async function seed(): Promise<void> {
     await client.query(`
       INSERT INTO role_permissions (tenant_id, role_id, permission_key)
       SELECT $1, $2, key FROM permissions
-      WHERE key LIKE 'events.%' OR key LIKE 'settings.%'
+      WHERE (
+          key LIKE 'events.%'
+          AND key NOT IN ('events.read_all', 'events.manage_all')
+        )
+        OR key LIKE 'settings.%'
+        OR key IN (
+          'conversations.read', 'conversations.reply', 'conversations.assign',
+          'channels.manage_own'
+        )
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.pastorRole]);
     await client.query(`

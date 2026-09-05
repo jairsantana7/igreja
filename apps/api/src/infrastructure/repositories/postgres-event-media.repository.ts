@@ -13,7 +13,14 @@ export class PostgresEventMediaRepository implements EventMediaRepository {
     media: Array<StoredMedia & { altText: string }>,
   ): Promise<EventMediaView[]> {
     return this.database.withTenant(principal, async (client) => {
-      const event = await client.query('SELECT id FROM events WHERE id = $1 FOR UPDATE', [eventId]);
+      const event = await client.query(`
+        SELECT id FROM events
+        WHERE id = $1 AND ($2::boolean OR created_by_user_id = $3 OR EXISTS (
+          SELECT 1 FROM event_collaborators
+          WHERE event_collaborators.event_id = events.id AND event_collaborators.user_id = $3
+        ))
+        FOR UPDATE
+      `, [eventId, principal.permissions.includes('events.manage_all'), principal.userId]);
       if (!event.rows[0]) throw new NotFoundError('Evento não encontrado nesta comunidade.');
       const position = await client.query<{ next_position: number }>(`
         SELECT COALESCE(max(position) + 1, 0)::integer AS next_position

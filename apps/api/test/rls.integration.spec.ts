@@ -14,6 +14,10 @@ const mediaB = 'b3000000-0000-4000-8000-000000000002';
 const publicEventA = 'a5000000-0000-4000-8000-000000000001';
 const registrationA = 'a6000000-0000-4000-8000-000000000001';
 const registrationB = 'b6000000-0000-4000-8000-000000000002';
+const channelA = 'a7000000-0000-4000-8000-000000000001';
+const channelB = 'b7000000-0000-4000-8000-000000000002';
+const conversationA = 'a8000000-0000-4000-8000-000000000001';
+const conversationB = 'b8000000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -52,12 +56,28 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${registrationA}', '${tenantA}', '${eventA}', '${userA}', 1),
         ('${registrationB}', '${tenantB}', '${eventB}', '${userB}', 1)
       ON CONFLICT DO NOTHING;
+      INSERT INTO conversation_channels (id, tenant_id, owner_user_id, provider_key, display_name, phone_number) VALUES
+        ('${channelA}', '${tenantA}', '${userA}', 'whatsapp_cloud', 'Canal A', '+551100000001'),
+        ('${channelB}', '${tenantB}', '${userB}', 'whatsapp_cloud', 'Canal B', '+551100000002')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO conversations (id, tenant_id, channel_id, event_id, assigned_user_id, contact_name, contact_address) VALUES
+        ('${conversationA}', '${tenantA}', '${channelA}', '${eventA}', '${userA}', 'Contato A', '+551199999001'),
+        ('${conversationB}', '${tenantB}', '${channelB}', '${eventB}', '${userB}', 'Contato B', '+551199999002')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO conversation_messages (tenant_id, conversation_id, direction, body, status) VALUES
+        ('${tenantA}', '${conversationA}', 'inbound', 'Mensagem A', 'received'),
+        ('${tenantB}', '${conversationB}', 'inbound', 'Mensagem B', 'received')
+      ON CONFLICT DO NOTHING;
     `);
   });
 
   afterAll(async () => {
     await admin.query(`
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM conversation_messages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM conversation_channels WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_collaborators WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_check_ins WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_registrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_form_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -127,6 +147,18 @@ describeDatabase('PostgreSQL RLS', () => {
           VALUES ($1, $2, 'a4000000-0000-4000-8000-000000000001.jpg', 'image/jpeg', 1)
         `, [tenantA, eventB])).rejects.toThrow();
       });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO event_collaborators (tenant_id, event_id, user_id, added_by_user_id)
+          VALUES ($1, $2, $3, $4)
+        `, [tenantA, eventA, userB, userA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO conversations (tenant_id, channel_id, event_id, assigned_user_id, contact_name, contact_address)
+          VALUES ($1, $2, $3, $4, 'Contato cruzado', '+551188888888')
+        `, [tenantA, channelB, eventA, userA])).rejects.toThrow();
+      });
     } finally { client.release(); }
   });
 
@@ -168,6 +200,18 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('canais, conversas e mensagens não atravessam comunidades', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id FROM conversation_channels')).rows.map((row) => row.id)).toEqual([channelA]);
+        expect((await client.query('SELECT id FROM conversations')).rows.map((row) => row.id)).toEqual([conversationA]);
+        expect((await client.query('SELECT body FROM conversation_messages')).rows.map((row) => row.body)).toEqual(['Mensagem A']);
+      });
+      expect((await client.query('SELECT id FROM conversations')).rows).toEqual([]);
+    } finally { client.release(); }
+  });
+
   it('auditoria é isolada por tenant e imutável para o runtime', async () => {
     const client = await runtime.connect();
     try {
@@ -205,7 +249,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'event_check_ins', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

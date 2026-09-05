@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateNested } from 'class-validator';
 import { EVENT_MEDIA_DISPLAY_MODES, FORM_FIELD_TYPES, type EventMediaDisplayMode, type FormFieldType } from '../../../domain/entities/event';
 
 export class EventFieldDto {
@@ -64,3 +64,10 @@ export class CreateEventDto extends EventDetailsDto {
 }
 
 export class UpdateEventDto extends EventDetailsDto {}
+
+export class UpdateEventCollaboratorsDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsUUID('4', { each: true })
+  userIds: string[] = [];
+}

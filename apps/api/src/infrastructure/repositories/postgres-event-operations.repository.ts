@@ -9,14 +9,26 @@ import type {
   ManagedRegistrationView,
 } from '../../application/ports/event-operations.port';
 import { PostgresDatabase } from '../database/postgres.database';
+import type { PoolClient } from 'pg';
+
+async function canAccessEvent(client: PoolClient, principal: AuthenticatedPrincipal, eventId: string, manage = false): Promise<boolean> {
+  const globalPermission = manage ? 'events.manage_all' : 'events.read_all';
+  const result = await client.query(`
+    SELECT 1 FROM events
+    WHERE id = $1 AND ($2::boolean OR created_by_user_id = $3 OR EXISTS (
+      SELECT 1 FROM event_collaborators
+      WHERE event_collaborators.event_id = events.id AND event_collaborators.user_id = $3
+    ))
+  `, [eventId, principal.permissions.includes(globalPermission), principal.userId]);
+  return Boolean(result.rowCount);
+}
 
 export class PostgresEventOperationsRepository implements EventOperationsRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
   listRegistrations(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedRegistrationView[] | null> {
     return this.database.withTenant(principal, async (client) => {
-      const event = await client.query('SELECT 1 FROM events WHERE id = $1', [eventId]);
-      if (!event.rowCount) return null;
+      if (!(await canAccessEvent(client, principal, eventId))) return null;
       const result = await client.query<{
         id: string; user_id: string; name: string; email: string; status: 'confirmed' | 'cancelled';
         form_version: number; created_at: Date; checked_in_at: Date | null; checked_in_by: string | null;
@@ -66,6 +78,7 @@ export class PostgresEventOperationsRepository implements EventOperationsReposit
 
   checkIn(principal: AuthenticatedPrincipal, eventId: string, registrationId: string): Promise<CheckInView | null> {
     return this.database.withTenant(principal, async (client) => {
+      if (!(await canAccessEvent(client, principal, eventId, true))) return null;
       const registration = await client.query(`
         SELECT 1 FROM event_registrations
         WHERE id = $1 AND event_id = $2 AND status = 'confirmed'
@@ -88,6 +101,7 @@ export class PostgresEventOperationsRepository implements EventOperationsReposit
 
   undoCheckIn(principal: AuthenticatedPrincipal, eventId: string, registrationId: string): Promise<boolean | null> {
     return this.database.withTenant(principal, async (client) => {
+      if (!(await canAccessEvent(client, principal, eventId, true))) return null;
       const registration = await client.query('SELECT 1 FROM event_registrations WHERE id = $1 AND event_id = $2', [registrationId, eventId]);
       if (!registration.rowCount) return null;
       const result = await client.query('DELETE FROM event_check_ins WHERE registration_id = $1 AND event_id = $2', [registrationId, eventId]);
@@ -101,7 +115,7 @@ export class PostgresEventCommunicationRepository implements EventCommunicationR
 
   list(principal: AuthenticatedPrincipal, eventId: string): Promise<EventCommunicationView[] | null> {
     return this.database.withTenant(principal, async (client) => {
-      if (!(await client.query('SELECT 1 FROM events WHERE id = $1', [eventId])).rowCount) return null;
+      if (!(await canAccessEvent(client, principal, eventId))) return null;
       const result = await client.query('SELECT * FROM event_communications WHERE event_id = $1 ORDER BY created_at DESC', [eventId]);
       return result.rows.map(this.map);
     });
@@ -109,7 +123,7 @@ export class PostgresEventCommunicationRepository implements EventCommunicationR
 
   create(principal: AuthenticatedPrincipal, eventId: string, input: Parameters<EventCommunicationRepository['create']>[2]): Promise<EventCommunicationView | null> {
     return this.database.withTenant(principal, async (client) => {
-      if (!(await client.query('SELECT 1 FROM events WHERE id = $1', [eventId])).rowCount) return null;
+      if (!(await canAccessEvent(client, principal, eventId, true))) return null;
       const result = await client.query(`
         INSERT INTO event_communications (tenant_id, event_id, created_by_user_id, audience, channel, subject, message)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -121,6 +135,7 @@ export class PostgresEventCommunicationRepository implements EventCommunicationR
 
   find(principal: AuthenticatedPrincipal, eventId: string, communicationId: string): Promise<EventCommunicationView | null> {
     return this.database.withTenant(principal, async (client) => {
+      if (!(await canAccessEvent(client, principal, eventId))) return null;
       const result = await client.query('SELECT * FROM event_communications WHERE id = $1 AND event_id = $2', [communicationId, eventId]);
       return result.rows[0] ? this.map(result.rows[0]) : null;
     });
@@ -128,6 +143,7 @@ export class PostgresEventCommunicationRepository implements EventCommunicationR
 
   markQueued(principal: AuthenticatedPrincipal, eventId: string, communicationId: string, jobId: string): Promise<EventCommunicationView | null> {
     return this.database.withTenant(principal, async (client) => {
+      if (!(await canAccessEvent(client, principal, eventId, true))) return null;
       const result = await client.query(`
         UPDATE event_communications SET status = 'queued', queue_job_id = $3, queued_at = now()
         WHERE id = $1 AND event_id = $2 AND status = 'draft'
@@ -164,6 +180,7 @@ export class PostgresEventTemplateRepository implements EventTemplateRepository 
 
   createFromEvent(principal: AuthenticatedPrincipal, eventId: string, name: string): Promise<EventTemplateView | null> {
     return this.database.withTenant(principal, async (client) => {
+      if (!(await canAccessEvent(client, principal, eventId, true))) return null;
       const event = await client.query(`
         SELECT description, location, capacity, media_display_mode,
           COALESCE((
