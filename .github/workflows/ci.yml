@@ -28,11 +28,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
           version: 11.0.8
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22.20.0
           cache: pnpm
@@ -43,7 +43,7 @@ jobs:
           APP_RUNTIME_PASSWORD: runtime-test
           APP_MIGRATOR_PASSWORD: migrator-test
         run: |
-          docker exec -e APP_RUNTIME_PASSWORD -e APP_MIGRATOR_PASSWORD ${{ job.services.postgres.id }} sh /dev/stdin < database/bootstrap/00-roles.sh
+          docker exec -i -e APP_RUNTIME_PASSWORD -e APP_MIGRATOR_PASSWORD ${{ job.services.postgres.id }} sh /dev/stdin < database/bootstrap/00-roles.sh
           docker cp database/migrations/. ${{ job.services.postgres.id }}:/migrations
           docker exec ${{ job.services.postgres.id }} sh -c "psql -v ON_ERROR_STOP=1 -1 -U postgres -d igreja -f /migrations/001_initial.sql"
       - run: pnpm typecheck
