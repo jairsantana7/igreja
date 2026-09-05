@@ -48,11 +48,14 @@ pnpm db:down    # encerra containers
 - criação de evento e formulário dinâmico;
 - página pública para inscrição do membro;
 - conta local de membro e base extensível para login social;
+- configurações desacopladas para login social, PIX e gateways de pagamento;
 - isolamento de todas as comunidades pelo PostgreSQL RLS.
 
 ## Projeto
 
 - [Arquitetura](docs/architecture.md)
+- [Regras de negócio](docs/business-rules.md)
+- [Como implementar integrações](docs/integrations.md)
 - [Regras de RLS](docs/rls-table-classification.md)
 - [Proxy, IP real e rate limit](docs/reverse-proxy-security.md)
 - [Política de segurança](SECURITY.md)

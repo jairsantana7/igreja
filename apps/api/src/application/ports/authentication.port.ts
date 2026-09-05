@@ -34,6 +34,7 @@ export interface ExternalIdentity {
 }
 
 export interface ExternalIdentityProvider {
+  readonly providerKey: string;
   authorizationUrl(state: string, redirectUri: string): Promise<string>;
   exchange(code: string, redirectUri: string): Promise<ExternalIdentity>;
 }

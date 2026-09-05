@@ -32,7 +32,19 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 
 - Provedores sociais são opcionais e configuráveis por implantação.
 - A aplicação só confia em e-mail/subject após validação OIDC no backend.
+- Admin e pastor podem configurar quais provedores sociais a comunidade pretende habilitar.
+- Ativar uma configuração não instala o adaptador: o login somente pode ser oferecido quando a implantação também disponibiliza um adaptador compatível.
+- Client secrets e tokens privados não são armazenados no banco; a configuração guarda somente a referência para uma variável de ambiente ou secret manager.
 - A vinculação automática por e-mail e regras para contas já existentes ainda precisam de decisão; até lá, nenhum adaptador social é habilitado por padrão.
+
+## Pagamentos
+
+- Pagamentos são opcionais e não fazem parte da confirmação gratuita de presença.
+- A comunidade pode configurar PIX manual ou indicar um gateway por uma chave de provedor estável.
+- A chave PIX, o nome do recebedor e a cidade são dados administrativos visíveis somente a usuários autorizados.
+- Credenciais privadas de gateway não são armazenadas no banco; somente sua referência externa é persistida.
+- A configuração não cobra nem confirma pagamentos até existir um adaptador de `PaymentGateway` instalado e uma regra de cobrança vinculada ao evento.
+- Taxas, reembolsos, conciliação, expiração, webhooks e efeitos de falha ainda precisam de definição antes de ativar cobrança real.
 
 ## Questões abertas
 
@@ -42,6 +54,8 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quais regras valem para capacidade, convidados, pagamentos e cancelamento?
 - Quais dados e consentimentos LGPD são obrigatórios por formulário?
 - Como registrar presença real: check-in manual, código individual, QR Code ou outra forma?
+- Como eventos definem preço, gratuidade, lotes e política de reembolso?
+- Quais gateways e provedores OIDC serão mantidos oficialmente pelo projeto?
 
 ## Acesso inicial
 

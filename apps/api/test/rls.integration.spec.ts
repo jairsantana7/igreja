@@ -30,11 +30,16 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${eventA}', '${tenantA}', '${userA}', 'evento-a', 'Evento A', now() + interval '1 day'),
         ('${eventB}', '${tenantB}', '${userB}', 'evento-b', 'Evento B', now() + interval '1 day')
       ON CONFLICT DO NOTHING;
+      INSERT INTO community_integrations (tenant_id, category, provider_key, enabled) VALUES
+        ('${tenantA}', 'identity', 'google', false),
+        ('${tenantB}', 'identity', 'google', false)
+      ON CONFLICT DO NOTHING;
     `);
   });
 
   afterAll(async () => {
     await admin.query(`
+      DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM users WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM tenants WHERE id IN ('${tenantA}', '${tenantB}');
@@ -96,12 +101,18 @@ describeDatabase('PostgreSQL RLS', () => {
       await inTenant(client, tenantA, async () => {
         const own = await client.query('SELECT id FROM users ORDER BY id');
         expect(own.rows.map((row) => row.id)).toEqual([userA]);
+        const integrations = await client.query<{ tenant_id: string }>('SELECT tenant_id FROM community_integrations');
+        expect(integrations.rows.map((row) => row.tenant_id)).toEqual([tenantA]);
         const other = await client.query('SELECT id FROM users WHERE id = $1', [userB]);
         expect(other.rows).toEqual([]);
         await expect(client.query(
           "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Intruso', 'intruso@b.test')",
           [tenantB],
         )).rejects.toThrow();
+        await expect(client.query(`
+          INSERT INTO community_integrations (tenant_id, category, provider_key)
+          VALUES ($1, 'payment', 'cross_tenant')
+        `, [tenantB])).rejects.toThrow();
       });
       await inTenant(client, tenantA, async () => {
         await expect(client.query('UPDATE users SET tenant_id = $1 WHERE id = $2', [tenantB, userA])).rejects.toThrow();
@@ -123,7 +134,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['event_form_fields', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['community_integrations', 'event_form_fields', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

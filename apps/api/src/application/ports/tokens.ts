@@ -3,6 +3,7 @@ export const TOKENS = {
   eventRepository: Symbol('EventRepository'),
   registrationRepository: Symbol('EventRegistrationRepository'),
   accessControlRepository: Symbol('AccessControlRepository'),
+  communitySettingsRepository: Symbol('CommunitySettingsRepository'),
   passwordHasher: Symbol('PasswordHasher'),
   tokenService: Symbol('TokenService'),
   loginUseCase: Symbol('LoginUseCase'),
@@ -17,4 +18,6 @@ export const TOKENS = {
   listMembersUseCase: Symbol('ListMembersUseCase'),
   createRoleUseCase: Symbol('CreateRoleUseCase'),
   createUserUseCase: Symbol('CreateUserUseCase'),
+  getCommunitySettingsUseCase: Symbol('GetCommunitySettingsUseCase'),
+  updateCommunitySettingsUseCase: Symbol('UpdateCommunitySettingsUseCase'),
 } as const;

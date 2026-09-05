@@ -10,6 +10,8 @@ export const PERMISSIONS = {
   usersUpdate: 'users.update',
   rolesRead: 'roles.read',
   rolesManage: 'roles.manage',
+  settingsRead: 'settings.read',
+  settingsManage: 'settings.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

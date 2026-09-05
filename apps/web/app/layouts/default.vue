@@ -2,6 +2,7 @@
 const auth = useAuth();
 const route = useRoute();
 const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
+const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
 
 async function leave() {
   auth.logout();
@@ -25,6 +26,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink v-if="canReadMembers" to="/members" class="nav-link" :class="{ active: route.path === '/members' }">
           <span aria-hidden="true">♙</span> Membros
+        </NuxtLink>
+        <NuxtLink v-if="canReadSettings" to="/settings" class="nav-link" :class="{ active: route.path === '/settings' }">
+          <span aria-hidden="true">⚙</span> Configurações
         </NuxtLink>
       </nav>
       <div class="sidebar__account">

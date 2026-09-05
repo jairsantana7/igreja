@@ -21,10 +21,13 @@ import { AccessControlController } from './presentation/http/controllers/access-
 import { JwtAuthGuard } from './presentation/http/guards/jwt-auth.guard';
 import { PermissionsGuard } from './presentation/http/guards/permissions.guard';
 import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttler.guard';
+import { PostgresCommunitySettingsRepository } from './infrastructure/repositories/postgres-community-settings.repository';
+import { GetCommunitySettingsUseCase, UpdateCommunitySettingsUseCase } from './application/use-cases/community-settings.use-cases';
+import { CommunitySettingsController } from './presentation/http/controllers/community-settings.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, AccessControlController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, AccessControlController, CommunitySettingsController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -50,6 +53,11 @@ import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttl
     {
       provide: TOKENS.accessControlRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAccessControlRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.communitySettingsRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresCommunitySettingsRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -113,6 +121,16 @@ import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttl
       provide: TOKENS.createUserUseCase,
       useFactory: (access: PostgresAccessControlRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(access, passwords),
       inject: [TOKENS.accessControlRepository, TOKENS.passwordHasher],
+    },
+    {
+      provide: TOKENS.getCommunitySettingsUseCase,
+      useFactory: (settings: PostgresCommunitySettingsRepository) => new GetCommunitySettingsUseCase(settings),
+      inject: [TOKENS.communitySettingsRepository],
+    },
+    {
+      provide: TOKENS.updateCommunitySettingsUseCase,
+      useFactory: (settings: PostgresCommunitySettingsRepository) => new UpdateCommunitySettingsUseCase(settings),
+      inject: [TOKENS.communitySettingsRepository],
     },
   ],
 })

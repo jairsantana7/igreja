@@ -51,6 +51,12 @@ Invariantes iniciais:
 
 Autenticação social entra pela porta `ExternalIdentityProvider`. Um adaptador futuro troca o código do provedor por uma identidade verificada e a vincula a `external_accounts`; o domínio não conhece detalhes OAuth/OIDC.
 
+## Bounded context: Configurações da comunidade
+
+Configurações de login social e pagamentos formam um contexto separado de eventos. Os casos de uso dependem de `CommunitySettingsRepository`; PostgreSQL é apenas um adaptador. Provedores externos implementam `ExternalIdentityProvider` ou `PaymentGateway` e são selecionados por uma `providerKey`, mantendo os princípios de responsabilidade única, inversão de dependência e aberto/fechado.
+
+`community_integrations` armazena configuração pública por tenant. Campos privados são referências a secrets externos, nunca o valor da credencial. Salvar a configuração não torna uma integração operacional: a implantação também precisa registrar o adaptador correspondente.
+
 ## Autorização granular
 
 Permissões são chaves globais e imutáveis. Cada comunidade define papéis que agrupam essas chaves, e um usuário pode receber vários papéis. O token carrega um snapshot de papéis e permissões de curta duração; mudanças críticas podem exigir revogação/renovação do token. A camada HTTP bloqueia cedo com `PermissionsGuard`, e casos de uso mantêm as invariantes de autorização relevantes.
