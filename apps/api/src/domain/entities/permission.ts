@@ -10,6 +10,7 @@ export const PERMISSIONS = {
   eventCollaboratorsManage: 'events.collaborators_manage',
   eventsCheckin: 'events.checkin',
   eventsCommunicate: 'events.communicate',
+  eventsRemindersManage: 'events.reminders_manage',
   eventTemplatesManage: 'events.templates_manage',
   usersRead: 'users.read',
   usersCreate: 'users.create',
@@ -30,6 +31,8 @@ export const PERMISSIONS = {
   channelsManageAll: 'channels.manage_all',
   whatsappTemplatesRead: 'whatsapp.templates_read',
   whatsappTemplatesSync: 'whatsapp.templates_sync',
+  communicationTemplatesRead: 'communications.templates_read',
+  communicationTemplatesManage: 'communications.templates_manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

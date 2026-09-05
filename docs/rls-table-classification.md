@@ -23,6 +23,9 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_form_versions` | tenant-direct | fotografia versionada do formulário pertence ao evento | RLS direta + FKs compostas para evento e autor |
 | `event_check_ins` | tenant-direct | presença pertence a uma inscrição e evento da comunidade | RLS direta + FKs compostas para inscrição e operador |
 | `event_communications` | tenant-direct | campanha de comunicação pertence a um evento | RLS direta + FKs compostas para evento e autor |
+| `communication_templates` | tenant-direct | modelo editorial de mensagem pertence à comunidade | RLS direta + FK composta para autor; conteúdo atual é derivado de versão imutável |
+| `communication_template_versions` | tenant-direct | versão imutável pertence ao modelo e à comunidade | RLS direta + FKs compostas para modelo e autor |
+| `event_reminder_rules` | tenant-direct | configuração de lembrete pertence a evento, versão e canal da mesma comunidade | RLS direta + FKs compostas para impedir vínculos cruzados |
 | `event_templates` | tenant-direct | modelo reutilizável pertence à comunidade | RLS direta + FK composta para autor |
 | `auth_sessions` | tenant-direct | sessão revogável e hashes da prova/assinatura pertencem ao usuário da comunidade | RLS direta + FK composta para usuário; JWT, prova bruta e `User-Agent` nunca são persistidos |
 | `conversation_channels` | tenant-direct | número/canal pertence a um responsável da comunidade | RLS direta + FK composta para o responsável; segredo fica fora do banco |

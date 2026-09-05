@@ -35,6 +35,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Consumidores são idempotentes e definem política explícita de tentativas, atraso e dead-letter queue.
 - O adaptador não pode confirmar a mensagem antes da conclusão segura do trabalho.
 - Campanhas de evento são persistidas antes do enqueue e usam `events.communication.dispatch` com chave de deduplicação.
+- Regras de lembrete fixam uma versão do modelo e só podem ser consumidas quando modelo e regra estão ativos. O scheduler futuro deve consultar por tenant e produzir jobs idempotentes sem interpolar conteúdo em logs.
 - Respostas da central são persistidas antes do enqueue e usam `conversations.message.dispatch`; o identificador da mensagem é a chave de deduplicação.
 
 ## Canais de conversa
@@ -80,4 +81,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. A consulta oficial de templates da Meta está implementada, mas não há adaptador de envio/recebimento, Embedded Signup, webhook, fila compartilhada, identidade externa, MFA ou pagamento instalado. Portanto conversas externas e cobranças permanecem **não operacionais** até essas implementações.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. Ainda não há scheduler, adaptador de envio/recebimento, Embedded Signup, webhook, fila compartilhada, identidade externa, MFA ou pagamento instalado. Portanto nenhuma regra declara mensagem entregue até essas implementações.

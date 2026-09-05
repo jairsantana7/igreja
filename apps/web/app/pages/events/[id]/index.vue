@@ -18,6 +18,16 @@ interface Communication {
   id: string; audience: 'confirmed' | 'checked_in' | 'not_checked_in'; channel: 'email' | 'whatsapp';
   subject: string; message: string; status: 'draft' | 'queued' | 'sent' | 'failed'; createdAt: string; queuedAt: string | null;
 }
+interface MessageTemplate {
+  id: string; name: string; purpose: string; channel: 'email' | 'whatsapp'; status: 'draft' | 'active' | 'archived';
+  currentVersion: { id: string; version: number; subject: string; body: string }; versionCount: number;
+}
+interface ConversationChannel { id: string; displayName: string; phoneNumber: string; status: string; owner: { id: string; name: string } }
+interface EventReminder {
+  id: string; audience: Communication['audience']; offsetMinutesBefore: number; enabled: boolean; scheduledFor: string;
+  template: { id: string; name: string; versionId: string; version: number; latestVersion: number; status: 'draft' | 'active' | 'archived' };
+  channel: { id: string; displayName: string; phoneNumber: string; status: 'configured' | 'connected' | 'disconnected' }; createdAt: string; updatedAt: string;
+}
 interface AuditEvent { id: string; actorName: string | null; action: 'created' | 'updated' | 'deleted'; resourceType: string; resourceId: string; createdAt: string }
 interface AuditPage { items: AuditEvent[]; nextCursor: string | null }
 
@@ -32,6 +42,9 @@ const canPublish = computed(() => permissions.value.includes('events.publish'));
 const canReadRegistrations = computed(() => permissions.value.includes('events.registrations_read'));
 const canCheckIn = computed(() => permissions.value.includes('events.checkin'));
 const canCommunicate = computed(() => permissions.value.includes('events.communicate'));
+const canReadMessageTemplates = computed(() => permissions.value.includes('communications.templates_read'));
+const canReadReminderChannels = computed(() => permissions.value.includes('channels.manage_own') || permissions.value.includes('channels.manage_all') || permissions.value.includes('conversations.read'));
+const canConfigureReminders = computed(() => permissions.value.includes('events.reminders_manage') && canReadMessageTemplates.value && canReadReminderChannels.value);
 const canTemplate = computed(() => permissions.value.includes('events.templates_manage'));
 const canAudit = computed(() => permissions.value.includes('audit.read'));
 const { data: event, pending, error, refresh } = await useAsyncData(`event-${eventId}`, () => api<ManagedEvent>(`/events/${eventId}`), { server: false });
@@ -51,6 +64,21 @@ const { data: communications, refresh: refreshCommunications } = await useAsyncD
   () => canCommunicate.value ? api<Communication[]>(`/events/${eventId}/communications`) : Promise.resolve([]),
   { server: false },
 );
+const { data: messageTemplates } = await useAsyncData(
+  `event-${eventId}-message-templates`,
+  () => canReadMessageTemplates.value ? api<MessageTemplate[]>('/communication/templates') : Promise.resolve([]),
+  { server: false },
+);
+const { data: reminderChannels } = await useAsyncData(
+  `event-${eventId}-reminder-channels`,
+  () => canConfigureReminders.value ? api<ConversationChannel[]>('/conversation-channels') : Promise.resolve([]),
+  { server: false },
+);
+const { data: reminders, refresh: refreshReminders } = await useAsyncData(
+  `event-${eventId}-reminders`,
+  () => canConfigureReminders.value ? api<EventReminder[]>(`/events/${eventId}/reminders`) : Promise.resolve([]),
+  { server: false },
+);
 const auditCursor = ref<string | null>(null);
 const auditCursorHistory = ref<Array<string | null>>([]);
 const { data: audit, pending: auditPending, error: auditError } = await useAsyncData(
@@ -65,11 +93,18 @@ const busyId = ref<string | null>(null);
 const feedback = ref('');
 const templateName = ref('');
 const selectedCollaborators = ref<string[]>([]);
-const communicationForm = reactive({ audience: 'confirmed' as Communication['audience'], channel: 'email' as Communication['channel'], subject: '', message: '' });
+const selectedMessageTemplateId = ref('');
+const communicationForm = reactive({ audience: 'confirmed' as Communication['audience'], channel: 'whatsapp' as Communication['channel'], subject: '', message: '' });
+const reminderEditorOpen = ref(false);
+const editingReminderId = ref<string | null>(null);
+const reminderToDelete = ref<EventReminder | null>(null);
+const reminderForm = reactive({ templateId: '', channelId: '', audience: 'confirmed' as Communication['audience'], offsetMinutesBefore: 1440, enabled: true });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 const statusLabels: Record<EventStatus, string> = { draft: 'Rascunho', published: 'Publicado', registration_closed: 'Inscrições encerradas', cancelled: 'Cancelado', completed: 'Concluído' };
 const audienceLabels = { confirmed: 'Inscritos confirmados', checked_in: 'Presentes', not_checked_in: 'Ausentes' } as const;
 const typeLabels: Record<string, string> = { short_text: 'Texto curto', long_text: 'Texto longo', single_choice: 'Escolha única', checkbox: 'Confirmação' };
+const activeWhatsAppTemplates = computed(() => (messageTemplates.value ?? []).filter((item) => item.status === 'active' && item.channel === 'whatsapp'));
+const availableReminderChannels = computed(() => (reminderChannels.value ?? []).filter((item) => item.status !== 'disconnected'));
 const filteredRegistrations = computed(() => (registrations.value ?? []).filter((registration) => {
   const term = search.value.toLowerCase().trim();
   const matchesText = !term || registration.member.name.toLowerCase().includes(term) || registration.member.email.toLowerCase().includes(term);
@@ -77,6 +112,43 @@ const filteredRegistrations = computed(() => (registrations.value ?? []).filter(
   return matchesText && matchesStatus;
 }));
 watch(event, (value) => { selectedCollaborators.value = value?.collaborators.map((item) => item.id) ?? []; }, { immediate: true });
+
+function applyMessageTemplate() {
+  const selected = messageTemplates.value?.find((item) => item.id === selectedMessageTemplateId.value);
+  if (!selected) return;
+  communicationForm.channel = selected.channel;
+  communicationForm.subject = selected.currentVersion.subject;
+  communicationForm.message = selected.currentVersion.body;
+}
+function openReminderCreate() {
+  Object.assign(reminderForm, { templateId: activeWhatsAppTemplates.value[0]?.id ?? '', channelId: availableReminderChannels.value[0]?.id ?? '', audience: 'confirmed', offsetMinutesBefore: 1440, enabled: true });
+  editingReminderId.value = null; reminderEditorOpen.value = true;
+}
+function openReminderEdit(item: EventReminder) {
+  Object.assign(reminderForm, { templateId: item.template.id, channelId: item.channel.id, audience: item.audience, offsetMinutesBefore: item.offsetMinutesBefore, enabled: item.enabled });
+  editingReminderId.value = item.id; reminderEditorOpen.value = true;
+}
+async function saveReminder() {
+  busyId.value = 'reminder'; feedback.value = '';
+  try {
+    await api(editingReminderId.value ? `/events/${eventId}/reminders/${editingReminderId.value}` : `/events/${eventId}/reminders`, { method: editingReminderId.value ? 'PUT' : 'POST', body: reminderForm });
+    feedback.value = editingReminderId.value ? 'Lembrete atualizado com a versão mais recente do modelo escolhido.' : 'Lembrete configurado para este evento.';
+    reminderEditorOpen.value = false; await refreshReminders();
+  } catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível salvar o lembrete.'; }
+  finally { busyId.value = null; }
+}
+async function deleteReminder() {
+  if (!reminderToDelete.value) return;
+  busyId.value = reminderToDelete.value.id;
+  try { await api(`/events/${eventId}/reminders/${reminderToDelete.value.id}`, { method: 'DELETE' }); reminderToDelete.value = null; await refreshReminders(); feedback.value = 'Lembrete removido do evento.'; }
+  catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível remover o lembrete.'; }
+  finally { busyId.value = null; }
+}
+function offsetLabel(minutes: number) {
+  if (minutes % 1440 === 0) return `${minutes / 1440} ${minutes === 1440 ? 'dia' : 'dias'} antes`;
+  if (minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? 'hora' : 'horas'} antes`;
+  return `${minutes} minutos antes`;
+}
 
 function nextAuditPage() {
   if (!audit.value?.nextCursor) return;
@@ -166,7 +238,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
           { key: 'overview', label: 'Visão geral', show: true },
           { key: 'registrations', label: 'Inscrições', show: canReadRegistrations },
           { key: 'form', label: 'Formulário', show: true },
-          { key: 'communication', label: 'Comunicação', show: canCommunicate },
+          { key: 'communication', label: 'Comunicação', show: canCommunicate || canConfigureReminders },
           { key: 'audit', label: 'Auditoria', show: canAudit },
         ].filter((item) => item.show)" :key="tab.key" type="button" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key as typeof activeTab">{{ tab.label }}</button>
       </nav>
@@ -189,9 +261,30 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
 
       <section v-else-if="activeTab === 'form'" class="operation-panel"><div class="operation-toolbar"><div><h2>Formulário de inscrição</h2><p>Versão atual {{ event.currentFormVersion }} · novas confirmações guardam esta versão.</p></div><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="button">Editar formulário</NuxtLink></div><div v-if="!event.fields.length" class="empty-card"><span class="empty-icon">☷</span><h3>Sem perguntas adicionais</h3><p>Nome e e-mail continuam sendo coletados pela conta.</p></div><ol v-else class="form-version-list"><li v-for="(field, index) in event.fields" :key="field.id"><span>{{ index + 1 }}</span><div><strong>{{ field.label }}</strong><small>{{ typeLabels[field.type] ?? field.type }} · {{ field.required ? 'Obrigatório' : 'Opcional' }}</small><p v-if="field.options.length">{{ field.options.join(' · ') }}</p></div></li></ol></section>
 
-      <section v-else-if="activeTab === 'communication'" class="operation-panel"><div class="operation-toolbar"><div><h2>Comunicação com participantes</h2><p>Prepare a mensagem agora; a entrega sempre passa pelo adaptador de fila da instalação.</p></div></div><div class="operation-grid"><form class="operation-card communication-form" @submit.prevent="createCommunication"><label class="field"><span>Público</span><select v-model="communicationForm.audience"><option value="confirmed">Inscritos confirmados</option><option value="checked_in">Presentes</option><option value="not_checked_in">Ausentes</option></select></label><label class="field"><span>Canal</span><select v-model="communicationForm.channel"><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Assunto</span><input v-model="communicationForm.subject" maxlength="160" placeholder="Assunto da mensagem"></label><label class="field"><span>Mensagem</span><textarea v-model="communicationForm.message" maxlength="5000" rows="5" required></textarea></label><button class="button button--primary" :disabled="busyId === 'communication'">Salvar rascunho</button></form><div class="communication-list"><article v-for="item in communications" :key="item.id" class="operation-card"><div class="event-card__badges"><span class="badge badge--draft">{{ item.channel }}</span><span class="badge" :class="item.status === 'queued' ? 'badge--published' : 'badge--draft'">{{ item.status === 'draft' ? 'Rascunho' : item.status === 'queued' ? 'Na fila' : item.status }}</span></div><h3>{{ item.subject || 'Mensagem sem assunto' }}</h3><p>{{ item.message }}</p><small>{{ audienceLabels[item.audience] }} · {{ formatter.format(new Date(item.createdAt)) }}</small><button v-if="item.status === 'draft'" class="button button--small" :disabled="busyId === item.id" @click="queueCommunication(item)">Enfileirar envio</button></article><div v-if="!communications?.length" class="empty-card"><p>Nenhuma comunicação preparada.</p></div></div></div><p class="integration-warning"><strong>Entrega segura:</strong> sem BullMQ, RabbitMQ ou outro adaptador configurado, o envio falha explicitamente e mantém o rascunho.</p></section>
+      <section v-else-if="activeTab === 'communication'" class="operation-panel communication-event-panel">
+        <div class="operation-toolbar"><div><h2>Comunicação com participantes</h2><p>Ative lembretes para este evento ou prepare uma mensagem pontual.</p></div><NuxtLink v-if="canReadMessageTemplates" to="/communication" class="button">✎ Gerenciar modelos</NuxtLink></div>
+
+        <section v-if="canConfigureReminders" class="event-reminders-section">
+          <header><div><p class="eyebrow">Automação do evento</p><h3>Lembretes programados</h3><p>O modelo e o canal são habilitados globalmente; cada regra abaixo precisa ser ativada separadamente.</p></div><button v-if="activeWhatsAppTemplates.length && availableReminderChannels.length" class="button button--primary" type="button" @click="openReminderCreate">＋ Novo lembrete</button></header>
+          <div v-if="!activeWhatsAppTemplates.length || !availableReminderChannels.length" class="reminder-prerequisites">
+            <div :class="{ complete: activeWhatsAppTemplates.length }"><span>{{ activeWhatsAppTemplates.length ? '✓' : '1' }}</span><div><strong>Modelo ativo</strong><small>{{ activeWhatsAppTemplates.length ? `${activeWhatsAppTemplates.length} disponíveis` : 'Crie e ative um modelo de WhatsApp na Central de comunicação.' }}</small></div></div>
+            <div :class="{ complete: availableReminderChannels.length }"><span>{{ availableReminderChannels.length ? '✓' : '2' }}</span><div><strong>Canal configurado</strong><small>{{ availableReminderChannels.length ? `${availableReminderChannels.length} disponíveis` : 'Configure ou reconecte o número do pastor na Central de conversas.' }}</small></div></div>
+          </div>
+          <form v-if="reminderEditorOpen" class="reminder-editor" @submit.prevent="saveReminder">
+            <div class="reminder-editor__heading"><div><p class="eyebrow">{{ editingReminderId ? 'Editar regra' : 'Nova regra' }}</p><h4>{{ editingReminderId ? 'Atualizar lembrete' : 'Quando devemos lembrar?' }}</h4><p v-if="editingReminderId">Salvar novamente adota a versão mais recente do modelo selecionado.</p></div><button class="icon-close" type="button" aria-label="Fechar" @click="reminderEditorOpen = false">×</button></div>
+            <div class="reminder-editor__fields"><label class="field"><span>Modelo de mensagem</span><select v-model="reminderForm.templateId" required><option value="" disabled>Selecione</option><option v-for="item in activeWhatsAppTemplates" :key="item.id" :value="item.id">{{ item.name }} · v{{ item.currentVersion.version }}</option></select></label><label class="field"><span>Número responsável</span><select v-model="reminderForm.channelId" required><option value="" disabled>Selecione</option><option v-for="channel in availableReminderChannels" :key="channel.id" :value="channel.id">{{ channel.displayName }} · {{ channel.phoneNumber }}</option></select></label><label class="field"><span>Público</span><select v-model="reminderForm.audience"><option value="confirmed">Inscritos confirmados</option><option value="checked_in">Presentes</option><option value="not_checked_in">Ausentes</option></select></label><label class="field"><span>Antecedência</span><select v-model.number="reminderForm.offsetMinutesBefore"><option :value="60">1 hora antes</option><option :value="180">3 horas antes</option><option :value="720">12 horas antes</option><option :value="1440">1 dia antes</option><option :value="2880">2 dias antes</option><option :value="10080">7 dias antes</option></select></label></div>
+            <label class="reminder-enable"><input v-model="reminderForm.enabled" type="checkbox"><span aria-hidden="true"></span><div><strong>Deixar esta regra ativa</strong><small>Desmarque para salvar a configuração sem permitir que o scheduler a processe.</small></div></label>
+            <footer><button class="button" type="button" @click="reminderEditorOpen = false">Cancelar</button><button class="button button--primary" :disabled="busyId === 'reminder'">{{ busyId === 'reminder' ? 'Salvando…' : 'Salvar lembrete' }}</button></footer>
+          </form>
+          <div v-if="reminders?.length" class="event-reminder-list"><article v-for="item in reminders" :key="item.id"><div class="reminder-time"><strong>{{ offsetLabel(item.offsetMinutesBefore) }}</strong><small>{{ formatter.format(new Date(item.scheduledFor)) }}</small></div><div class="reminder-details"><div class="event-card__badges"><span class="badge" :class="item.enabled && item.template.status === 'active' && item.channel.status !== 'disconnected' ? 'badge--published' : 'badge--draft'">{{ !item.enabled ? 'Regra pausada' : item.template.status !== 'active' ? 'Modelo pausado' : item.channel.status === 'disconnected' ? 'Canal desconectado' : 'Regra ativa' }}</span><span v-if="item.template.version < item.template.latestVersion" class="badge badge--open">Atualização disponível</span></div><h4>{{ item.template.name }} · v{{ item.template.version }}</h4><p>{{ audienceLabels[item.audience] }} · {{ item.channel.displayName }} · {{ item.channel.phoneNumber }}</p></div><div class="reminder-actions"><button class="button button--small" type="button" @click="openReminderEdit(item)">✎ Editar</button><button class="button button--small button--danger" type="button" @click="reminderToDelete = item">Remover</button></div></article></div><div v-else-if="activeWhatsAppTemplates.length && availableReminderChannels.length" class="form-empty">Nenhum lembrete configurado para este evento.</div>
+        </section>
+
+        <section v-if="canCommunicate" class="manual-communication-section"><header><div><p class="eyebrow">Mensagem pontual</p><h3>Preparar rascunho</h3><p>Use um modelo como ponto de partida ou escreva uma mensagem exclusiva deste evento.</p></div></header><div class="operation-grid"><form class="operation-card communication-form" @submit.prevent="createCommunication"><div v-if="canReadMessageTemplates" class="inline-operation-form"><label class="field"><span>Começar com um modelo</span><select v-model="selectedMessageTemplateId"><option value="">Mensagem em branco</option><option v-for="item in messageTemplates?.filter(template => template.status === 'active')" :key="item.id" :value="item.id">{{ item.name }} · {{ item.channel }}</option></select></label><button class="button" type="button" :disabled="!selectedMessageTemplateId" @click="applyMessageTemplate">Aplicar</button></div><label class="field"><span>Público</span><select v-model="communicationForm.audience"><option value="confirmed">Inscritos confirmados</option><option value="checked_in">Presentes</option><option value="not_checked_in">Ausentes</option></select></label><label class="field"><span>Canal</span><select v-model="communicationForm.channel"><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Assunto</span><input v-model="communicationForm.subject" maxlength="160" placeholder="Assunto da mensagem"></label><label class="field"><span>Mensagem</span><textarea v-model="communicationForm.message" maxlength="5000" rows="5" required></textarea></label><button class="button button--primary" :disabled="busyId === 'communication'">Salvar rascunho</button></form><div class="communication-list"><article v-for="item in communications" :key="item.id" class="operation-card"><div class="event-card__badges"><span class="badge badge--draft">{{ item.channel }}</span><span class="badge" :class="item.status === 'queued' ? 'badge--published' : 'badge--draft'">{{ item.status === 'draft' ? 'Rascunho' : item.status === 'queued' ? 'Na fila' : item.status }}</span></div><h3>{{ item.subject || 'Mensagem sem assunto' }}</h3><p>{{ item.message }}</p><small>{{ audienceLabels[item.audience] }} · {{ formatter.format(new Date(item.createdAt)) }}</small><button v-if="item.status === 'draft'" class="button button--small" :disabled="busyId === item.id" @click="queueCommunication(item)">Enfileirar envio</button></article><div v-if="!communications?.length" class="empty-card"><p>Nenhuma comunicação preparada.</p></div></div></div></section>
+        <p class="integration-warning"><strong>Entrega segura:</strong> estas regras ficam prontas e auditadas, mas nenhum envio acontece enquanto a instalação não configurar scheduler, fila e adapter de canal.</p>
+      </section>
 
       <section v-else class="operation-panel"><div class="operation-toolbar"><div><h2>Auditoria deste evento</h2><p>Alterações administrativas, check-ins, versões e comunicações relacionadas.</p></div></div><div v-if="auditPending" class="empty-card">Carregando auditoria…</div><div v-else-if="auditError" class="empty-card">Não foi possível carregar a auditoria.</div><ol v-else-if="audit?.items.length" class="audit-list"><li v-for="item in audit.items" :key="item.id" class="audit-item"><span class="audit-item__icon" :class="`audit-item__icon--${item.action}`">{{ item.action === 'created' ? '＋' : item.action === 'updated' ? '✎' : '−' }}</span><div class="audit-item__body"><p><strong>{{ item.actorName ?? 'Processo do sistema' }}</strong> {{ item.action === 'created' ? 'criou' : item.action === 'updated' ? 'editou' : 'excluiu' }} <strong>{{ item.resourceType.replaceAll('_', ' ') }}</strong>.</p><small>{{ formatter.format(new Date(item.createdAt)) }}</small></div></li></ol><div v-else class="empty-card"><p>Nenhuma atividade encontrada para este evento.</p></div><nav v-if="auditCursorHistory.length || audit?.nextCursor" class="pagination" aria-label="Paginação da auditoria do evento"><button class="button" :disabled="auditPending || !auditCursorHistory.length" @click="previousAuditPage">← Anterior</button><span>Página {{ auditCursorHistory.length + 1 }}</span><button class="button" :disabled="auditPending || !audit?.nextCursor" @click="nextAuditPage">Próxima →</button></nav></section>
     </template>
+    <ConfirmDialog :open="Boolean(reminderToDelete)" title="Remover este lembrete?" description="A regra será removida deste evento. O modelo e seu histórico continuarão disponíveis na Central de comunicação." confirm-label="Remover lembrete" :busy="Boolean(busyId && reminderToDelete)" @cancel="reminderToDelete = null" @confirm="deleteReminder" />
   </div>
 </template>

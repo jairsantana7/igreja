@@ -77,7 +77,7 @@ A trilha usa paginação keyset pela ordenação imutável `(created_at DESC, id
 
 ## Contextos preparados
 
-- **Comunicação:** campanhas persistem como intenção de envio; a entrega passa por `JobQueue` e por adaptadores de canal.
+- **Comunicação:** modelos editoriais versionados são reutilizados por lembretes de eventos. Cada regra fixa a versão, o canal, o público e a antecedência; a entrega futura passa por scheduler, `JobQueue` e adaptadores de canal.
 - **Conversas:** canais, atendimentos e mensagens formam um bounded context próprio. `ConversationProvider` recebe/envia mensagens e `JobQueue` desacopla a entrega; eventos apenas fornecem um vínculo opcional.
 - **Templates do WhatsApp:** `WhatsAppTemplateProvider` consulta o fornecedor e `WhatsAppTemplateRepository` mantém uma projeção por canal. Casos de uso conhecem status e componentes, mas não conhecem URLs, tokens ou detalhes da Graph API.
 - **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.

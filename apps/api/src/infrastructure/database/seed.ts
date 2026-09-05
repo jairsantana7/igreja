@@ -11,6 +11,12 @@ const ids = {
   event: '30000000-0000-4000-8000-000000000001',
   eventPublic: '40000000-0000-4000-8000-000000000001',
   field: '50000000-0000-4000-8000-000000000001',
+  reminderTemplate: '60000000-0000-4000-8000-000000000001',
+  reminderTemplateVersion: '61000000-0000-4000-8000-000000000001',
+  cancellationTemplate: '60000000-0000-4000-8000-000000000002',
+  cancellationTemplateVersion: '61000000-0000-4000-8000-000000000002',
+  conversationChannel: '62000000-0000-4000-8000-000000000001',
+  eventReminder: '63000000-0000-4000-8000-000000000001',
 };
 
 async function seed(): Promise<void> {
@@ -58,7 +64,9 @@ async function seed(): Promise<void> {
         OR key IN (
           'conversations.read', 'conversations.reply', 'conversations.assign',
           'channels.manage_own', 'members.profile_read', 'members.profile_manage',
-          'whatsapp.templates_read', 'whatsapp.templates_sync'
+          'whatsapp.templates_read', 'whatsapp.templates_sync',
+          'communications.templates_read', 'communications.templates_manage',
+          'events.reminders_manage'
         )
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.pastorRole]);
@@ -104,6 +112,36 @@ async function seed(): Promise<void> {
       required: false,
       options: [],
     }]), ids.admin]);
+    await client.query(`
+      INSERT INTO communication_templates (id, tenant_id, created_by_user_id, name, purpose, channel, status) VALUES
+        ($1, $3, $4, 'Lembrete do evento', 'event_reminder', 'whatsapp', 'active'),
+        ($2, $3, $4, 'Aviso de cancelamento', 'event_cancellation', 'whatsapp', 'active')
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, purpose = EXCLUDED.purpose,
+        channel = EXCLUDED.channel, status = EXCLUDED.status, updated_at = now()
+    `, [ids.reminderTemplate, ids.cancellationTemplate, ids.tenant, ids.admin]);
+    await client.query(`
+      INSERT INTO communication_template_versions (
+        id, tenant_id, template_id, version, subject, body, variables, created_by_user_id
+      ) VALUES
+        ($1, $5, $2, 1, '', 'Olá, {{membro.nome}}! Lembramos que {{evento.nome}} será em {{evento.data}}, no local {{evento.local}}.',
+          '["membro.nome", "evento.nome", "evento.data", "evento.local"]', $6),
+        ($3, $5, $4, 1, '', 'Olá, {{membro.nome}}. O evento {{evento.nome}} foi cancelado. Acompanhe a comunidade para novas informações.',
+          '["membro.nome", "evento.nome"]', $6)
+      ON CONFLICT (id) DO NOTHING
+    `, [ids.reminderTemplateVersion, ids.reminderTemplate, ids.cancellationTemplateVersion, ids.cancellationTemplate, ids.tenant, ids.admin]);
+    await client.query(`
+      INSERT INTO conversation_channels (
+        id, tenant_id, owner_user_id, provider_key, display_name, phone_number, status
+      ) VALUES ($1, $2, $3, 'manual', 'WhatsApp pastoral de demonstração', '+5511999999999', 'configured')
+      ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, owner_user_id = EXCLUDED.owner_user_id
+    `, [ids.conversationChannel, ids.tenant, ids.admin]);
+    await client.query(`
+      INSERT INTO event_reminder_rules (
+        id, tenant_id, event_id, template_id, template_version_id, channel_id,
+        created_by_user_id, audience, offset_minutes_before, enabled
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', 1440, false)
+      ON CONFLICT (id) DO NOTHING
+    `, [ids.eventReminder, ids.tenant, ids.event, ids.reminderTemplate, ids.reminderTemplateVersion, ids.conversationChannel, ids.admin]);
     await client.query('COMMIT');
     process.stdout.write('Seed local concluído.\n');
   } catch (error) {

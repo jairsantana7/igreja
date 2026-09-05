@@ -54,10 +54,13 @@ import { EnvironmentSecretResolver } from './infrastructure/security/environment
 import { MetaWhatsAppTemplateProvider } from './infrastructure/integrations/meta-whatsapp-template.provider';
 import { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from './application/use-cases/whatsapp-template.use-cases';
 import { env } from './infrastructure/config/env';
+import { PostgresCommunicationTemplateRepository, PostgresEventReminderRepository } from './infrastructure/repositories/postgres-communication-template.repository';
+import { CommunicationController } from './presentation/http/controllers/communication.controller';
+import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteEventReminderUseCase, ListCommunicationTemplatesUseCase, ListCommunicationTemplateVersionsUseCase, ListEventRemindersUseCase, SetCommunicationTemplateStatusUseCase, UpdateCommunicationTemplateUseCase, UpdateEventReminderUseCase } from './application/use-cases/communication-template.use-cases';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -140,6 +143,16 @@ import { env } from './infrastructure/config/env';
     {
       provide: TOKENS.whatsappTemplateRepository,
       useFactory: (database: PostgresDatabase) => new PostgresWhatsAppTemplateRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.communicationTemplateRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresCommunicationTemplateRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.eventReminderRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventReminderRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -350,6 +363,51 @@ import { env } from './infrastructure/config/env';
       provide: TOKENS.syncWhatsAppTemplatesUseCase,
       useFactory: (templates: PostgresWhatsAppTemplateRepository, provider: MetaWhatsAppTemplateProvider) => new SyncWhatsAppTemplatesUseCase(templates, provider),
       inject: [TOKENS.whatsappTemplateRepository, TOKENS.whatsappTemplateProvider],
+    },
+    {
+      provide: TOKENS.listCommunicationTemplatesUseCase,
+      useFactory: (templates: PostgresCommunicationTemplateRepository) => new ListCommunicationTemplatesUseCase(templates),
+      inject: [TOKENS.communicationTemplateRepository],
+    },
+    {
+      provide: TOKENS.listCommunicationTemplateVersionsUseCase,
+      useFactory: (templates: PostgresCommunicationTemplateRepository) => new ListCommunicationTemplateVersionsUseCase(templates),
+      inject: [TOKENS.communicationTemplateRepository],
+    },
+    {
+      provide: TOKENS.createCommunicationTemplateUseCase,
+      useFactory: (templates: PostgresCommunicationTemplateRepository) => new CreateCommunicationTemplateUseCase(templates),
+      inject: [TOKENS.communicationTemplateRepository],
+    },
+    {
+      provide: TOKENS.updateCommunicationTemplateUseCase,
+      useFactory: (templates: PostgresCommunicationTemplateRepository) => new UpdateCommunicationTemplateUseCase(templates),
+      inject: [TOKENS.communicationTemplateRepository],
+    },
+    {
+      provide: TOKENS.setCommunicationTemplateStatusUseCase,
+      useFactory: (templates: PostgresCommunicationTemplateRepository) => new SetCommunicationTemplateStatusUseCase(templates),
+      inject: [TOKENS.communicationTemplateRepository],
+    },
+    {
+      provide: TOKENS.listEventRemindersUseCase,
+      useFactory: (reminders: PostgresEventReminderRepository) => new ListEventRemindersUseCase(reminders),
+      inject: [TOKENS.eventReminderRepository],
+    },
+    {
+      provide: TOKENS.createEventReminderUseCase,
+      useFactory: (reminders: PostgresEventReminderRepository) => new CreateEventReminderUseCase(reminders),
+      inject: [TOKENS.eventReminderRepository],
+    },
+    {
+      provide: TOKENS.updateEventReminderUseCase,
+      useFactory: (reminders: PostgresEventReminderRepository) => new UpdateEventReminderUseCase(reminders),
+      inject: [TOKENS.eventReminderRepository],
+    },
+    {
+      provide: TOKENS.deleteEventReminderUseCase,
+      useFactory: (reminders: PostgresEventReminderRepository) => new DeleteEventReminderUseCase(reminders),
+      inject: [TOKENS.eventReminderRepository],
     },
     {
       provide: TOKENS.createRoleUseCase,

@@ -19,11 +19,12 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - perfil complementar opcional de membros com permissões sensíveis próprias;
 - responsável e colaboradores por evento com escopos próprio/global;
 - fundação da central de conversas e canais individuais por pastor.
+- modelos de comunicação versionados e regras de lembrete por evento;
 
 ## Próximo
 
 - adapter compartilhado de fila e adapter oficial do WhatsApp com webhook validado;
-- consentimento, opt-out, retenção e modelos aprovados para lembretes;
+- scheduler de lembretes, consentimento, opt-out, retenção e vínculo com modelos aprovados da Meta;
 - QR Code e fluxo de check-in móvel/offline;
 - comparação e edição avançada de versões do formulário;
 - recorrência automática com exceções de calendário;

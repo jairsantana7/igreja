@@ -34,6 +34,9 @@ const resourceLabels: Record<string, string> = {
   community_integrations: 'configuração da comunidade',
   event_media: 'imagem do evento',
   whatsapp_message_templates: 'template do WhatsApp',
+  communication_templates: 'modelo de comunicação',
+  communication_template_versions: 'versão de modelo',
+  event_reminder_rules: 'lembrete de evento',
 };
 const pageNumber = computed(() => cursorHistory.value.length + 1);
 

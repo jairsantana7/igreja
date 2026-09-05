@@ -22,6 +22,12 @@ const profileA = 'a9000000-0000-4000-8000-000000000001';
 const profileB = 'b9000000-0000-4000-8000-000000000002';
 const sessionA = 'aa000000-0000-4000-8000-000000000001';
 const sessionB = 'bb000000-0000-4000-8000-000000000002';
+const communicationTemplateA = 'ac000000-0000-4000-8000-000000000001';
+const communicationTemplateB = 'bc000000-0000-4000-8000-000000000002';
+const templateVersionA = 'ad000000-0000-4000-8000-000000000001';
+const templateVersionB = 'bd000000-0000-4000-8000-000000000002';
+const reminderA = 'ae000000-0000-4000-8000-000000000001';
+const reminderB = 'be000000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -80,6 +86,18 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${tenantA}', '${channelA}', 'template-a', 'lembrete_a', 'pt_BR', 'UTILITY', 'APPROVED', '[]'),
         ('${tenantB}', '${channelB}', 'template-b', 'lembrete_b', 'pt_BR', 'UTILITY', 'PENDING', '[]')
       ON CONFLICT DO NOTHING;
+      INSERT INTO communication_templates (id, tenant_id, created_by_user_id, name, purpose, channel, status) VALUES
+        ('${communicationTemplateA}', '${tenantA}', '${userA}', 'Modelo A', 'event_reminder', 'whatsapp', 'active'),
+        ('${communicationTemplateB}', '${tenantB}', '${userB}', 'Modelo B', 'event_reminder', 'whatsapp', 'active')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO communication_template_versions (id, tenant_id, template_id, version, body, variables, created_by_user_id) VALUES
+        ('${templateVersionA}', '${tenantA}', '${communicationTemplateA}', 1, 'Mensagem A', '[]', '${userA}'),
+        ('${templateVersionB}', '${tenantB}', '${communicationTemplateB}', 1, 'Mensagem B', '[]', '${userB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO event_reminder_rules (id, tenant_id, event_id, template_id, template_version_id, channel_id, created_by_user_id, audience, offset_minutes_before) VALUES
+        ('${reminderA}', '${tenantA}', '${eventA}', '${communicationTemplateA}', '${templateVersionA}', '${channelA}', '${userA}', 'confirmed', 1440),
+        ('${reminderB}', '${tenantB}', '${eventB}', '${communicationTemplateB}', '${templateVersionB}', '${channelB}', '${userB}', 'confirmed', 1440)
+      ON CONFLICT DO NOTHING;
       INSERT INTO conversations (id, tenant_id, channel_id, event_id, assigned_user_id, contact_name, contact_address) VALUES
         ('${conversationA}', '${tenantA}', '${channelA}', '${eventA}', '${userA}', 'Contato A', '+551199999001'),
         ('${conversationB}', '${tenantB}', '${channelB}', '${eventB}', '${userB}', 'Contato B', '+551199999002')
@@ -94,6 +112,9 @@ describeDatabase('PostgreSQL RLS', () => {
   afterAll(async () => {
     await admin.query(`
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_reminder_rules WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM communication_template_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM communication_templates WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_messages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_channels WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -143,6 +164,8 @@ describeDatabase('PostgreSQL RLS', () => {
   it('sem contexto não retorna linhas de tenant', async () => {
     const result = await runtime.query('SELECT id FROM users');
     expect(result.rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM communication_templates')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM event_reminder_rules')).rows).toEqual([]);
     await expect(runtime.query(
       "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Sem contexto', 'sem-contexto@test.local')",
       [tenantA],
@@ -187,6 +210,14 @@ describeDatabase('PostgreSQL RLS', () => {
           INSERT INTO member_children (tenant_id, profile_id, member_user_id, name)
           VALUES ($1, $2, $3, 'Vínculo cruzado')
         `, [tenantA, profileB, userA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO event_reminder_rules (
+            tenant_id, event_id, template_id, template_version_id, channel_id,
+            created_by_user_id, audience, offset_minutes_before
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', 60)
+        `, [tenantA, eventA, communicationTemplateB, templateVersionB, channelA, userA])).rejects.toThrow();
       });
     } finally { client.release(); }
   });
@@ -242,6 +273,30 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('modelos, versões e lembretes não atravessam comunidades', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id FROM communication_templates')).rows.map((row) => row.id)).toEqual([communicationTemplateA]);
+        expect((await client.query('SELECT id FROM communication_template_versions')).rows.map((row) => row.id)).toEqual([templateVersionA]);
+        expect((await client.query('SELECT id FROM event_reminder_rules')).rows.map((row) => row.id)).toEqual([reminderA]);
+      });
+      expect((await client.query('SELECT id FROM event_reminder_rules')).rows).toEqual([]);
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO communication_templates (tenant_id, created_by_user_id, name, purpose, channel)
+          VALUES ($1, $2, 'Intruso', 'event_reminder', 'whatsapp')
+        `, [tenantB, userA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query('UPDATE communication_templates SET tenant_id = $1 WHERE id = $2', [tenantB, communicationTemplateA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('DELETE FROM communication_templates WHERE id = $1', [communicationTemplateB])).rowCount).toBe(0);
+      });
+    } finally { client.release(); }
+  });
+
   it('sessões e perfil complementar não atravessam comunidades', async () => {
     const client = await runtime.connect();
     try {
@@ -291,7 +346,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

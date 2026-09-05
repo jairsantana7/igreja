@@ -77,11 +77,25 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Comunicação é um módulo do contexto de eventos, mas o transporte é sempre uma porta `JobQueue` e adaptadores de canal.
 - O MVP permite preparar campanhas para inscritos confirmados, presentes ou ausentes, sem enviar diretamente no request HTTP.
 - Uma campanha só muda para enfileirada depois que o adaptador de fila aceita o trabalho. Sem adaptador, a operação falha de forma explícita e o rascunho é preservado.
-- Consentimento, opt-out, custo, janela de envio e disparo por template permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
+- Modelos de mensagem locais pertencem à comunidade e são diferentes de modelos de evento e de templates oficiais da Meta.
+- Ler modelos locais exige `communications.templates_read`; criar, editar, ativar, pausar ou arquivar exige `communications.templates_manage`.
+- Cada edição cria uma versão imutável. Nome, finalidade, canal e estado ficam no modelo; assunto e conteúdo ficam na versão.
+- Um modelo local pode estar em `draft`, `active` ou `archived`. Somente modelos ativos podem ser vinculados a um novo lembrete.
+- O conteúdo aceita apenas variáveis documentadas de membro, evento e inscrição. Variáveis desconhecidas são rejeitadas no domínio.
+- Um lembrete pertence a um evento, seleciona uma versão específica do modelo, um canal acessível, um público e uma antecedência em minutos.
+- Editar um modelo não altera lembretes existentes silenciosamente. O responsável precisa atualizar a regra do evento para adotar a versão mais recente.
+- Ativar ou alterar lembretes exige `events.reminders_manage` e acesso de gestão ao evento. A regra não concede acesso ao canal de outro pastor.
+- Habilitação possui duas barreiras independentes: o modelo precisa estar ativo globalmente e a regra precisa estar ativa no evento.
+- A interface pode preparar e ativar regras mesmo sem fila instalada, mas deve informar que não haverá entrega até um scheduler e um adapter de fila/canal serem configurados.
+- Templates oficiais da Meta continuam somente como catálogo sincronizado. Usá-los em lembretes oficiais e submetê-los para aprovação permanecem bloqueados até o fluxo de conta WABA ser separado de seus números.
+- Consentimento, opt-out, custo, janela de envio e disparo real permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
 
 ## Central de conversas
 
-- Cada canal de WhatsApp Business pertence a um usuário responsável e a uma comunidade.
+- Cada canal de conversa pertence a um usuário responsável e a uma comunidade; o proprietário externo do número pode ser a comunidade ou o próprio pastor.
+- Números institucionais são recomendados para preservar continuidade, mas números próprios são permitidos porque fazem parte do trabalho cotidiano de muitas comunidades.
+- Um canal `manual` apenas organiza o número e pode abrir uma conversa direta; ele não captura uma sessão do WhatsApp Web nem declara mensagens como entregues.
+- Um futuro adapter não oficial de WhatsApp Web deve ser opcional, desabilitado por padrão, isolado do processo da API e limitado a conversas individuais. Campanhas e lembretes em massa não podem usar esse adapter.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
 - Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
 - Uma conversa possui responsável, estado `open`, `waiting` ou `resolved`, e histórico ordenado de mensagens.
@@ -152,7 +166,6 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Qual prazo de retenção, consentimento e opt-out vale para mensagens e contatos?
 - Qual base legal, consentimento, prazo de retenção e processo de exclusão valem para nascimento, endereço e dados de filhos?
 - O próprio membro poderá consultar e editar o perfil complementar?
-- A comunidade aceitará múltiplos números por pastor e um número institucional compartilhado?
 
 ## Acesso inicial
 

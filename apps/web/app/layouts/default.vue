@@ -7,6 +7,7 @@ const canReadSettings = computed(() => auth.session.value?.user.permissions.incl
 const canReadAccess = computed(() => auth.session.value?.user.permissions.includes('roles.read'));
 const canReadAudit = computed(() => auth.session.value?.user.permissions.includes('audit.read'));
 const canReadConversations = computed(() => auth.session.value?.user.permissions.includes('conversations.read'));
+const canReadCommunication = computed(() => auth.session.value?.user.permissions.includes('communications.templates_read'));
 
 async function leave() {
   try { await api('/sessions/current', { method: 'DELETE' }); } catch { /* O logout local continua se a API estiver indisponível. */ }
@@ -34,6 +35,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink v-if="canReadConversations" to="/conversations" class="nav-link" :class="{ active: route.path === '/conversations' }">
           <span aria-hidden="true">◌</span> Conversas
+        </NuxtLink>
+        <NuxtLink v-if="canReadCommunication" to="/communication" class="nav-link" :class="{ active: route.path === '/communication' }">
+          <span aria-hidden="true">✎</span> Comunicação
         </NuxtLink>
         <NuxtLink v-if="canReadAccess" to="/access" class="nav-link" :class="{ active: route.path === '/access' }">
           <span aria-hidden="true">⌘</span> Acessos
