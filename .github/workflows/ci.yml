@@ -51,4 +51,5 @@ jobs:
         env:
           DATABASE_URL: postgresql://igreja_runtime:runtime-test@localhost:5434/igreja
           DATABASE_ADMIN_URL: postgresql://postgres:postgres@localhost:5434/igreja
+          JWT_SECRET: ci-only-secret-with-at-least-32-characters
       - run: pnpm build
