@@ -181,7 +181,7 @@ async function updateStatus(status: ConversationStatus) {
         </div>
         <form v-if="canReply" class="conversation-composer" @submit.prevent="reply"><textarea v-model="replyBody" rows="3" maxlength="10000" placeholder="Escreva uma resposta…" required></textarea><div><small>O envio passa pelo adapter e pela fila configurados na instalação.</small><button class="button button--primary" :disabled="busy || !replyBody.trim()">Enviar</button></div></form>
       </article>
-      <article v-else class="conversation-thread conversation-thread--empty"><span>◌</span><h2>Selecione uma conversa</h2><p>As conversas dos seus próprios canais aparecem aqui. Quem possui <code>conversations.read_all</code> pode supervisionar toda a comunidade.</p></article>
+      <article v-else class="conversation-thread conversation-thread--empty"><span>◌</span><h2>Selecione uma conversa</h2><p>Você acompanha aqui os atendimentos dos seus próprios números. Pessoas responsáveis pela supervisão também podem acompanhar as conversas da comunidade.</p></article>
     </section>
   </div>
 </template>

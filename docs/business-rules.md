@@ -180,6 +180,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Papéis apenas agrupam permissões; regras de negócio não verificam nomes como `admin` ou `pastor`.
 - Usuários com `roles.manage` podem liberar ou fechar funcionalidades alterando as permissões de um papel.
 - A autorização do backend consulta as atribuições atuais; esconder menus ou botões no frontend não é uma fronteira de segurança.
+- Chaves técnicas de permissão aparecem somente na administração de acessos. Nas demais telas, a interface descreve a capacidade em linguagem do negócio.
 - Login local, consulta de evento publicado, cadastro pelo formulário público e health check são exceções públicas explícitas.
 - Ainda precisa ser definida uma recuperação administrativa segura caso todos os papéis percam `roles.manage`.
 
