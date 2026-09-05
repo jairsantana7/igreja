@@ -15,11 +15,13 @@ interface EventRow {
   status: DashboardEvent['status'];
   capacity: number | null;
   registrations: string;
+  attendance: string;
 }
 
 interface ManagedEventRow extends EventRow {
   description: string;
   media_display_mode: EventMediaDisplayMode;
+  current_form_version: number;
 }
 
 export class PostgresEventRepository implements EventRepository {
@@ -73,6 +75,7 @@ export class PostgresEventRepository implements EventRepository {
         ...this.mapEvent(event),
         description: event.description,
         mediaDisplayMode: event.media_display_mode,
+        currentFormVersion: event.current_form_version,
         fields: fields.rows.map((field) => ({
           id: field.id,
           key: field.field_key,
@@ -95,7 +98,7 @@ export class PostgresEventRepository implements EventRepository {
           starts_at, registration_deadline, capacity, media_display_mode, status
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
-          '0'::text AS registrations
+          '0'::text AS registrations, '0'::text AS attendance
       `, [
         principal.tenantId,
         principal.userId,
@@ -113,6 +116,7 @@ export class PostgresEventRepository implements EventRepository {
       if (!event) throw new Error('Falha ao criar evento.');
       await client.query('SELECT app.register_public_event($1, $2, $3)', [event.public_id, principal.tenantId, event.id]);
       await this.insertFields(client, principal.tenantId, event.id, draft);
+      await this.snapshotForm(client, principal.tenantId, principal.userId, event.id, 1);
       return this.mapEvent(event);
     });
   }
@@ -143,6 +147,11 @@ export class PostgresEventRepository implements EventRepository {
       ]);
       if (!result.rows[0]) throw new NotFoundError('Evento não encontrado nesta comunidade.');
       await this.upsertFields(client, principal.tenantId, eventId, draft);
+      const version = await client.query<{ current_form_version: number }>(`
+        UPDATE events SET current_form_version = current_form_version + 1
+        WHERE id = $1 RETURNING current_form_version
+      `, [eventId]);
+      await this.snapshotForm(client, principal.tenantId, principal.userId, eventId, version.rows[0]!.current_form_version);
       const event = await this.queryEvent(client, eventId);
       if (!event) throw new NotFoundError('Evento não encontrado nesta comunidade.');
       return this.mapEvent(event);
@@ -150,16 +159,15 @@ export class PostgresEventRepository implements EventRepository {
   }
 
   cancel(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null> {
-    return this.database.withTenant(principal, async (client) => {
-      await client.query(`
-        UPDATE events
-        SET status = 'cancelled', updated_at = now()
-        WHERE id = $1 AND status <> 'cancelled'
-        RETURNING id
-      `, [eventId]);
-      const event = await this.queryEvent(client, eventId);
-      return event ? this.mapEvent(event) : null;
-    });
+    return this.changeStatus(principal, eventId, 'cancelled', ['draft', 'published', 'registration_closed'], 'Um evento concluído não pode ser cancelado.');
+  }
+
+  closeRegistrations(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null> {
+    return this.changeStatus(principal, eventId, 'registration_closed', ['published'], 'Somente um evento publicado pode ter as inscrições fechadas.');
+  }
+
+  complete(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null> {
+    return this.changeStatus(principal, eventId, 'completed', ['published', 'registration_closed'], 'Somente um evento publicado ou com inscrições fechadas pode ser concluído.');
   }
 
   async findPublic(publicId: string): Promise<PublicEventView | null> {
@@ -205,14 +213,47 @@ export class PostgresEventRepository implements EventRepository {
     }
   }
 
+  private async snapshotForm(client: PoolClient, tenantId: string, userId: string, eventId: string, version: number) {
+    await client.query(`
+      INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id)
+      SELECT $1, $2, $3, COALESCE(jsonb_agg(jsonb_build_object(
+        'id', fields.id, 'key', fields.field_key, 'label', fields.label, 'type', fields.type,
+        'required', fields.required, 'options', fields.options
+      ) ORDER BY fields.position) FILTER (WHERE fields.id IS NOT NULL), '[]'::jsonb), $4
+      FROM event_form_fields AS fields
+      WHERE fields.event_id = $2
+    `, [tenantId, eventId, version, userId]);
+  }
+
+  private changeStatus(
+    principal: AuthenticatedPrincipal,
+    eventId: string,
+    target: DashboardEvent['status'],
+    allowed: DashboardEvent['status'][],
+    invalidMessage: string,
+  ): Promise<DashboardEvent | null> {
+    return this.database.withTenant(principal, async (client) => {
+      const current = await this.queryEvent(client, eventId);
+      if (!current) return null;
+      if (current.status === target) return this.mapEvent(current);
+      if (!allowed.includes(current.status)) throw new ConflictError(invalidMessage);
+      await client.query('UPDATE events SET status = $2, updated_at = now() WHERE id = $1', [eventId, target]);
+      const event = await this.queryEvent(client, eventId);
+      return event ? this.mapEvent(event) : null;
+    });
+  }
+
   private queryEvents(client: PoolClient) {
     return client.query<EventRow>(`
       SELECT events.id, events.public_id, events.title, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
-        count(registrations.id)::text AS registrations
+        count(DISTINCT registrations.id)::text AS registrations,
+        count(DISTINCT check_ins.id)::text AS attendance
       FROM events
       LEFT JOIN event_registrations AS registrations
         ON registrations.event_id = events.id AND registrations.status = 'confirmed'
+      LEFT JOIN event_check_ins AS check_ins
+        ON check_ins.event_id = events.id
       GROUP BY events.id
       ORDER BY events.starts_at ASC
     `);
@@ -222,10 +263,14 @@ export class PostgresEventRepository implements EventRepository {
     const result = await client.query<ManagedEventRow>(`
       SELECT events.id, events.public_id, events.title, events.description, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
-        events.media_display_mode, count(registrations.id)::text AS registrations
+        events.media_display_mode, events.current_form_version,
+        count(DISTINCT registrations.id)::text AS registrations,
+        count(DISTINCT check_ins.id)::text AS attendance
       FROM events
       LEFT JOIN event_registrations AS registrations
         ON registrations.event_id = events.id AND registrations.status = 'confirmed'
+      LEFT JOIN event_check_ins AS check_ins
+        ON check_ins.event_id = events.id
       WHERE events.id = $1
       GROUP BY events.id
     `, [eventId]);
@@ -248,6 +293,7 @@ export class PostgresEventRepository implements EventRepository {
       }),
       capacity: row.capacity,
       registrations: Number(row.registrations),
+      attendance: Number(row.attendance),
     };
   }
 }

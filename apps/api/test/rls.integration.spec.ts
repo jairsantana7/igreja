@@ -12,6 +12,8 @@ const eventB = 'b2000000-0000-4000-8000-000000000002';
 const mediaA = 'a3000000-0000-4000-8000-000000000001';
 const mediaB = 'b3000000-0000-4000-8000-000000000002';
 const publicEventA = 'a5000000-0000-4000-8000-000000000001';
+const registrationA = 'a6000000-0000-4000-8000-000000000001';
+const registrationB = 'b6000000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -42,12 +44,23 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${tenantA}', 'identity', 'google', false),
         ('${tenantB}', 'identity', 'google', false)
       ON CONFLICT DO NOTHING;
+      INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id) VALUES
+        ('${tenantA}', '${eventA}', 1, '[]', '${userA}'),
+        ('${tenantB}', '${eventB}', 1, '[]', '${userB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO event_registrations (id, tenant_id, event_id, user_id, form_version) VALUES
+        ('${registrationA}', '${tenantA}', '${eventA}', '${userA}', 1),
+        ('${registrationB}', '${tenantB}', '${eventB}', '${userB}', 1)
+      ON CONFLICT DO NOTHING;
     `);
   });
 
   afterAll(async () => {
     await admin.query(`
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_check_ins WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_registrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_form_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_media WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM users WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -101,6 +114,12 @@ describeDatabase('PostgreSQL RLS', () => {
           INSERT INTO event_form_fields (tenant_id, event_id, field_key, label, type, position)
           VALUES ($1, $2, 'campo_teste', 'Campo teste', 'short_text', 0)
         `, [tenantA, eventB])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO event_check_ins (tenant_id, event_id, registration_id, checked_in_by_user_id)
+          VALUES ($1, $2, $3, $4)
+        `, [tenantA, eventA, registrationB, userA])).rejects.toThrow();
       });
       await inTenant(client, tenantA, async () => {
         await expect(client.query(`
@@ -186,7 +205,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'community_integrations', 'event_form_fields', 'event_media', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'event_check_ins', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
-import type { CancelEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
+import type { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
 import { TOKENS } from '../../../application/ports/tokens';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
@@ -18,6 +18,8 @@ export class DashboardController {
     @Inject(TOKENS.getEventUseCase) private readonly getEvent: GetEventUseCase,
     @Inject(TOKENS.updateEventUseCase) private readonly updateEvent: UpdateEventUseCase,
     @Inject(TOKENS.cancelEventUseCase) private readonly cancelEvent: CancelEventUseCase,
+    @Inject(TOKENS.closeEventRegistrationsUseCase) private readonly closeRegistrations: CloseEventRegistrationsUseCase,
+    @Inject(TOKENS.completeEventUseCase) private readonly completeEvent: CompleteEventUseCase,
   ) {}
 
   @Get('dashboard')
@@ -73,5 +75,25 @@ export class DashboardController {
     @Param('eventId', new ParseUUIDPipe()) eventId: string,
   ) {
     return this.cancelEvent.execute(principal, eventId);
+  }
+
+  @Post('events/:eventId/close-registrations')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.eventsPublish)
+  close(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.closeRegistrations.execute(principal, eventId);
+  }
+
+  @Post('events/:eventId/complete')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.eventsPublish)
+  complete(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.completeEvent.execute(principal, eventId);
   }
 }

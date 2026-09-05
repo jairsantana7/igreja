@@ -4,10 +4,10 @@ import { AuthorizationError } from './errors';
 
 export class ListAuditEventsUseCase {
   constructor(private readonly audit: AuditTrailRepository) {}
-  execute(principal: AuthenticatedPrincipal) {
+  execute(principal: AuthenticatedPrincipal, eventId?: string) {
     if (!principal.permissions.includes(PERMISSIONS.auditRead)) {
       throw new AuthorizationError('Você não tem permissão para visualizar a auditoria.');
     }
-    return this.audit.list(principal, 100);
+    return this.audit.list(principal, 100, eventId);
   }
 }

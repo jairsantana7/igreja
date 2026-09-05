@@ -1,7 +1,7 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { PERMISSIONS } from '../../domain/entities/permission';
 import { AuthorizationError } from './errors';
-import type { PasswordHasher, TokenService } from '../ports/authentication.port';
+import type { PasswordHasher, SessionRepository, TokenService } from '../ports/authentication.port';
 import type { EventRegistrationRepository, RegistrationAnswerInput } from '../ports/event.port';
 import { GetPublicEventUseCase, validateAnswers } from './event.use-cases';
 
@@ -11,6 +11,7 @@ export class SignUpForEventUseCase {
     private readonly registrations: EventRegistrationRepository,
     private readonly passwords: PasswordHasher,
     private readonly tokens: TokenService,
+    private readonly sessions: SessionRepository,
   ) {}
 
   async execute(input: { publicId: string; name: string; email: string; password: string; answers: RegistrationAnswerInput[] }) {
@@ -31,6 +32,7 @@ export class SignUpForEventUseCase {
       roles: result.identity.roles,
       permissions: result.identity.permissions,
     };
+    principal.sessionId = await this.sessions.create(principal);
     return { registrationId: result.registrationId, accessToken: await this.tokens.sign(principal), user: principal };
   }
 }

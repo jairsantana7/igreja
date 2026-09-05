@@ -55,7 +55,7 @@ async function seed(): Promise<void> {
     `, [ids.tenant, ids.pastorRole]);
     await client.query(`
       INSERT INTO role_permissions (tenant_id, role_id, permission_key)
-      VALUES ($1, $2, 'events.register')
+      VALUES ($1, $2, 'events.register'), ($1, $2, 'sessions.manage')
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.memberRole]);
     await client.query(`
@@ -83,6 +83,18 @@ async function seed(): Promise<void> {
       VALUES ($1, $2, $3, 'restricao_alimentar', 'Possui alguma restrição alimentar?', 'short_text', false, '[]', 0)
       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label
     `, [ids.field, ids.tenant, ids.event]);
+    await client.query(`
+      INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id)
+      VALUES ($1, $2, 1, $3::jsonb, $4)
+      ON CONFLICT (event_id, tenant_id, version) DO NOTHING
+    `, [ids.tenant, ids.event, JSON.stringify([{
+      id: ids.field,
+      key: 'restricao_alimentar',
+      label: 'Possui alguma restrição alimentar?',
+      type: 'short_text',
+      required: false,
+      options: [],
+    }]), ids.admin]);
     await client.query('COMMIT');
     process.stdout.write('Seed local concluído.\n');
   } catch (error) {

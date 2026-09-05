@@ -25,6 +25,6 @@ describe('trilha de auditoria', () => {
     const list = vi.fn().mockResolvedValue([]);
     const useCase = new ListAuditEventsUseCase({ list } as unknown as AuditTrailRepository);
     await expect(useCase.execute(principal(['audit.read']))).resolves.toEqual([]);
-    expect(list).toHaveBeenCalledWith(expect.objectContaining({ userId: principal([]).userId }), 100);
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ userId: principal([]).userId }), 100, undefined);
   });
 });

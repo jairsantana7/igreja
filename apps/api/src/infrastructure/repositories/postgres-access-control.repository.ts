@@ -125,6 +125,7 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
         email: current.email,
         roles: current.roles,
         permissions: current.permissions,
+        sessionId: principal.sessionId,
       } : null;
     });
   }

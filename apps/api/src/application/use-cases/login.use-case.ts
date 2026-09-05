@@ -1,4 +1,4 @@
-import type { AuthenticationRepository, PasswordHasher, TokenService } from '../ports/authentication.port';
+import type { AuthenticationRepository, PasswordHasher, SessionRepository, TokenService } from '../ports/authentication.port';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { AuthenticationError } from './errors';
 
@@ -7,6 +7,7 @@ export class LoginUseCase {
     private readonly authentication: AuthenticationRepository,
     private readonly passwords: PasswordHasher,
     private readonly tokens: TokenService,
+    private readonly sessions: SessionRepository,
   ) {}
 
   async execute(input: { tenantSlug: string; email: string; password: string }) {
@@ -31,6 +32,7 @@ export class LoginUseCase {
       roles: identity.roles,
       permissions: identity.permissions,
     };
+    principal.sessionId = await this.sessions.create(principal);
     return { accessToken: await this.tokens.sign(principal), user: principal };
   }
 }

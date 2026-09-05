@@ -11,5 +11,5 @@ export interface AuditEventView {
 }
 
 export interface AuditTrailRepository {
-  list(principal: AuthenticatedPrincipal, limit: number): Promise<AuditEventView[]>;
+  list(principal: AuthenticatedPrincipal, limit: number, eventId?: string): Promise<AuditEventView[]>;
 }

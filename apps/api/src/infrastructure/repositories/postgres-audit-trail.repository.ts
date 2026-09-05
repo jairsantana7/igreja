@@ -5,7 +5,7 @@ import { PostgresDatabase } from '../database/postgres.database';
 export class PostgresAuditTrailRepository implements AuditTrailRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
-  list(principal: AuthenticatedPrincipal, limit: number): Promise<AuditEventView[]> {
+  list(principal: AuthenticatedPrincipal, limit: number, eventId?: string): Promise<AuditEventView[]> {
     return this.database.withTenant(principal, async (client) => {
       const result = await client.query<{
         id: string;
@@ -18,9 +18,10 @@ export class PostgresAuditTrailRepository implements AuditTrailRepository {
       }>(`
         SELECT id, actor_user_id, actor_name, action, resource_type, resource_id, created_at
         FROM audit_events
+        WHERE ($2::uuid IS NULL OR metadata ->> 'eventId' = $2::text)
         ORDER BY created_at DESC, id DESC
         LIMIT $1
-      `, [Math.min(Math.max(limit, 1), 100)]);
+      `, [Math.min(Math.max(limit, 1), 100), eventId ?? null]);
       return result.rows.map((row) => ({
         id: row.id,
         actorUserId: row.actor_user_id,

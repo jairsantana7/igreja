@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
-import { CancelEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
+import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
+import { CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
 import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from './application/use-cases/access-control.use-cases';
@@ -35,10 +36,15 @@ import { LocalMediaStorage } from './infrastructure/storage/local-media.storage'
 import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
 import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
 import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './application/use-cases/event-media.use-cases';
+import { PostgresEventCommunicationRepository, PostgresEventOperationsRepository, PostgresEventTemplateRepository } from './infrastructure/repositories/postgres-event-operations.repository';
+import { EventOperationsController } from './presentation/http/controllers/event-operations.controller';
+import { PostgresSessionRepository } from './infrastructure/repositories/postgres-session.repository';
+import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from './application/use-cases/session.use-cases';
+import { SessionsController } from './presentation/http/controllers/sessions.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -54,6 +60,11 @@ import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './applicati
     {
       provide: TOKENS.authRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAuthenticationRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.sessionRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresSessionRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -87,10 +98,25 @@ import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './applicati
       inject: [PostgresDatabase],
     },
     {
+      provide: TOKENS.eventOperationsRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventOperationsRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.eventCommunicationRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventCommunicationRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.eventTemplateRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventTemplateRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
       provide: TOKENS.loginUseCase,
-      useFactory: (auth: PostgresAuthenticationRepository, passwords: BcryptPasswordHasher, tokens: JoseTokenService) =>
-        new LoginUseCase(auth, passwords, tokens),
-      inject: [TOKENS.authRepository, TOKENS.passwordHasher, TOKENS.tokenService],
+      useFactory: (auth: PostgresAuthenticationRepository, passwords: BcryptPasswordHasher, tokens: JoseTokenService, sessions: PostgresSessionRepository) =>
+        new LoginUseCase(auth, passwords, tokens, sessions),
+      inject: [TOKENS.authRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository],
     },
     {
       provide: TOKENS.dashboardUseCase,
@@ -123,6 +149,56 @@ import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './applicati
       inject: [TOKENS.eventRepository],
     },
     {
+      provide: TOKENS.closeEventRegistrationsUseCase,
+      useFactory: (events: PostgresEventRepository) => new CloseEventRegistrationsUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.completeEventUseCase,
+      useFactory: (events: PostgresEventRepository) => new CompleteEventUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.listEventRegistrationsUseCase,
+      useFactory: (operations: PostgresEventOperationsRepository) => new ListEventRegistrationsUseCase(operations),
+      inject: [TOKENS.eventOperationsRepository],
+    },
+    {
+      provide: TOKENS.checkInRegistrationUseCase,
+      useFactory: (operations: PostgresEventOperationsRepository) => new CheckInRegistrationUseCase(operations),
+      inject: [TOKENS.eventOperationsRepository],
+    },
+    {
+      provide: TOKENS.undoRegistrationCheckInUseCase,
+      useFactory: (operations: PostgresEventOperationsRepository) => new UndoRegistrationCheckInUseCase(operations),
+      inject: [TOKENS.eventOperationsRepository],
+    },
+    {
+      provide: TOKENS.listEventCommunicationsUseCase,
+      useFactory: (communications: PostgresEventCommunicationRepository) => new ListEventCommunicationsUseCase(communications),
+      inject: [TOKENS.eventCommunicationRepository],
+    },
+    {
+      provide: TOKENS.createEventCommunicationUseCase,
+      useFactory: (communications: PostgresEventCommunicationRepository) => new CreateEventCommunicationUseCase(communications),
+      inject: [TOKENS.eventCommunicationRepository],
+    },
+    {
+      provide: TOKENS.queueEventCommunicationUseCase,
+      useFactory: (communications: PostgresEventCommunicationRepository, queue: DisabledJobQueue) => new QueueEventCommunicationUseCase(communications, queue),
+      inject: [TOKENS.eventCommunicationRepository, TOKENS.jobQueue],
+    },
+    {
+      provide: TOKENS.listEventTemplatesUseCase,
+      useFactory: (templates: PostgresEventTemplateRepository) => new ListEventTemplatesUseCase(templates),
+      inject: [TOKENS.eventTemplateRepository],
+    },
+    {
+      provide: TOKENS.createEventTemplateUseCase,
+      useFactory: (templates: PostgresEventTemplateRepository) => new CreateEventTemplateUseCase(templates),
+      inject: [TOKENS.eventTemplateRepository],
+    },
+    {
       provide: TOKENS.publicEventUseCase,
       useFactory: (events: PostgresEventRepository) => new GetPublicEventUseCase(events),
       inject: [TOKENS.eventRepository],
@@ -134,14 +210,30 @@ import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './applicati
         registrations: PostgresRegistrationRepository,
         passwords: BcryptPasswordHasher,
         tokens: JoseTokenService,
-      ) => new SignUpForEventUseCase(publicEvents, registrations, passwords, tokens),
-      inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository, TOKENS.passwordHasher, TOKENS.tokenService],
+        sessions: PostgresSessionRepository,
+      ) => new SignUpForEventUseCase(publicEvents, registrations, passwords, tokens, sessions),
+      inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository],
     },
     {
       provide: TOKENS.registerForEventUseCase,
       useFactory: (publicEvents: GetPublicEventUseCase, registrations: PostgresRegistrationRepository) =>
         new RegisterForEventUseCase(publicEvents, registrations),
       inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository],
+    },
+    {
+      provide: TOKENS.listSessionsUseCase,
+      useFactory: (sessions: PostgresSessionRepository) => new ListSessionsUseCase(sessions),
+      inject: [TOKENS.sessionRepository],
+    },
+    {
+      provide: TOKENS.revokeOtherSessionsUseCase,
+      useFactory: (sessions: PostgresSessionRepository) => new RevokeOtherSessionsUseCase(sessions),
+      inject: [TOKENS.sessionRepository],
+    },
+    {
+      provide: TOKENS.revokeCurrentSessionUseCase,
+      useFactory: (sessions: PostgresSessionRepository) => new RevokeCurrentSessionUseCase(sessions),
+      inject: [TOKENS.sessionRepository],
     },
     {
       provide: TOKENS.getAccessControlUseCase,

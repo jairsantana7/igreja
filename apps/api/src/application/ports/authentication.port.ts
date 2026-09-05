@@ -25,6 +25,32 @@ export interface TokenService {
   verify(token: string): Promise<AuthenticatedPrincipal>;
 }
 
+export interface SessionView {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export interface SessionRepository {
+  create(principal: AuthenticatedPrincipal): Promise<string>;
+  isActive(principal: AuthenticatedPrincipal): Promise<boolean>;
+  list(principal: AuthenticatedPrincipal): Promise<SessionView[]>;
+  revokeOthers(principal: AuthenticatedPrincipal): Promise<number>;
+  revokeCurrent(principal: AuthenticatedPrincipal): Promise<boolean>;
+}
+
+export interface MultiFactorChallenge {
+  challengeId: string;
+  expiresAt: string;
+}
+
+export interface MultiFactorProvider {
+  readonly providerKey: string;
+  createChallenge(input: { tenantId: string; userId: string }): Promise<MultiFactorChallenge>;
+  verifyChallenge(input: { challengeId: string; response: string }): Promise<boolean>;
+}
+
 export interface ExternalIdentity {
   provider: string;
   subject: string;

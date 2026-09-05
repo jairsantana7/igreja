@@ -2,7 +2,8 @@ import { DomainError } from './errors';
 
 export const FORM_FIELD_TYPES = ['short_text', 'long_text', 'single_choice', 'checkbox'] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
-export type EventStatus = 'draft' | 'published' | 'cancelled';
+export const EVENT_STATUSES = ['draft', 'published', 'registration_closed', 'cancelled', 'completed'] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
 export const EVENT_MEDIA_DISPLAY_MODES = ['hero', 'carousel', 'fixed'] as const;
 export type EventMediaDisplayMode = (typeof EVENT_MEDIA_DISPLAY_MODES)[number];
 
@@ -13,6 +14,14 @@ export function isRegistrationOpen(
   return event.status === 'published'
     && event.startsAt > now
     && (!event.registrationDeadline || event.registrationDeadline > now);
+}
+
+export type EventLifecycleAction = 'close_registrations' | 'cancel' | 'complete';
+
+export function canTransitionEvent(status: EventStatus, action: EventLifecycleAction): boolean {
+  if (action === 'close_registrations') return status === 'published' || status === 'registration_closed';
+  if (action === 'cancel') return ['draft', 'published', 'registration_closed', 'cancelled'].includes(status);
+  return ['published', 'registration_closed', 'completed'].includes(status);
 }
 
 export interface EventFormField {

@@ -63,6 +63,26 @@ export class CancelEventUseCase {
   }
 }
 
+export class CloseEventRegistrationsUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string) {
+    requirePermission(principal, PERMISSIONS.eventsPublish);
+    const event = await this.events.closeRegistrations(principal, eventId);
+    if (!event) throw new NotFoundError('Evento não encontrado nesta comunidade.');
+    return event;
+  }
+}
+
+export class CompleteEventUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string) {
+    requirePermission(principal, PERMISSIONS.eventsPublish);
+    const event = await this.events.complete(principal, eventId);
+    if (!event) throw new NotFoundError('Evento não encontrado nesta comunidade.');
+    return event;
+  }
+}
+
 export class GetPublicEventUseCase {
   constructor(private readonly events: EventRepository) {}
   async execute(publicId: string) {

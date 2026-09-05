@@ -47,8 +47,8 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
     userId: string,
     answers: RegistrationAnswerInput[],
   ): Promise<string> {
-    const event = await client.query<{ capacity: number | null; registration_deadline: Date | null }>(`
-      SELECT capacity, registration_deadline FROM events
+    const event = await client.query<{ capacity: number | null; registration_deadline: Date | null; current_form_version: number }>(`
+      SELECT capacity, registration_deadline, current_form_version FROM events
       WHERE id = $1 AND status = 'published'
       FOR UPDATE
     `, [eventId]);
@@ -70,12 +70,12 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
     }
 
     const registration = await client.query<{ id: string }>(`
-      INSERT INTO event_registrations (tenant_id, event_id, user_id, status)
-      VALUES ($1, $2, $3, 'confirmed')
+      INSERT INTO event_registrations (tenant_id, event_id, user_id, status, form_version)
+      VALUES ($1, $2, $3, 'confirmed', $4)
       ON CONFLICT (event_id, user_id)
-      DO UPDATE SET status = 'confirmed', updated_at = now()
+      DO UPDATE SET status = 'confirmed', form_version = EXCLUDED.form_version, updated_at = now()
       RETURNING id
-    `, [tenantId, eventId, userId]);
+    `, [tenantId, eventId, userId, event.rows[0].current_form_version]);
     const registrationId = registration.rows[0]!.id;
 
     for (const answer of answers) {

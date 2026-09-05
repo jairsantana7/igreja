@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isRegistrationOpen } from '../src/domain/entities/event';
+import { canTransitionEvent, isRegistrationOpen } from '../src/domain/entities/event';
 import type { EventRepository } from '../src/application/ports/event.port';
 import { CancelEventUseCase, UpdateEventUseCase } from '../src/application/use-cases/event.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
@@ -71,5 +71,17 @@ describe('gestão de evento existente', () => {
     const useCase = new CancelEventUseCase({ cancel } as unknown as EventRepository);
     await expect(useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001')).rejects.toThrow(AuthorizationError);
     expect(cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('ciclo de vida do evento', () => {
+  it('permite fechar inscrições apenas após publicação', () => {
+    expect(canTransitionEvent('published', 'close_registrations')).toBe(true);
+    expect(canTransitionEvent('draft', 'close_registrations')).toBe(false);
+  });
+
+  it('não permite cancelar um evento concluído', () => {
+    expect(canTransitionEvent('completed', 'cancel')).toBe(false);
+    expect(canTransitionEvent('registration_closed', 'cancel')).toBe(true);
   });
 });

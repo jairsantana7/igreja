@@ -13,6 +13,7 @@ export class JoseTokenService implements TokenService {
       email: principal.email,
       roles: principal.roles,
       permissions: principal.permissions,
+      sessionId: principal.sessionId,
     })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setSubject(principal.userId)
@@ -41,6 +42,7 @@ export class JoseTokenService implements TokenService {
       permissions: Array.isArray(payload.permissions)
         ? payload.permissions.filter((permission): permission is Permission => typeof permission === 'string')
         : [],
+      sessionId: typeof payload.sessionId === 'string' ? payload.sessionId : undefined,
     };
   }
 }

@@ -5,6 +5,9 @@ export const PERMISSIONS = {
   eventsPublish: 'events.publish',
   registrationsRead: 'events.registrations_read',
   eventsRegister: 'events.register',
+  eventsCheckin: 'events.checkin',
+  eventsCommunicate: 'events.communicate',
+  eventTemplatesManage: 'events.templates_manage',
   usersRead: 'users.read',
   usersCreate: 'users.create',
   usersUpdate: 'users.update',
@@ -13,6 +16,7 @@ export const PERMISSIONS = {
   settingsRead: 'settings.read',
   settingsManage: 'settings.manage',
   auditRead: 'audit.read',
+  sessionsManage: 'sessions.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -24,4 +28,5 @@ export interface AuthenticatedPrincipal {
   email: string;
   roles: string[];
   permissions: Permission[];
+  sessionId?: string;
 }

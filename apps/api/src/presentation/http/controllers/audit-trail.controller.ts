@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
 import type { ListAuditEventsUseCase } from '../../../application/use-cases/audit-trail.use-case';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
@@ -14,7 +14,10 @@ export class AuditTrailController {
 
   @Get()
   @RequirePermissions(PERMISSIONS.auditRead)
-  list(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
-    return this.listAuditEvents.execute(principal);
+  list(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query('eventId', new ParseUUIDPipe({ optional: true })) eventId?: string,
+  ) {
+    return this.listAuditEvents.execute(principal, eventId);
   }
 }
