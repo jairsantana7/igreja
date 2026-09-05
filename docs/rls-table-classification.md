@@ -13,6 +13,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `role_permissions` | tenant-direct | associação pertence à comunidade | RLS direta + FK composta para papel |
 | `user_roles` | tenant-direct | atribuição pertence à comunidade | RLS direta + FKs compostas |
 | `events` | tenant-direct | evento pertence à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita |
+| `event_collaborators` | tenant-direct | colaboração relaciona evento e usuário da mesma comunidade | RLS direta + FKs compostas para evento e usuário |
 | `event_form_fields` | tenant-direct | campo pertence a evento e comunidade | RLS direta + FK composta para evento |
 | `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |
 | `event_registrations` | tenant-direct | inscrição pertence a evento e comunidade | RLS direta + FKs compostas |
@@ -22,6 +23,9 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_communications` | tenant-direct | campanha de comunicação pertence a um evento | RLS direta + FKs compostas para evento e autor |
 | `event_templates` | tenant-direct | modelo reutilizável pertence à comunidade | RLS direta + FK composta para autor |
 | `auth_sessions` | tenant-direct | sessão revogável pertence ao usuário da comunidade | RLS direta + FK composta para usuário; token bruto nunca é persistido |
+| `conversation_channels` | tenant-direct | número/canal pertence a um responsável da comunidade | RLS direta + FK composta para o responsável; segredo fica fora do banco |
+| `conversations` | tenant-direct | atendimento pertence ao canal, contato e comunidade | RLS direta + FKs compostas para canal, evento, membro e responsável |
+| `conversation_messages` | tenant-direct | mensagem pertence a uma conversa da comunidade | RLS direta + FKs compostas para conversa e remetente interno |
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |
 | `community_integrations` | tenant-direct | configuração de integração pertence à comunidade | RLS direta; segredos ficam fora da tabela |
 | `audit_events` | tenant-direct | trilha de alterações pertence à comunidade | RLS direta; runtime somente leitura e triggers gravam como owner |

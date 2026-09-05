@@ -15,10 +15,13 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - fechamento de inscrições, conclusão e cancelamento;
 - versões de formulário, modelos de evento e campanhas em rascunho;
 - sessões revogáveis.
+- responsável e colaboradores por evento com escopos próprio/global;
+- fundação da central de conversas e canais individuais por pastor.
 
 ## Próximo
 
-- adapter compartilhado de fila e primeiro canal de comunicação;
+- adapter compartilhado de fila e adapter oficial do WhatsApp com webhook validado;
+- consentimento, opt-out, retenção e modelos aprovados para lembretes;
 - QR Code e fluxo de check-in móvel/offline;
 - comparação e edição avançada de versões do formulário;
 - recorrência automática com exceções de calendário;

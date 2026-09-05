@@ -10,6 +10,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Configurações dependem de `CommunitySettingsRepository`; o adaptador PostgreSQL não vaza para os casos de uso.
 - Cache implementa `CacheStore`; a implementação padrão é no-op e pode ser substituída por Redis ou outro backend.
 - Filas implementam `JobQueue`; a implementação padrão falha explicitamente até BullMQ, RabbitMQ, SQS ou outro broker ser configurado.
+- Mensageria individual implementa `ConversationProvider`; a porta não conhece Meta, WhatsApp Cloud API ou outro fornecedor.
 - Logs e captura de exceções implementam `ApplicationLogger`; Sentry e OpenTelemetry entram como adaptadores de infraestrutura.
 - Arquivos implementam `MediaStorage`; disco local, S3 e Cloudflare R2 são adaptadores de infraestrutura.
 - A seleção ocorre por `providerKey`, nunca por condicionais de fornecedor no domínio.
@@ -32,6 +33,16 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Consumidores são idempotentes e definem política explícita de tentativas, atraso e dead-letter queue.
 - O adaptador não pode confirmar a mensagem antes da conclusão segura do trabalho.
 - Campanhas de evento são persistidas antes do enqueue e usam `events.communication.dispatch` com chave de deduplicação.
+- Respostas da central são persistidas antes do enqueue e usam `conversations.message.dispatch`; o identificador da mensagem é a chave de deduplicação.
+
+## Canais de conversa
+
+- Cada canal pertence a um usuário e a uma comunidade. O worker sempre reabre o contexto RLS com o `tenantId` confiável do job.
+- O banco armazena número, identificador operacional e referência do segredo; tokens permanecem no secret manager.
+- O webhook deve validar assinatura e replay antes de resolver canal e contato. Cabeçalhos públicos não definem tenant.
+- Atualizações de entrega são idempotentes pelo identificador do fornecedor e não podem mover mensagens de outro tenant.
+- Conteúdo, nomes e números são dados pessoais: não os inclua em logs, breadcrumbs ou payloads de erro.
+- Um canal somente recebe estado `connected` após teste real do adapter. Salvar configuração resulta apenas em `configured`.
 
 ## Logs e captura de erros
 
@@ -58,4 +69,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual e um slot genérico de gateway podem ser configurados. Sessões locais já são revogáveis. Ainda não há adaptador externo de identidade, MFA, fila ou pagamento instalado, cobrança de evento, webhook ou vinculação de conta social; portanto esses recursos permanecem **não operacionais** até uma implementação posterior.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Ainda não há adaptador externo de identidade, MFA, fila, WhatsApp ou pagamento instalado, cobrança de evento, webhook ou vinculação de conta social; portanto esses recursos permanecem **não operacionais** até uma implementação posterior.

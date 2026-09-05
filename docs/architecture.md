@@ -62,6 +62,7 @@ Configurações de login social e pagamentos formam um contexto separado de even
 ## Contextos preparados
 
 - **Comunicação:** campanhas persistem como intenção de envio; a entrega passa por `JobQueue` e por adaptadores de canal.
+- **Conversas:** canais, atendimentos e mensagens formam um bounded context próprio. `ConversationProvider` recebe/envia mensagens e `JobQueue` desacopla a entrega; eventos apenas fornecem um vínculo opcional.
 - **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.
 - **Segurança administrativa:** sessões revogáveis e uma futura porta de MFA não alteram o domínio de eventos. Acesso emergencial será um fluxo privilegiado explícito, nunca um tenant vazio.
 - **Modelos de evento:** reutilizam conteúdo e formulário, mas não transformam recorrência em comportamento implícito.

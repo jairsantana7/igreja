@@ -28,6 +28,11 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Concluir um evento é permitido a partir de `published` ou `registration_closed` e encerra sua operação.
 - Eventos concluídos não podem ser cancelados. Repetir fechamento, conclusão ou cancelamento no mesmo estado é idempotente.
 - As transições de ciclo de vida exigem `events.publish`; o nome do papel nunca participa dessa decisão.
+- Quem cria um evento torna-se seu responsável inicial.
+- Um responsável pode compartilhar o evento com colaboradores da mesma comunidade.
+- Sem permissão de escopo global, usuários enxergam e administram apenas eventos próprios ou compartilhados com eles.
+- Permissões `events.read_all` e `events.manage_all` permitem supervisão transversal; essa capacidade não é inferida do nome do papel.
+- Transferência de responsabilidade ainda precisa de uma operação explícita e auditada; remover um pastor não transfere dados automaticamente.
 
 ## Inscrição
 
@@ -60,6 +65,20 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O MVP permite preparar campanhas para inscritos confirmados, presentes ou ausentes, sem enviar diretamente no request HTTP.
 - Uma campanha só muda para enfileirada depois que o adaptador de fila aceita o trabalho. Sem adaptador, a operação falha de forma explícita e o rascunho é preservado.
 - Consentimento, opt-out, modelos de mensagem, custo, janela de envio e provedores oficiais permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
+
+## Central de conversas
+
+- Cada canal de WhatsApp Business pertence a um usuário responsável e a uma comunidade.
+- Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
+- Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
+- Uma conversa possui responsável, estado `open`, `waiting` ou `resolved`, e histórico ordenado de mensagens.
+- `conversations.read` habilita a central; sem `conversations.read_all`, aparecem somente conversas de canais próprios ou atribuídas ao usuário.
+- Responder exige `conversations.reply`; atribuir ou resolver exige `conversations.assign` e acesso à conversa.
+- Mensagens de saída são persistidas como pendentes e somente mudam para enfileiradas após aceitação de `JobQueue`.
+- O conector implementa `ConversationProvider`; casos de uso não conhecem Meta, WhatsApp Cloud API ou outro fornecedor.
+- Número completo, nomes, endereços de contato e conteúdo são dados pessoais. Não entram em logs nem na metadata de auditoria e seguem a política de retenção ainda a definir.
+- Client secrets e tokens ficam no secret manager. O banco guarda apenas uma referência e identificadores operacionais não secretos.
+- Um canal configurado não é considerado conectado enquanto a implantação não registrar e validar um adapter oficial.
 
 ## Modelos e recorrência
 
@@ -104,12 +123,15 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quais gateways e provedores OIDC serão mantidos oficialmente pelo projeto?
 - Quando uma edição deve ou não criar uma nova versão do formulário?
 - Qual política de MFA e recuperação de emergência será adotada antes da produção?
+- Qual prazo de retenção, consentimento e opt-out vale para mensagens e contatos?
+- A comunidade aceitará múltiplos números por pastor e um número institucional compartilhado?
 
 ## Acesso inicial
 
 - O seed de desenvolvimento cria somente um usuário `admin`.
 - A senha inicial deve ser alterada ou substituída por fluxo de convite antes de produção.
 - Papéis `pastor` e `member` são modelos de sistema; novos usuários recebem um ou mais papéis pelo módulo de acesso.
+- Migrações concedem capacidades novas ao papel administrativo de sistema para preservar a possibilidade de delegação; outros papéis não recebem ampliação automática fora do seed de desenvolvimento.
 
 ## Controle de funcionalidades
 
