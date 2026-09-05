@@ -13,4 +13,4 @@ Obrigado por contribuir. Antes de escrever código, abra uma issue para mudança
 
 Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`). Não inclua dados reais em fixtures, issues ou logs.
 
-Ao contribuir, você concorda que sua contribuição será licenciada sob a licença MIT do projeto.
+Salvo declaração explícita em contrário, ao enviar uma contribuição para inclusão no projeto você concorda que ela seja licenciada sob a [Apache License 2.0](LICENSE), sem termos adicionais, conforme a seção 5 da licença.

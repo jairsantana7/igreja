@@ -2,7 +2,7 @@
   "name": "@igreja/web",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "nuxt dev --dotenv ../../.env --port 3100",
     "build": "nuxt build --dotenv ../../.env",

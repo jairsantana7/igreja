@@ -82,4 +82,4 @@ A central de conversas já preserva canais, atendimentos e respostas pendentes, 
 - [Roadmap](ROADMAP.md)
 - [Código de conduta](CODE_OF_CONDUCT.md)
 
-Licenciado sob [MIT](LICENSE).
+Licenciado sob a [Apache License 2.0](LICENSE). Consulte também os avisos de atribuição em [NOTICE](NOTICE).
