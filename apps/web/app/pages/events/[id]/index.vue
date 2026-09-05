@@ -19,6 +19,7 @@ interface Communication {
   subject: string; message: string; status: 'draft' | 'queued' | 'sent' | 'failed'; createdAt: string; queuedAt: string | null;
 }
 interface AuditEvent { id: string; actorName: string | null; action: 'created' | 'updated' | 'deleted'; resourceType: string; resourceId: string; createdAt: string }
+interface AuditPage { items: AuditEvent[]; nextCursor: string | null }
 
 useHead({ title: 'Gestão do evento' });
 const route = useRoute();
@@ -50,10 +51,12 @@ const { data: communications, refresh: refreshCommunications } = await useAsyncD
   () => canCommunicate.value ? api<Communication[]>(`/events/${eventId}/communications`) : Promise.resolve([]),
   { server: false },
 );
-const { data: audit } = await useAsyncData(
+const auditCursor = ref<string | null>(null);
+const auditCursorHistory = ref<Array<string | null>>([]);
+const { data: audit, pending: auditPending, error: auditError } = await useAsyncData(
   `event-${eventId}-audit`,
-  () => canAudit.value ? api<AuditEvent[]>(`/audit?eventId=${eventId}`) : Promise.resolve([]),
-  { server: false },
+  () => canAudit.value ? api<AuditPage>('/audit', { query: { eventId, limit: 25, cursor: auditCursor.value ?? undefined } }) : Promise.resolve({ items: [], nextCursor: null }),
+  { server: false, watch: [auditCursor] },
 );
 const activeTab = ref<'overview' | 'registrations' | 'form' | 'communication' | 'audit'>('overview');
 const registrationFilter = ref<'all' | 'present' | 'absent'>('all');
@@ -74,6 +77,13 @@ const filteredRegistrations = computed(() => (registrations.value ?? []).filter(
   return matchesText && matchesStatus;
 }));
 watch(event, (value) => { selectedCollaborators.value = value?.collaborators.map((item) => item.id) ?? []; }, { immediate: true });
+
+function nextAuditPage() {
+  if (!audit.value?.nextCursor) return;
+  auditCursorHistory.value.push(auditCursor.value);
+  auditCursor.value = audit.value.nextCursor;
+}
+function previousAuditPage() { auditCursor.value = auditCursorHistory.value.pop() ?? null; }
 
 async function changeLifecycle(action: 'close-registrations' | 'complete') {
   busyId.value = action; feedback.value = '';
@@ -181,7 +191,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
 
       <section v-else-if="activeTab === 'communication'" class="operation-panel"><div class="operation-toolbar"><div><h2>Comunicação com participantes</h2><p>Prepare a mensagem agora; a entrega sempre passa pelo adaptador de fila da instalação.</p></div></div><div class="operation-grid"><form class="operation-card communication-form" @submit.prevent="createCommunication"><label class="field"><span>Público</span><select v-model="communicationForm.audience"><option value="confirmed">Inscritos confirmados</option><option value="checked_in">Presentes</option><option value="not_checked_in">Ausentes</option></select></label><label class="field"><span>Canal</span><select v-model="communicationForm.channel"><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Assunto</span><input v-model="communicationForm.subject" maxlength="160" placeholder="Assunto da mensagem"></label><label class="field"><span>Mensagem</span><textarea v-model="communicationForm.message" maxlength="5000" rows="5" required></textarea></label><button class="button button--primary" :disabled="busyId === 'communication'">Salvar rascunho</button></form><div class="communication-list"><article v-for="item in communications" :key="item.id" class="operation-card"><div class="event-card__badges"><span class="badge badge--draft">{{ item.channel }}</span><span class="badge" :class="item.status === 'queued' ? 'badge--published' : 'badge--draft'">{{ item.status === 'draft' ? 'Rascunho' : item.status === 'queued' ? 'Na fila' : item.status }}</span></div><h3>{{ item.subject || 'Mensagem sem assunto' }}</h3><p>{{ item.message }}</p><small>{{ audienceLabels[item.audience] }} · {{ formatter.format(new Date(item.createdAt)) }}</small><button v-if="item.status === 'draft'" class="button button--small" :disabled="busyId === item.id" @click="queueCommunication(item)">Enfileirar envio</button></article><div v-if="!communications?.length" class="empty-card"><p>Nenhuma comunicação preparada.</p></div></div></div><p class="integration-warning"><strong>Entrega segura:</strong> sem BullMQ, RabbitMQ ou outro adaptador configurado, o envio falha explicitamente e mantém o rascunho.</p></section>
 
-      <section v-else class="operation-panel"><div class="operation-toolbar"><div><h2>Auditoria deste evento</h2><p>Alterações administrativas, check-ins, versões e comunicações relacionadas.</p></div></div><ol v-if="audit?.length" class="audit-list"><li v-for="item in audit" :key="item.id" class="audit-item"><span class="audit-item__icon" :class="`audit-item__icon--${item.action}`">{{ item.action === 'created' ? '＋' : item.action === 'updated' ? '✎' : '−' }}</span><div class="audit-item__body"><p><strong>{{ item.actorName ?? 'Processo do sistema' }}</strong> {{ item.action === 'created' ? 'criou' : item.action === 'updated' ? 'editou' : 'excluiu' }} <strong>{{ item.resourceType.replaceAll('_', ' ') }}</strong>.</p><small>{{ formatter.format(new Date(item.createdAt)) }}</small></div></li></ol><div v-else class="empty-card"><p>Nenhuma atividade encontrada para este evento.</p></div></section>
+      <section v-else class="operation-panel"><div class="operation-toolbar"><div><h2>Auditoria deste evento</h2><p>Alterações administrativas, check-ins, versões e comunicações relacionadas.</p></div></div><div v-if="auditPending" class="empty-card">Carregando auditoria…</div><div v-else-if="auditError" class="empty-card">Não foi possível carregar a auditoria.</div><ol v-else-if="audit?.items.length" class="audit-list"><li v-for="item in audit.items" :key="item.id" class="audit-item"><span class="audit-item__icon" :class="`audit-item__icon--${item.action}`">{{ item.action === 'created' ? '＋' : item.action === 'updated' ? '✎' : '−' }}</span><div class="audit-item__body"><p><strong>{{ item.actorName ?? 'Processo do sistema' }}</strong> {{ item.action === 'created' ? 'criou' : item.action === 'updated' ? 'editou' : 'excluiu' }} <strong>{{ item.resourceType.replaceAll('_', ' ') }}</strong>.</p><small>{{ formatter.format(new Date(item.createdAt)) }}</small></div></li></ol><div v-else class="empty-card"><p>Nenhuma atividade encontrada para este evento.</p></div><nav v-if="auditCursorHistory.length || audit?.nextCursor" class="pagination" aria-label="Paginação da auditoria do evento"><button class="button" :disabled="auditPending || !auditCursorHistory.length" @click="previousAuditPage">← Anterior</button><span>Página {{ auditCursorHistory.length + 1 }}</span><button class="button" :disabled="auditPending || !audit?.nextCursor" @click="nextAuditPage">Próxima →</button></nav></section>
     </template>
   </div>
 </template>

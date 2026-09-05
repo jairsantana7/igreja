@@ -10,6 +10,23 @@ export interface AuditEventView {
   createdAt: string;
 }
 
+export interface AuditCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface AuditTrailQuery {
+  limit: number;
+  eventId?: string;
+  action?: AuditEventView['action'];
+  cursor?: AuditCursor;
+}
+
+export interface AuditEventPage {
+  items: AuditEventView[];
+  nextCursor: string | null;
+}
+
 export interface AuditTrailRepository {
-  list(principal: AuthenticatedPrincipal, limit: number, eventId?: string): Promise<AuditEventView[]>;
+  list(principal: AuthenticatedPrincipal, query: AuditTrailQuery): Promise<AuditEventView[]>;
 }
