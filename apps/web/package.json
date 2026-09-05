@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "dev": "nuxt dev --dotenv ../../.env --port 3000",
+    "dev": "nuxt dev --dotenv ../../.env --port 3100",
     "build": "nuxt build --dotenv ../../.env",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",

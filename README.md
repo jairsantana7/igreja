@@ -21,14 +21,14 @@ pnpm db:seed
 pnpm dev
 ```
 
-Abra `http://localhost:3000`. O seed local cria:
+Abra `http://localhost:3100`. O seed local cria:
 
 - comunidade: `comunidade-demo`
 - usuário inicial: `Admin Inicial`
 - e-mail: `admin@comunidade.local`
 - senha: `Comunidade#2026`
 
-Essas credenciais são apenas para desenvolvimento. A API fica em `http://localhost:3001/api` e o PostgreSQL escuta somente em `127.0.0.1:5434`.
+Essas credenciais são apenas para desenvolvimento. A API fica em `http://localhost:3101/api` e o PostgreSQL escuta somente em `127.0.0.1:5434`.
 
 ## Comandos
 

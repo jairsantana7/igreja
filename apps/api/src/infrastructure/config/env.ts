@@ -18,8 +18,8 @@ function integer(name: string, fallback: number): number {
 export const env = Object.freeze({
   appName: required('APP_NAME', 'Minha Comunidade'),
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  apiPort: integer('API_PORT', 3001),
-  corsOrigin: required('CORS_ORIGIN', 'http://localhost:3000'),
+  apiPort: integer('API_PORT', 3101),
+  corsOrigin: required('CORS_ORIGIN', 'http://localhost:3100'),
   databaseUrl: required('DATABASE_URL'),
   databaseAdminUrl: process.env.DATABASE_ADMIN_URL,
   migrationUrl: process.env.DATABASE_MIGRATION_URL,
