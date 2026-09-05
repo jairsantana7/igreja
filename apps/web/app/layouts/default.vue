@@ -8,6 +8,7 @@ const canReadAccess = computed(() => auth.session.value?.user.permissions.includ
 const canReadAudit = computed(() => auth.session.value?.user.permissions.includes('audit.read'));
 const canReadConversations = computed(() => auth.session.value?.user.permissions.includes('conversations.read'));
 const canReadCommunication = computed(() => auth.session.value?.user.permissions.includes('communications.templates_read'));
+const canReadFollowups = computed(() => auth.session.value?.user.permissions.some((permission) => ['followups.read_own', 'followups.read_all'].includes(permission)));
 
 async function leave() {
   try { await api('/sessions/current', { method: 'DELETE' }); } catch { /* O logout local continua se a API estiver indisponível. */ }
@@ -35,6 +36,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink v-if="canReadConversations" to="/conversations" class="nav-link" :class="{ active: route.path === '/conversations' }">
           <span aria-hidden="true">◌</span> Conversas
+        </NuxtLink>
+        <NuxtLink v-if="canReadFollowups" to="/followups" class="nav-link" :class="{ active: route.path === '/followups' }">
+          <span aria-hidden="true">♡</span> Acompanhamentos
         </NuxtLink>
         <NuxtLink v-if="canReadCommunication" to="/communication" class="nav-link" :class="{ active: route.path === '/communication' }">
           <span aria-hidden="true">✎</span> Comunicação

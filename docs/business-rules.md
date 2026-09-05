@@ -112,6 +112,20 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Somente uma sincronização autenticada bem-sucedida pode mudar o canal de `configured` para `connected` nesta etapa.
 - Criar, editar, excluir ou enviar templates permanece bloqueado até serem definidas regras para categorias, exemplos de variáveis, opt-in, janela de atendimento e custos.
 
+## Acompanhamento pastoral
+
+- Acompanhamento pastoral é um bounded context próprio. A conversa é um vínculo de comunicação e não o agregado principal.
+- Um acompanhamento nasce de uma conversa acessível e preserva uma fotografia do nome e contato, podendo também apontar para um membro cadastrado.
+- Cada acompanhamento possui responsável, etapa, etiquetas opcionais e data opcional para a próxima ação.
+- As etapas e etiquetas pertencem à comunidade. Etapas podem ser criadas por quem administra o quadro; excluir ou reordenar etapas permanece uma decisão posterior.
+- Uma conversa pertence a no máximo um acompanhamento. Um acompanhamento pode reunir várias conversas da mesma pessoa ao longo do tempo.
+- Mover um cartão cria um histórico imutável com etapa anterior, nova etapa, ator e horário.
+- Notas são internas e nunca são enviadas ao contato. Notas `private` são visíveis somente para o autor; notas `team` podem ser lidas por usuários autorizados que acessam o acompanhamento.
+- O conteúdo de notas não é copiado para auditoria, logs, breadcrumbs ou mensagens de erro.
+- `followups.read_own` limita a leitura aos acompanhamentos sob responsabilidade do usuário; `followups.read_all` habilita supervisão da comunidade.
+- Alterações exigem `followups.manage` e acesso ao acompanhamento. Notas exigem adicionalmente `followups.notes_read` ou `followups.notes_manage`; administrar etapas e etiquetas exige `followups.pipeline_manage`.
+- A interface descreve essas capacidades em linguagem do negócio; as chaves técnicas aparecem somente na administração de acessos.
+
 ## Modelos e recorrência
 
 - Um evento pode ser salvo como modelo reutilizável contendo dados editoriais e o formulário, sem inscrições, auditoria ou identificadores públicos.

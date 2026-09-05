@@ -50,6 +50,7 @@ pnpm db:down    # encerra containers
 - central operacional por evento com inscrições, presença, formulário, comunicação e auditoria;
 - eventos com responsável e colaboradores, incluindo escopos de acesso próprio e global;
 - central de conversas com canais individuais por pastor e vínculo opcional ao evento;
+- acompanhamento pastoral em Kanban, com etapas, etiquetas, próxima ação, notas privadas ou da equipe e histórico;
 - Central de comunicação com modelos locais versionados, prévia, variáveis e histórico;
 - lembretes configuráveis por evento, canal, público, antecedência e versão do modelo;
 - sincronização dos templates oficiais e seus status pela Meta WhatsApp Cloud API;

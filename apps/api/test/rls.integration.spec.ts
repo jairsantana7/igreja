@@ -28,6 +28,12 @@ const templateVersionA = 'ad000000-0000-4000-8000-000000000001';
 const templateVersionB = 'bd000000-0000-4000-8000-000000000002';
 const reminderA = 'ae000000-0000-4000-8000-000000000001';
 const reminderB = 'be000000-0000-4000-8000-000000000002';
+const followupStageA = 'af000000-0000-4000-8000-000000000001';
+const followupStageB = 'bf000000-0000-4000-8000-000000000002';
+const followupTagA = 'a1100000-0000-4000-8000-000000000001';
+const followupTagB = 'b1100000-0000-4000-8000-000000000002';
+const followupA = 'a1200000-0000-4000-8000-000000000001';
+const followupB = 'b1200000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -106,6 +112,30 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${tenantA}', '${conversationA}', 'inbound', 'Mensagem A', 'received'),
         ('${tenantB}', '${conversationB}', 'inbound', 'Mensagem B', 'received')
       ON CONFLICT DO NOTHING;
+      INSERT INTO followup_stages (id, tenant_id, name, color, position) VALUES
+        ('${followupStageA}', '${tenantA}', 'Etapa A', '#378661', 0),
+        ('${followupStageB}', '${tenantB}', 'Etapa B', '#3B82F6', 0)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO followup_tags (id, tenant_id, name, color) VALUES
+        ('${followupTagA}', '${tenantA}', 'Etiqueta A', '#D4A94F'),
+        ('${followupTagB}', '${tenantB}', 'Etiqueta B', '#7C5CBF')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO pastoral_followups (id, tenant_id, owner_user_id, stage_id, contact_name, contact_address, created_by_user_id) VALUES
+        ('${followupA}', '${tenantA}', '${userA}', '${followupStageA}', 'Contato A', '+551199999001', '${userA}'),
+        ('${followupB}', '${tenantB}', '${userB}', '${followupStageB}', 'Contato B', '+551199999002', '${userB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO followup_conversations (tenant_id, followup_id, conversation_id) VALUES
+        ('${tenantA}', '${followupA}', '${conversationA}'), ('${tenantB}', '${followupB}', '${conversationB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO followup_tag_assignments (tenant_id, followup_id, tag_id) VALUES
+        ('${tenantA}', '${followupA}', '${followupTagA}'), ('${tenantB}', '${followupB}', '${followupTagB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO followup_notes (tenant_id, followup_id, author_user_id, visibility, body) VALUES
+        ('${tenantA}', '${followupA}', '${userA}', 'private', 'Nota A'),
+        ('${tenantB}', '${followupB}', '${userB}', 'team', 'Nota B');
+      INSERT INTO followup_stage_changes (tenant_id, followup_id, to_stage_id, changed_by_user_id) VALUES
+        ('${tenantA}', '${followupA}', '${followupStageA}', '${userA}'),
+        ('${tenantB}', '${followupB}', '${followupStageB}', '${userB}');
     `);
   });
 
@@ -115,6 +145,13 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM event_reminder_rules WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM communication_template_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM communication_templates WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_notes WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_stage_changes WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_tag_assignments WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM pastoral_followups WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_tags WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM followup_stages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_messages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_channels WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -166,6 +203,8 @@ describeDatabase('PostgreSQL RLS', () => {
     expect(result.rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM communication_templates')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM event_reminder_rules')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM pastoral_followups')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM followup_notes')).rows).toEqual([]);
     await expect(runtime.query(
       "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Sem contexto', 'sem-contexto@test.local')",
       [tenantA],
@@ -218,6 +257,11 @@ describeDatabase('PostgreSQL RLS', () => {
             created_by_user_id, audience, offset_minutes_before
           ) VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', 60)
         `, [tenantA, eventA, communicationTemplateB, templateVersionB, channelA, userA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO followup_tag_assignments (tenant_id, followup_id, tag_id) VALUES ($1, $2, $3)
+        `, [tenantA, followupA, followupTagB])).rejects.toThrow();
       });
     } finally { client.release(); }
   });
@@ -297,6 +341,24 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('acompanhamentos, notas e vínculos não atravessam comunidades', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id FROM pastoral_followups')).rows.map((row) => row.id)).toEqual([followupA]);
+        expect((await client.query('SELECT body FROM followup_notes')).rows).toEqual([{ body: 'Nota A' }]);
+        expect((await client.query('SELECT tag_id FROM followup_tag_assignments')).rows).toEqual([{ tag_id: followupTagA }]);
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query('UPDATE pastoral_followups SET tenant_id = $1 WHERE id = $2', [tenantB, followupA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('DELETE FROM pastoral_followups WHERE id = $1', [followupB])).rowCount).toBe(0);
+      });
+      expect((await client.query('SELECT id FROM followup_stages')).rows).toEqual([]);
+    } finally { client.release(); }
+  });
+
   it('sessões e perfil complementar não atravessam comunidades', async () => {
     const client = await runtime.connect();
     try {
@@ -346,7 +408,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

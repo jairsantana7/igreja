@@ -21,6 +21,7 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - fundação da central de conversas e canais individuais por pastor.
 - modelos de comunicação versionados e regras de lembrete por evento;
 - adapter compartilhado BullMQ/Redis e worker separado, habilitados de forma explícita;
+- acompanhamento pastoral com Kanban, etapas, etiquetas, próximas ações e notas internas;
 
 ## Próximo
 

@@ -20,11 +20,13 @@ interface EventOption { id: string; title: string; owner: { id: string; name: st
 useHead({ title: 'Conversas' });
 const api = useApi();
 const auth = useAuth();
+const route = useRoute();
 const permissions = computed(() => auth.session.value?.user.permissions ?? []);
 const canManageChannel = computed(() => permissions.value.includes('channels.manage_own') || permissions.value.includes('channels.manage_all'));
 const canReply = computed(() => permissions.value.includes('conversations.reply'));
 const canAssign = computed(() => permissions.value.includes('conversations.assign'));
 const canReadTemplates = computed(() => permissions.value.includes('communications.templates_read'));
+const canManageFollowups = computed(() => permissions.value.includes('followups.manage'));
 const { data: conversations, pending, error, refresh } = await useAsyncData('conversations', () => api<Conversation[]>('/conversations'), { server: false });
 const { data: channels, refresh: refreshChannels } = await useAsyncData(
   'conversation-channels',
@@ -32,7 +34,7 @@ const { data: channels, refresh: refreshChannels } = await useAsyncData(
   { server: false },
 );
 const { data: events } = await useAsyncData('conversation-event-options', () => api<EventOption[]>('/events'), { server: false });
-const selectedId = ref<string | null>(null);
+const selectedId = ref<string | null>(typeof route.query.selected === 'string' ? route.query.selected : null);
 const selected = computed(() => (conversations.value ?? []).find((item) => item.id === selectedId.value) ?? null);
 const { data: messages, pending: messagesPending, refresh: refreshMessages } = await useAsyncData(
   'conversation-messages',
@@ -59,6 +61,9 @@ const filtered = computed(() => (conversations.value ?? []).filter((item) => {
 watch(conversations, (items) => {
   if (!selectedId.value && items?.length) selectedId.value = items[0]!.id;
 }, { immediate: true });
+watch(() => route.query.selected, (id) => {
+  if (typeof id === 'string') selectedId.value = id;
+});
 watch(selectedId, async (id) => {
   if (id) await refreshMessages();
 });
@@ -122,6 +127,17 @@ async function updateStatus(status: ConversationStatus) {
     feedback.value = requestError?.data?.message ?? 'Não foi possível atualizar a conversa.';
   } finally { busy.value = false; }
 }
+
+async function startFollowup() {
+  if (!selected.value) return;
+  busy.value = true; feedback.value = '';
+  try {
+    const followup = await api<{ id: string }>('/followups', { method: 'POST', body: { conversationId: selected.value.id } });
+    await navigateTo(`/followups?selected=${followup.id}`);
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível iniciar o acompanhamento.';
+  } finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -171,7 +187,7 @@ async function updateStatus(status: ConversationStatus) {
       </aside>
 
       <article v-if="selected" class="conversation-thread">
-        <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template></small></div><div v-if="canAssign" class="conversation-status-actions"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></div></header>
+        <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template></small></div><div class="conversation-status-actions"><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
         <div class="conversation-messages">
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>

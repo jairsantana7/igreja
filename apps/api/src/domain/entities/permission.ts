@@ -33,6 +33,12 @@ export const PERMISSIONS = {
   whatsappTemplatesSync: 'whatsapp.templates_sync',
   communicationTemplatesRead: 'communications.templates_read',
   communicationTemplatesManage: 'communications.templates_manage',
+  followupsReadOwn: 'followups.read_own',
+  followupsReadAll: 'followups.read_all',
+  followupsManage: 'followups.manage',
+  followupsNotesRead: 'followups.notes_read',
+  followupsNotesManage: 'followups.notes_manage',
+  followupsPipelineManage: 'followups.pipeline_manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

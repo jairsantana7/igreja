@@ -35,6 +35,13 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |
 | `community_integrations` | tenant-direct | configuração de integração pertence à comunidade | RLS direta; segredos ficam fora da tabela |
 | `audit_events` | tenant-direct | trilha de alterações pertence à comunidade | RLS direta; runtime somente leitura; paginação e filtros usam índices iniciados por `tenant_id`; triggers gravam como owner |
+| `followup_stages` | tenant-direct | etapas configuráveis do acompanhamento pertencem à comunidade | RLS direta + índice iniciado por tenant |
+| `followup_tags` | tenant-direct | etiquetas de acompanhamento pertencem à comunidade | RLS direta + índice iniciado por tenant |
+| `pastoral_followups` | tenant-direct | acompanhamento sensível pertence à comunidade e a um responsável | RLS direta + FKs compostas para membro, responsável e etapa |
+| `followup_conversations` | tenant-direct | vínculo entre acompanhamento e conversa não pode atravessar comunidades | RLS direta + FKs compostas para ambos os agregados |
+| `followup_tag_assignments` | tenant-direct | associação de etiqueta deve preservar o mesmo tenant | RLS direta + FKs compostas para acompanhamento e etiqueta |
+| `followup_notes` | tenant-direct | anotação pastoral sensível pertence ao acompanhamento e à comunidade | RLS direta + FKs compostas para acompanhamento e autor |
+| `followup_stage_changes` | tenant-direct | histórico imutável de movimentação pertence ao acompanhamento | RLS direta + FKs compostas para acompanhamento, etapas e ator |
 
 ## Regras para novas tabelas
 

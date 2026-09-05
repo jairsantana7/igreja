@@ -31,6 +31,7 @@ const groupNames: Record<string, string> = {
   members: 'Perfis de membros',
   whatsapp: 'WhatsApp oficial',
   communications: 'Modelos de comunicação',
+  followups: 'Acompanhamento pastoral',
 };
 const permissionGroups = computed(() => {
   const groups = new Map<string, PermissionOption[]>();

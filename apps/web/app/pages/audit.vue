@@ -37,6 +37,13 @@ const resourceLabels: Record<string, string> = {
   communication_templates: 'modelo de comunicação',
   communication_template_versions: 'versão de modelo',
   event_reminder_rules: 'lembrete de evento',
+  followup_stages: 'etapa de acompanhamento',
+  followup_tags: 'etiqueta de acompanhamento',
+  pastoral_followups: 'acompanhamento pastoral',
+  followup_conversations: 'vínculo de conversa',
+  followup_tag_assignments: 'etiqueta do acompanhamento',
+  followup_notes: 'anotação pastoral',
+  followup_stage_changes: 'movimentação do acompanhamento',
 };
 const pageNumber = computed(() => cursorHistory.value.length + 1);
 

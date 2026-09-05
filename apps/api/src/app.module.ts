@@ -59,10 +59,13 @@ import { env } from './infrastructure/config/env';
 import { PostgresCommunicationTemplateRepository, PostgresEventReminderRepository } from './infrastructure/repositories/postgres-communication-template.repository';
 import { CommunicationController } from './presentation/http/controllers/communication.controller';
 import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteEventReminderUseCase, ListCommunicationTemplatesUseCase, ListCommunicationTemplateVersionsUseCase, ListEventRemindersUseCase, SetCommunicationTemplateStatusUseCase, UpdateCommunicationTemplateUseCase, UpdateEventReminderUseCase } from './application/use-cases/communication-template.use-cases';
+import { PostgresPastoralFollowupRepository } from './infrastructure/repositories/postgres-pastoral-followup.repository';
+import { PastoralFollowupController } from './presentation/http/controllers/pastoral-followup.controller';
+import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from './application/use-cases/pastoral-followup.use-cases';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -160,6 +163,11 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
     {
       provide: TOKENS.eventReminderRepository,
       useFactory: (database: PostgresDatabase) => new PostgresEventReminderRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.pastoralFollowupRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresPastoralFollowupRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -416,6 +424,17 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
       useFactory: (reminders: PostgresEventReminderRepository) => new DeleteEventReminderUseCase(reminders),
       inject: [TOKENS.eventReminderRepository],
     },
+    { provide: TOKENS.listFollowupBoardUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new ListFollowupBoardUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.getFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new GetFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.createFollowupFromConversationUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new CreateFollowupFromConversationUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.moveFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new MoveFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.updateFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new UpdateFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.listFollowupStagesUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new ListFollowupStagesUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.createFollowupStageUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new CreateFollowupStageUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.listFollowupTagsUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new ListFollowupTagsUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.createFollowupTagUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new CreateFollowupTagUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.addFollowupNoteUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new AddFollowupNoteUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.removeFollowupNoteUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new RemoveFollowupNoteUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     {
       provide: TOKENS.createRoleUseCase,
       useFactory: (access: PostgresAccessControlRepository) => new CreateRoleUseCase(access),
