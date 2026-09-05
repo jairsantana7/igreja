@@ -1,7 +1,7 @@
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
 import type { EventCommunicationRepository, EventOperationsRepository, EventTemplateRepository, CommunicationAudience, CommunicationChannel } from '../ports/event-operations.port';
 import type { JobQueue } from '../ports/job-queue.port';
-import { AuthorizationError, NotFoundError } from './errors';
+import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission): void {
   if (!principal.permissions.includes(permission)) throw new AuthorizationError('Você não tem permissão para realizar esta ação.');
@@ -63,11 +63,16 @@ export class QueueEventCommunicationUseCase {
     requirePermission(principal, PERMISSIONS.eventsCommunicate);
     const item = await this.communications.find(principal, eventId, communicationId);
     if (!item) throw new NotFoundError('Comunicação não encontrada neste evento.');
-    const job = await this.queue.enqueue({
-      name: 'events.communication.dispatch',
-      payload: { tenantId: principal.tenantId, eventId, communicationId },
-      deduplicationKey: communicationId,
-    }, { attempts: 5 });
+    let job: { jobId: string };
+    try {
+      job = await this.queue.enqueue({
+        name: 'events.communication.dispatch',
+        payload: { tenantId: principal.tenantId, eventId, communicationId },
+        deduplicationKey: communicationId,
+      }, { attempts: 5 });
+    } catch {
+      throw new ConflictError('A fila de comunicação não está disponível nesta instalação. O rascunho foi preservado.');
+    }
     return this.communications.markQueued(principal, eventId, communicationId, job.jobId);
   }
 }
