@@ -33,3 +33,10 @@ export class CreateUserDto {
   @IsUUID('4', { each: true })
   roleIds!: string[];
 }
+
+export class UpdateRolePermissionsDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  permissions: string[] = [];
+}

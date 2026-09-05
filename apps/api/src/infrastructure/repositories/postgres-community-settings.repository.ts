@@ -15,7 +15,7 @@ export class PostgresCommunitySettingsRepository implements CommunitySettingsRep
   constructor(private readonly database: PostgresDatabase) {}
 
   get(principal: AuthenticatedPrincipal): Promise<CommunitySettingsProps> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const result = await client.query<IntegrationRow>(`
         SELECT category, provider_key, enabled, configuration, secret_reference
         FROM community_integrations
@@ -26,7 +26,7 @@ export class PostgresCommunitySettingsRepository implements CommunitySettingsRep
   }
 
   save(principal: AuthenticatedPrincipal, settings: CommunitySettings): Promise<CommunitySettingsProps> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const { socialLogin, payments } = settings.props;
       await this.upsert(client, principal.tenantId, 'identity', 'google', socialLogin.google.enabled, {
         clientId: socialLogin.google.clientId,

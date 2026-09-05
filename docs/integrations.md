@@ -7,6 +7,9 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Login social implementa `ExternalIdentityProvider` em `application/ports/authentication.port.ts`.
 - Cobranças implementam `PaymentGateway` em `application/ports/payment-gateway.port.ts`.
 - Configurações dependem de `CommunitySettingsRepository`; o adaptador PostgreSQL não vaza para os casos de uso.
+- Cache implementa `CacheStore`; a implementação padrão é no-op e pode ser substituída por Redis ou outro backend.
+- Filas implementam `JobQueue`; a implementação padrão falha explicitamente até BullMQ, RabbitMQ, SQS ou outro broker ser configurado.
+- Logs e captura de exceções implementam `ApplicationLogger`; Sentry e OpenTelemetry entram como adaptadores de infraestrutura.
 - A seleção ocorre por `providerKey`, nunca por condicionais de fornecedor no domínio.
 
 ## Adicionando um adaptador
@@ -17,6 +20,21 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 4. Valide que o adaptador existe antes de expor login ou cobrança como operacional.
 5. Adicione testes de contrato que possam ser reutilizados por outros adaptadores.
 6. Documente variáveis, URLs de callback/webhook, permissões externas e procedimento de rotação.
+
+## Cache e filas
+
+- Chaves de cache sempre incluem o tenant e possuem TTL explícito.
+- Decisões de autorização não usam cache; fechar uma permissão deve valer na próxima requisição.
+- Jobs carregam um `tenantId` confiável e o worker abre seu próprio contexto RLS por tarefa.
+- Payloads não carregam senhas, tokens ou dados pessoais desnecessários.
+- Consumidores são idempotentes e definem política explícita de tentativas, atraso e dead-letter queue.
+- O adaptador não pode confirmar a mensagem antes da conclusão segura do trabalho.
+
+## Logs e captura de erros
+
+- `ApplicationLogger` recebe eventos estáveis e contexto estruturado.
+- A implementação padrão não imprime mensagens internas, SQL, payloads ou stack traces potencialmente sensíveis.
+- Um adaptador Sentry deve configurar scrubbing antes do envio, separar ambientes e nunca usar auditoria como breadcrumb integral.
 
 ## Segurança de identidade
 

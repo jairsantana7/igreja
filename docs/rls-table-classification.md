@@ -18,6 +18,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `registration_answers` | tenant-direct | resposta pertence à inscrição/campo/evento | RLS direta + FKs compostas para impedir cruzamento |
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |
 | `community_integrations` | tenant-direct | configuração de integração pertence à comunidade | RLS direta; segredos ficam fora da tabela |
+| `audit_events` | tenant-direct | trilha de alterações pertence à comunidade | RLS direta; runtime somente leitura e triggers gravam como owner |
 
 ## Regras para novas tabelas
 

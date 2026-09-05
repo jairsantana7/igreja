@@ -3,6 +3,8 @@ const auth = useAuth();
 const route = useRoute();
 const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
 const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
+const canReadAccess = computed(() => auth.session.value?.user.permissions.includes('roles.read'));
+const canReadAudit = computed(() => auth.session.value?.user.permissions.includes('audit.read'));
 
 async function leave() {
   auth.logout();
@@ -26,6 +28,12 @@ async function leave() {
         </NuxtLink>
         <NuxtLink v-if="canReadMembers" to="/members" class="nav-link" :class="{ active: route.path === '/members' }">
           <span aria-hidden="true">♙</span> Membros
+        </NuxtLink>
+        <NuxtLink v-if="canReadAccess" to="/access" class="nav-link" :class="{ active: route.path === '/access' }">
+          <span aria-hidden="true">⌘</span> Acessos
+        </NuxtLink>
+        <NuxtLink v-if="canReadAudit" to="/audit" class="nav-link" :class="{ active: route.path === '/audit' }">
+          <span aria-hidden="true">◎</span> Auditoria
         </NuxtLink>
         <NuxtLink v-if="canReadSettings" to="/settings" class="nav-link" :class="{ active: route.path === '/settings' }">
           <span aria-hidden="true">⚙</span> Configurações

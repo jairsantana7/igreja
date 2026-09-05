@@ -42,6 +42,7 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM users WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM audit_events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM tenants WHERE id IN ('${tenantA}', '${tenantB}');
       DELETE FROM tenant_directory WHERE tenant_id IN ('${tenantA}', '${tenantB}');
     `);
@@ -133,8 +134,23 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('auditoria é isolada por tenant e imutável para o runtime', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        const result = await client.query<{ tenant_id: string }>('SELECT tenant_id FROM audit_events');
+        expect(result.rows.length).toBeGreaterThan(0);
+        expect(result.rows.every((row) => row.tenant_id === tenantA)).toBe(true);
+        await expect(client.query("UPDATE audit_events SET actor_name = 'alterado' WHERE tenant_id = $1", [tenantA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query('DELETE FROM audit_events WHERE tenant_id = $1', [tenantA])).rejects.toThrow();
+      });
+    } finally { client.release(); }
+  });
+
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['community_integrations', 'event_form_fields', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'community_integrations', 'event_form_fields', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

@@ -57,6 +57,10 @@ Configurações de login social e pagamentos formam um contexto separado de even
 
 `community_integrations` armazena configuração pública por tenant. Campos privados são referências a secrets externos, nunca o valor da credencial. Salvar a configuração não torna uma integração operacional: a implantação também precisa registrar o adaptador correspondente.
 
+## Portas transversais
+
+`ApplicationLogger`, `CacheStore` e `JobQueue` pertencem à camada de aplicação e não conhecem Sentry, Redis, BullMQ ou RabbitMQ. A infraestrutura fornece adaptadores substituíveis e `app.module.ts` faz a composição. A implementação padrão de cache é no-op; a de fila falha explicitamente para impedir perda silenciosa de trabalho.
+
 ## Autorização granular
 
-Permissões são chaves globais e imutáveis. Cada comunidade define papéis que agrupam essas chaves, e um usuário pode receber vários papéis. O token carrega um snapshot de papéis e permissões de curta duração; mudanças críticas podem exigir revogação/renovação do token. A camada HTTP bloqueia cedo com `PermissionsGuard`, e casos de uso mantêm as invariantes de autorização relevantes.
+Permissões são chaves globais e imutáveis. Cada comunidade define papéis que agrupam essas chaves, e um usuário pode receber vários papéis. O token identifica usuário e tenant, mas o `PermissionsGuard` recarrega papéis e permissões atuais a cada requisição protegida. A camada HTTP bloqueia cedo, e casos de uso mantêm as invariantes de autorização relevantes.

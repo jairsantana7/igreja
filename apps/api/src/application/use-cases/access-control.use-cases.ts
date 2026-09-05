@@ -31,6 +31,14 @@ export class CreateRoleUseCase {
   }
 }
 
+export class UpdateRolePermissionsUseCase {
+  constructor(private readonly access: AccessControlRepository) {}
+  execute(principal: AuthenticatedPrincipal, roleId: string, permissions: string[]) {
+    requirePermission(principal, PERMISSIONS.rolesManage);
+    return this.access.updateRolePermissions(principal, roleId, [...new Set(permissions)]);
+  }
+}
+
 export class CreateUserUseCase {
   constructor(private readonly access: AccessControlRepository, private readonly passwords: PasswordHasher) {}
   async execute(principal: AuthenticatedPrincipal, input: { name: string; email: string; password: string; roleIds: string[] }) {

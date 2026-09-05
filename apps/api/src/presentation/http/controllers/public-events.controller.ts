@@ -8,6 +8,9 @@ import type { AuthenticatedPrincipal } from '../../../domain/entities/permission
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { EventLoginDto, EventSignUpDto, RegistrationDto } from '../dto/auth.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { RequirePermissions } from '../decorators/require-permissions.decorator';
+import { PERMISSIONS } from '../../../domain/entities/permission';
 
 @Controller('public/events')
 export class PublicEventsController {
@@ -37,7 +40,8 @@ export class PublicEventsController {
   }
 
   @Post(':publicId/registrations')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.eventsRegister)
   eventRegistration(
     @Param('publicId', new ParseUUIDPipe()) publicId: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,

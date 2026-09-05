@@ -12,6 +12,7 @@ export const PERMISSIONS = {
   rolesManage: 'roles.manage',
   settingsRead: 'settings.read',
   settingsManage: 'settings.manage',
+  auditRead: 'audit.read',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

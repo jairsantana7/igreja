@@ -18,12 +18,16 @@ export class PostgresDatabase implements OnModuleDestroy {
     return this.pool.query<T>(text, values);
   }
 
-  async withTenant<T>(tenantId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
+  async withTenant<T>(context: string | { tenantId: string; userId?: string }, work: (client: PoolClient) => Promise<T>): Promise<T> {
+    const tenantId = typeof context === 'string' ? context : context.tenantId;
+    const actorUserId = typeof context === 'string' ? '' : context.userId ?? '';
     if (!UUID_PATTERN.test(tenantId)) throw new Error('Contexto de tenant inválido.');
+    if (actorUserId && !UUID_PATTERN.test(actorUserId)) throw new Error('Contexto de ator inválido.');
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      await client.query("SELECT set_config('app.actor_user_id', $1, true)", [actorUserId]);
       const result = await work(client);
       await client.query('COMMIT');
       return result;

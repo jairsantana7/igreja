@@ -1,16 +1,29 @@
-import { ArgumentsHost, BadRequestException, Catch, ConflictException, ExceptionFilter, ForbiddenException, HttpException, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ArgumentsHost, BadRequestException, Catch, ConflictException, ExceptionFilter, ForbiddenException, HttpException, Inject, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError } from '../../application/use-cases/errors';
 import { DomainError } from '../../domain/entities/errors';
+import type { ApplicationLogger } from '../../application/ports/application-logger.port';
+import { TOKENS } from '../../application/ports/tokens';
 
 interface HttpResponse {
   status(code: number): { json(body: unknown): void };
 }
 
 @Catch()
+@Injectable()
 export class ApplicationExceptionFilter implements ExceptionFilter {
+  constructor(@Inject(TOKENS.applicationLogger) private readonly logger: ApplicationLogger) {}
+
   catch(error: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<HttpResponse>();
     const httpError = this.toHttp(error);
+    if (httpError.getStatus() >= 500) {
+      const request = host.switchToHttp().getRequest<{ method?: string; originalUrl?: string }>();
+      this.logger.captureException(error, {
+        statusCode: httpError.getStatus(),
+        method: request.method,
+        path: request.originalUrl,
+      });
+    }
     const body = httpError.getResponse();
     response.status(httpError.getStatus()).json(typeof body === 'string' ? { statusCode: httpError.getStatus(), message: body } : body);
   }

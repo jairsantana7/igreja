@@ -1,13 +1,13 @@
 import type { AccessControlRepository, MemberView, RoleView } from '../../application/ports/access-control.port';
 import type { AuthenticatedPrincipal, Permission } from '../../domain/entities/permission';
-import { ConflictError } from '../../application/use-cases/errors';
+import { ConflictError, NotFoundError } from '../../application/use-cases/errors';
 import { PostgresDatabase } from '../database/postgres.database';
 
 export class PostgresAccessControlRepository implements AccessControlRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
   list(principal: AuthenticatedPrincipal) {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const permissions = await client.query<{ key: string; description: string }>('SELECT key, description FROM permissions ORDER BY key');
       const roles = await client.query<{ id: string; key: string; name: string; is_system: boolean; permissions: Permission[] }>(`
         SELECT roles.id, roles.key, roles.name, roles.is_system,
@@ -23,7 +23,7 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
   }
 
   listMembers(principal: AuthenticatedPrincipal): Promise<MemberView[]> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const members = await client.query<{
         id: string;
         name: string;
@@ -62,7 +62,7 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
   }
 
   createRole(principal: AuthenticatedPrincipal, input: { key: string; name: string; permissions: string[] }) {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const valid = await client.query<{ key: Permission }>('SELECT key FROM permissions WHERE key = ANY($1::text[])', [input.permissions]);
       if (valid.rowCount !== new Set(input.permissions).size) throw new ConflictError('Uma ou mais permissões não existem.');
       const role = await client.query<{ id: string; key: string; name: string; is_system: boolean }>(`
@@ -78,8 +78,59 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
     });
   }
 
+  updateRolePermissions(principal: AuthenticatedPrincipal, roleId: string, permissions: string[]): Promise<RoleView> {
+    return this.database.withTenant(principal, async (client) => {
+      const valid = await client.query<{ key: Permission }>('SELECT key FROM permissions WHERE key = ANY($1::text[])', [permissions]);
+      if (valid.rowCount !== new Set(permissions).size) throw new ConflictError('Uma ou mais permissões não existem.');
+      const role = await client.query<{ id: string; key: string; name: string; is_system: boolean }>(`
+        SELECT id, key, name, is_system FROM roles WHERE id = $1
+      `, [roleId]);
+      if (!role.rows[0]) throw new NotFoundError('Papel não encontrado nesta comunidade.');
+      await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+      for (const permission of valid.rows) {
+        await client.query('INSERT INTO role_permissions (tenant_id, role_id, permission_key) VALUES ($1, $2, $3)', [
+          principal.tenantId, roleId, permission.key,
+        ]);
+      }
+      return this.mapRole({ ...role.rows[0], permissions: valid.rows.map((item) => item.key).sort() });
+    });
+  }
+
+  refreshPrincipal(principal: AuthenticatedPrincipal): Promise<AuthenticatedPrincipal | null> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query<{
+        user_id: string;
+        name: string;
+        email: string;
+        roles: string[];
+        permissions: Permission[];
+      }>(`
+        SELECT users.id AS user_id, users.name, users.email,
+          COALESCE(array_agg(DISTINCT roles.key) FILTER (WHERE roles.key IS NOT NULL), ARRAY[]::text[]) AS roles,
+          COALESCE(array_agg(DISTINCT role_permissions.permission_key)
+            FILTER (WHERE role_permissions.permission_key IS NOT NULL), ARRAY[]::text[]) AS permissions
+        FROM users
+        LEFT JOIN user_roles ON user_roles.user_id = users.id AND user_roles.tenant_id = users.tenant_id
+        LEFT JOIN roles ON roles.id = user_roles.role_id AND roles.tenant_id = user_roles.tenant_id
+        LEFT JOIN role_permissions
+          ON role_permissions.role_id = roles.id AND role_permissions.tenant_id = roles.tenant_id
+        WHERE users.id = $1
+        GROUP BY users.id
+      `, [principal.userId]);
+      const current = result.rows[0];
+      return current ? {
+        userId: current.user_id,
+        tenantId: principal.tenantId,
+        name: current.name,
+        email: current.email,
+        roles: current.roles,
+        permissions: current.permissions,
+      } : null;
+    });
+  }
+
   createUser(principal: AuthenticatedPrincipal, input: { name: string; email: string; passwordHash: string; roleIds: string[] }) {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const roles = await client.query<{ id: string }>('SELECT id FROM roles WHERE id = ANY($1::uuid[])', [input.roleIds]);
       if (roles.rowCount !== new Set(input.roleIds).size) throw new ConflictError('Um ou mais papéis não pertencem à comunidade.');
       try {

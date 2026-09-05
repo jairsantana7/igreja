@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CommunitySettingsRepository } from '../src/application/ports/community-settings.port';
+import type { CacheStore } from '../src/application/ports/cache-store.port';
 import { UpdateCommunitySettingsUseCase } from '../src/application/use-cases/community-settings.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
 import { CommunitySettings } from '../src/domain/entities/community-settings';
@@ -15,6 +16,12 @@ const principal = (permissions: AuthenticatedPrincipal['permissions']): Authenti
   permissions,
 });
 
+const cache = (): CacheStore => ({
+  get: vi.fn().mockResolvedValue(null),
+  set: vi.fn().mockResolvedValue(undefined),
+  delete: vi.fn().mockResolvedValue(undefined),
+});
+
 describe('configurações da comunidade', () => {
   it('não permite habilitar provedor social sem Client ID e referência de segredo', () => {
     const input = structuredClone(CommunitySettings.defaults().props);
@@ -28,10 +35,10 @@ describe('configurações da comunidade', () => {
     expect(() => CommunitySettings.create(input)).toThrow(DomainError);
   });
 
-  it('verifica settings.manage antes de chamar o repositório', () => {
+  it('verifica settings.manage antes de chamar o repositório', async () => {
     const save = vi.fn();
-    const useCase = new UpdateCommunitySettingsUseCase({ save } as unknown as CommunitySettingsRepository);
-    expect(() => useCase.execute(principal([]), CommunitySettings.defaults().props)).toThrow(AuthorizationError);
+    const useCase = new UpdateCommunitySettingsUseCase({ save } as unknown as CommunitySettingsRepository, cache());
+    await expect(useCase.execute(principal([]), CommunitySettings.defaults().props)).rejects.toThrow(AuthorizationError);
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -45,7 +52,7 @@ describe('configurações da comunidade', () => {
       city: 'São Paulo',
     };
     const save = vi.fn().mockResolvedValue(settings);
-    const useCase = new UpdateCommunitySettingsUseCase({ save } as unknown as CommunitySettingsRepository);
+    const useCase = new UpdateCommunitySettingsUseCase({ save } as unknown as CommunitySettingsRepository, cache());
     await expect(useCase.execute(principal(['settings.manage']), settings)).resolves.toEqual(settings);
     expect(save).toHaveBeenCalledOnce();
   });

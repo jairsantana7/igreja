@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccessControlRepository } from '../src/application/ports/access-control.port';
-import { ListMembersUseCase } from '../src/application/use-cases/access-control.use-cases';
+import { ListMembersUseCase, UpdateRolePermissionsUseCase } from '../src/application/use-cases/access-control.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 
@@ -34,5 +34,29 @@ describe('listagem de membros', () => {
     const useCase = new ListMembersUseCase({ listMembers } as unknown as AccessControlRepository);
     await expect(useCase.execute(principal(['users.read']))).resolves.toEqual(members);
     expect(listMembers).toHaveBeenCalledOnce();
+  });
+});
+
+describe('edição de permissões de papel', () => {
+  it('exige roles.manage antes de alterar o papel', () => {
+    const updateRolePermissions = vi.fn();
+    const useCase = new UpdateRolePermissionsUseCase({ updateRolePermissions } as unknown as AccessControlRepository);
+    expect(() => useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001', ['events.read'])).toThrow(AuthorizationError);
+    expect(updateRolePermissions).not.toHaveBeenCalled();
+  });
+
+  it('remove permissões duplicadas antes de persistir', async () => {
+    const updateRolePermissions = vi.fn().mockResolvedValue({ id: 'role' });
+    const useCase = new UpdateRolePermissionsUseCase({ updateRolePermissions } as unknown as AccessControlRepository);
+    await useCase.execute(
+      principal(['roles.manage']),
+      '20000000-0000-4000-8000-000000000001',
+      ['events.read', 'events.read'],
+    );
+    expect(updateRolePermissions).toHaveBeenCalledWith(
+      expect.any(Object),
+      '20000000-0000-4000-8000-000000000001',
+      ['events.read'],
+    );
   });
 });

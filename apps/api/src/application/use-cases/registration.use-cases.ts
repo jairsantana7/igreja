@@ -1,4 +1,6 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
+import { PERMISSIONS } from '../../domain/entities/permission';
+import { AuthorizationError } from './errors';
 import type { PasswordHasher, TokenService } from '../ports/authentication.port';
 import type { EventRegistrationRepository, RegistrationAnswerInput } from '../ports/event.port';
 import { GetPublicEventUseCase, validateAnswers } from './event.use-cases';
@@ -40,6 +42,9 @@ export class RegisterForEventUseCase {
   ) {}
 
   async execute(principal: AuthenticatedPrincipal, publicId: string, answers: RegistrationAnswerInput[]) {
+    if (!principal.permissions.includes(PERMISSIONS.eventsRegister)) {
+      throw new AuthorizationError('Você não tem permissão para confirmar inscrição em eventos.');
+    }
     const event = await this.publicEvents.resolve(publicId);
     if (principal.tenantId !== event.tenantId) throw new Error('Esta conta pertence a outra comunidade.');
     validateAnswers(event.fields, answers);

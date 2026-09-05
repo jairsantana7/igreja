@@ -35,7 +35,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
   }
 
   register(input: Parameters<EventRegistrationRepository['register']>[0]) {
-    return this.database.withTenant(input.principal.tenantId, (client) =>
+    return this.database.withTenant(input.principal, (client) =>
       this.persistRegistration(client, input.principal.tenantId, input.event.id, input.principal.userId, input.answers),
     );
   }

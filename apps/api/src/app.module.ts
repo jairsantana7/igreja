@@ -5,7 +5,7 @@ import { TOKENS } from './application/ports/tokens';
 import { CreateEventUseCase, GetDashboardUseCase, GetPublicEventUseCase, ListEventsUseCase } from './application/use-cases/event.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
-import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase } from './application/use-cases/access-control.use-cases';
+import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from './application/use-cases/access-control.use-cases';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { PostgresAuthenticationRepository } from './infrastructure/repositories/postgres-authentication.repository';
 import { PostgresEventRepository } from './infrastructure/repositories/postgres-event.repository';
@@ -24,17 +24,28 @@ import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttl
 import { PostgresCommunitySettingsRepository } from './infrastructure/repositories/postgres-community-settings.repository';
 import { GetCommunitySettingsUseCase, UpdateCommunitySettingsUseCase } from './application/use-cases/community-settings.use-cases';
 import { CommunitySettingsController } from './presentation/http/controllers/community-settings.controller';
+import { PostgresAuditTrailRepository } from './infrastructure/repositories/postgres-audit-trail.repository';
+import { AuditTrailController } from './presentation/http/controllers/audit-trail.controller';
+import { ListAuditEventsUseCase } from './application/use-cases/audit-trail.use-case';
+import { NestApplicationLogger } from './infrastructure/observability/nest-application.logger';
+import { NoopCacheStore } from './infrastructure/cache/noop-cache.store';
+import { ApplicationExceptionFilter } from './presentation/http/application-exception.filter';
+import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, AccessControlController, CommunitySettingsController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
     PermissionsGuard,
+    ApplicationExceptionFilter,
     { provide: APP_GUARD, useClass: RealIpThrottlerGuard },
     { provide: TOKENS.passwordHasher, useClass: BcryptPasswordHasher },
     { provide: TOKENS.tokenService, useClass: JoseTokenService },
+    { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
+    { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
+    { provide: TOKENS.jobQueue, useClass: DisabledJobQueue },
     {
       provide: TOKENS.authRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAuthenticationRepository(database),
@@ -58,6 +69,11 @@ import { CommunitySettingsController } from './presentation/http/controllers/com
     {
       provide: TOKENS.communitySettingsRepository,
       useFactory: (database: PostgresDatabase) => new PostgresCommunitySettingsRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.auditTrailRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresAuditTrailRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -118,19 +134,29 @@ import { CommunitySettingsController } from './presentation/http/controllers/com
       inject: [TOKENS.accessControlRepository],
     },
     {
+      provide: TOKENS.updateRolePermissionsUseCase,
+      useFactory: (access: PostgresAccessControlRepository) => new UpdateRolePermissionsUseCase(access),
+      inject: [TOKENS.accessControlRepository],
+    },
+    {
       provide: TOKENS.createUserUseCase,
       useFactory: (access: PostgresAccessControlRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(access, passwords),
       inject: [TOKENS.accessControlRepository, TOKENS.passwordHasher],
     },
     {
       provide: TOKENS.getCommunitySettingsUseCase,
-      useFactory: (settings: PostgresCommunitySettingsRepository) => new GetCommunitySettingsUseCase(settings),
-      inject: [TOKENS.communitySettingsRepository],
+      useFactory: (settings: PostgresCommunitySettingsRepository, cache: NoopCacheStore) => new GetCommunitySettingsUseCase(settings, cache),
+      inject: [TOKENS.communitySettingsRepository, TOKENS.cacheStore],
     },
     {
       provide: TOKENS.updateCommunitySettingsUseCase,
-      useFactory: (settings: PostgresCommunitySettingsRepository) => new UpdateCommunitySettingsUseCase(settings),
-      inject: [TOKENS.communitySettingsRepository],
+      useFactory: (settings: PostgresCommunitySettingsRepository, cache: NoopCacheStore) => new UpdateCommunitySettingsUseCase(settings, cache),
+      inject: [TOKENS.communitySettingsRepository, TOKENS.cacheStore],
+    },
+    {
+      provide: TOKENS.listAuditEventsUseCase,
+      useFactory: (audit: PostgresAuditTrailRepository) => new ListAuditEventsUseCase(audit),
+      inject: [TOKENS.auditTrailRepository],
     },
   ],
 })

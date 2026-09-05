@@ -4,6 +4,14 @@ const api = useApi();
 const auth = useAuth();
 const { data, pending, error, refresh } = await useAsyncData('dashboard', () => api<any>('/dashboard'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
+const canReadAccess = computed(() => auth.session.value?.user.permissions.includes('roles.read'));
+interface DashboardRole { id: string; name: string; key: string; permissions: string[] }
+interface DashboardAccess { roles: DashboardRole[] }
+const { data: access } = await useAsyncData(
+  'dashboard-access',
+  () => canReadAccess.value ? api<DashboardAccess>('/access') : Promise.resolve(null),
+  { server: false },
+);
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
 
@@ -18,6 +26,17 @@ const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeSt
       <article class="summary-card"><span class="summary-icon green">◫</span><p>Eventos abertos</p><strong>{{ data?.events.filter((event: any) => event.registrationOpen).length ?? '—' }}</strong><small>recebendo inscrições</small></article>
       <article class="summary-card"><span class="summary-icon gold">✓</span><p>Inscrições</p><strong>{{ data?.events.reduce((total: number, event: any) => total + event.registrations, 0) ?? '—' }}</strong><small>confirmadas</small></article>
       <article class="summary-card"><span class="summary-icon blue">↗</span><p>Eventos publicados</p><strong>{{ data?.events.filter((event: any) => event.status === 'published').length ?? '—' }}</strong><small>com link ativo</small></article>
+    </section>
+
+    <section v-if="canReadAccess" class="section-block dashboard-access">
+      <div class="section-heading"><div><h2>Papéis e acessos</h2><p class="muted">Libere ou bloqueie funcionalidades por permissões granulares.</p></div><NuxtLink to="/access" class="section-link">Gerenciar →</NuxtLink></div>
+      <div class="dashboard-role-list">
+        <article v-for="role in access?.roles.slice(0, 4)" :key="role.id" class="dashboard-role-item">
+          <span class="role-symbol">{{ role.name.charAt(0).toUpperCase() }}</span>
+          <span><strong>{{ role.name }}</strong><small>{{ role.permissions.length }} permissões liberadas</small></span>
+        </article>
+        <p v-if="!access?.roles.length" class="muted">Nenhum papel configurado.</p>
+      </div>
     </section>
 
     <section class="section-block">

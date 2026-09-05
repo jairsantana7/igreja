@@ -20,6 +20,8 @@ Estas regras valem para todo o repositório.
 - Autenticação social implementa a porta `ExternalIdentityProvider`; não acople casos de uso a Google, Microsoft ou outro fornecedor.
 - Autorização usa permissões granulares (`context.action`), não condicionais por nome de papel. Papéis apenas agrupam permissões por tenant.
 - Controllers declaram permissões com decorator; casos de uso sensíveis também validam autorização quando puderem ser chamados fora de HTTP.
+- Toda nova funcionalidade autenticada deve declarar uma permissão granular no controller e validá-la novamente no caso de uso. Exceções públicas devem ser explícitas e documentadas.
+- Ocultar botões no frontend melhora a experiência, mas nunca substitui a autorização no backend.
 
 ## PostgreSQL e RLS
 

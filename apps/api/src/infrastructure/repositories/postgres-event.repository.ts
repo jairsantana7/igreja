@@ -20,7 +20,7 @@ export class PostgresEventRepository implements EventRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
   dashboard(principal: AuthenticatedPrincipal): Promise<DashboardView> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const tenant = await client.query<{ id: string; name: string }>('SELECT id, name FROM tenants LIMIT 1');
       const events = await this.queryEvents(client);
       const community = tenant.rows[0];
@@ -40,14 +40,14 @@ export class PostgresEventRepository implements EventRepository {
   }
 
   list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const events = await this.queryEvents(client);
       return events.rows.map(this.mapEvent);
     });
   }
 
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent> {
-    return this.database.withTenant(principal.tenantId, async (client) => {
+    return this.database.withTenant(principal, async (client) => {
       const baseSlug = slugify(draft.props.title) || 'evento';
       const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
       const eventResult = await client.query<EventRow>(`
