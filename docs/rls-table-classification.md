@@ -6,6 +6,8 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 |---|---|---|---|
 | `tenants` | tenant root | representa a própria comunidade | `id = current_tenant_id()` |
 | `users` | tenant-direct | possui `tenant_id` | `tenant_id = current_tenant_id()` em leitura e escrita |
+| `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; endereço é dado pessoal protegido por permissão específica |
+| `member_children` | tenant-direct | filho informado pertence ao perfil de um membro da comunidade | RLS direta + FK composta para perfil/usuário; dados de menores não entram na auditoria |
 | `tenant_directory` | global catalog | mapeia slug público para UUID no fluxo mínimo de login | sem acesso direto do runtime; somente função resolver |
 | `event_public_directory` | global catalog | resolve um UUID público opaco para evento/tenant | sem acesso direto do runtime; somente função resolver |
 | `permissions` | global catalog | chaves estáveis compartilhadas pelo produto | runtime somente leitura |
@@ -22,7 +24,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_check_ins` | tenant-direct | presença pertence a uma inscrição e evento da comunidade | RLS direta + FKs compostas para inscrição e operador |
 | `event_communications` | tenant-direct | campanha de comunicação pertence a um evento | RLS direta + FKs compostas para evento e autor |
 | `event_templates` | tenant-direct | modelo reutilizável pertence à comunidade | RLS direta + FK composta para autor |
-| `auth_sessions` | tenant-direct | sessão revogável pertence ao usuário da comunidade | RLS direta + FK composta para usuário; token bruto nunca é persistido |
+| `auth_sessions` | tenant-direct | sessão revogável e hashes da prova/assinatura pertencem ao usuário da comunidade | RLS direta + FK composta para usuário; JWT, prova bruta e `User-Agent` nunca são persistidos |
 | `conversation_channels` | tenant-direct | número/canal pertence a um responsável da comunidade | RLS direta + FK composta para o responsável; segredo fica fora do banco |
 | `conversations` | tenant-direct | atendimento pertence ao canal, contato e comunidade | RLS direta + FKs compostas para canal, evento, membro e responsável |
 | `conversation_messages` | tenant-direct | mensagem pertence a uma conversa da comunidade | RLS direta + FKs compostas para conversa e remetente interno |

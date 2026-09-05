@@ -15,6 +15,8 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - fechamento de inscrições, conclusão e cancelamento;
 - versões de formulário, modelos de evento e campanhas em rascunho;
 - sessões revogáveis.
+- cookies `HttpOnly`, prova de sessão e proteção contra replay/CSRF;
+- perfil complementar opcional de membros com permissões sensíveis próprias;
 - responsável e colaboradores por evento com escopos próprio/global;
 - fundação da central de conversas e canais individuais por pastor.
 

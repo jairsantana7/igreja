@@ -43,6 +43,17 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Capacidade esgotada, lista de espera e cancelamento ainda precisam de definição detalhada.
 - A contagem exibida na gestão representa inscrições confirmadas, não presença física no evento.
 
+## Perfil complementar do membro
+
+- Tornar-se membro ou confirmar um evento não exige preencher perfil complementar.
+- O perfil pode guardar endereço estruturado opcional: CEP, logradouro, número, complemento, bairro, cidade e estado.
+- A informação “possui filhos” é derivada da existência de filhos cadastrados, evitando dois dados contraditórios.
+- Para cada filho, o MVP guarda somente nome e data de nascimento opcional. Não há campo livre para informações sensíveis de menores.
+- Ler perfis exige `members.profile_read`; editar exige `members.profile_manage`. `users.read` isoladamente não libera endereço ou filhos.
+- A listagem geral continua exibindo apenas identidade, papéis e contagens. Dados complementares aparecem somente no detalhe protegido.
+- Alterações são auditadas por identidade do registro, sem copiar endereço, nomes ou nascimento para a metadata de auditoria.
+- Autoedição pelo membro, consentimento específico, base legal, retenção, exportação e exclusão desses dados permanecem decisões abertas antes de uso em produção.
+
 ## Presença e check-in
 
 - Presença é diferente de inscrição e só existe após check-in de uma inscrição confirmada.
@@ -89,7 +100,14 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 ## Segurança administrativa
 
 - Tokens de acesso pertencem a uma sessão revogável; o banco persiste somente o identificador opaco da sessão, nunca o token.
-- O usuário pode encerrar suas outras sessões. Operações administrativas de sessões exigem permissão granular.
+- A sessão do navegador usa cookie `HttpOnly`, `SameSite=Strict` e `Secure` em produção; o JWT não é entregue ao JavaScript nem salvo em `localStorage`.
+- Cada login gera uma prova aleatória independente. O navegador mantém essa prova somente em `sessionStorage` e a envia no cabeçalho `X-Session-Proof`; o banco guarda apenas seu hash com chave.
+- Cookie e prova são validados juntos em toda rota autenticada, inclusive leituras. Roubar apenas um dos componentes não forma uma credencial reutilizável fora do navegador.
+- A sessão também é vinculada a uma assinatura com chave do `User-Agent`. O IP não bloqueia a sessão, pois mudanças legítimas em redes móveis e proxies produziriam falsos positivos.
+- Login sempre cria um novo identificador de sessão no servidor, prevenindo fixação. Logout limpa o cookie e revoga a sessão atual.
+- Sessões criadas antes da adoção da prova dividida são revogadas pela migração e exigem novo login.
+- A duração absoluta inicial permanece em oito horas. Renovação silenciosa, sessão persistente e fluxo “lembrar de mim” continuam fora do escopo até regras próprias.
+- Todo usuário autenticado pode encerrar a sessão atual. Listar e encerrar outras sessões exige `sessions.manage`.
 - MFA é planejado por porta de provedor e deve ser exigível por política da comunidade antes de integrar TOTP, passkey ou fornecedor externo.
 - A recuperação de emergência (`break-glass`) não usa ausência de tenant nem bypass de RLS; deverá ter identidade explícita, credencial separada e auditoria reforçada.
 
@@ -123,7 +141,10 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quais gateways e provedores OIDC serão mantidos oficialmente pelo projeto?
 - Quando uma edição deve ou não criar uma nova versão do formulário?
 - Qual política de MFA e recuperação de emergência será adotada antes da produção?
+- A duração de oito horas será reduzida ou terá renovação com rotação de credenciais?
 - Qual prazo de retenção, consentimento e opt-out vale para mensagens e contatos?
+- Qual base legal, consentimento, prazo de retenção e processo de exclusão valem para endereço e dados de filhos?
+- O próprio membro poderá consultar e editar o perfil complementar?
 - A comunidade aceitará múltiplos números por pastor e um número institucional compartilhado?
 
 ## Acesso inicial

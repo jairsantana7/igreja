@@ -35,6 +35,10 @@ O login exige o slug da comunidade e resolve somente a identidade necessária po
 
 O valor é local à transação, portanto não permanece na conexão devolvida ao pool.
 
+## Sessão do navegador
+
+O JWT assinado é transportado em cookie `HttpOnly`; o cliente não recebe seu valor. Uma prova aleatória separada fica apenas na aba e seu HMAC, junto ao HMAC do `User-Agent`, é armazenado em `auth_sessions`. O guard exige os três componentes — JWT válido, sessão ativa e prova/assinatura correspondentes — antes de instalar o principal autenticado. O cabeçalho customizado também impede requests autenticados por CSRF tradicional.
+
 ## Bounded context: Eventos e inscrições
 
 O agregado `Event` pertence a uma comunidade, é criado por uma identidade autorizada e possui campos de formulário ordenados. Um evento começa como rascunho e pode ser publicado. O registro relaciona um membro ao evento e guarda respostas tipadas pelo identificador do campo.
@@ -58,6 +62,12 @@ Autenticação social entra pela porta `ExternalIdentityProvider`. Um adaptador 
 Configurações de login social e pagamentos formam um contexto separado de eventos. Os casos de uso dependem de `CommunitySettingsRepository`; PostgreSQL é apenas um adaptador. Provedores externos implementam `ExternalIdentityProvider` ou `PaymentGateway` e são selecionados por uma `providerKey`, mantendo os princípios de responsabilidade única, inversão de dependência e aberto/fechado.
 
 `community_integrations` armazena configuração pública por tenant. Campos privados são referências a secrets externos, nunca o valor da credencial. Salvar a configuração não torna uma integração operacional: a implantação também precisa registrar o adaptador correspondente.
+
+## Bounded context: Membros
+
+A identidade básica em `users` continua suficiente para autenticação e inscrição. `member_profiles` e `member_children` formam um perfil complementar opcional, acessado por casos de uso e portas próprios. Essa separação permite aplicar permissões mais restritas aos dados de endereço e menores sem ampliar implicitamente `users.read`.
+
+O banco impõe tenant consistente nas relações com FKs compostas e RLS forçada. A API devolve esses dados somente no endpoint de detalhe com `members.profile_read`; auditoria registra a operação, mas não replica valores pessoais.
 
 ## Contextos preparados
 

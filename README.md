@@ -54,11 +54,13 @@ pnpm db:down    # encerra containers
 - criação de evento, formulário dinâmico e imagens em hero, carrossel ou fundo fixo;
 - página pública para inscrição do membro;
 - conta local de membro e base extensível para login social;
+- perfil complementar opcional com endereço e filhos, protegido por permissões específicas;
 - papéis editáveis com permissões granulares verificadas no backend;
 - trilha de auditoria para criações, edições e exclusões;
 - configurações desacopladas para login social, PIX e gateways de pagamento;
 - portas substituíveis para logs, cache, filas, pagamentos, identidade externa e armazenamento de mídia;
 - sessões revogáveis e porta de MFA preparada para adaptadores;
+- sessão dividida entre cookie `HttpOnly` e prova efêmera da aba, sem JWT no `localStorage`;
 - isolamento de todas as comunidades pelo PostgreSQL RLS.
 
 O adapter de mídia local é voltado ao desenvolvimento. Instalações de produção devem registrar um adapter de object storage e um backend compartilhado para cache/throttling quando houver múltiplas réplicas.

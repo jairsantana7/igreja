@@ -14,6 +14,7 @@ cliente -> Cloudflare -> Traefik -> API (rede privada)
 4. Traefik sobrescreve/normaliza os cabeçalhos encaminhados e é o único cliente de rede da API.
 5. A API configura `TRUST_PROXY` com as redes exatas do Traefik. O padrão local aceita loopback e redes privadas; em produção, reduza essa lista à subnet real.
 6. O código usa `request.ip`. Nunca confia diretamente em `CF-Connecting-IP`, pois esse cabeçalho pode ser falsificado se existir um caminho direto ao origin.
+7. Web e API permanecem no mesmo site registrável. `CORS_ORIGIN` contém origens exatas, nunca `*`, para permitir o cookie `HttpOnly` com credenciais.
 
 Exemplo parcial de configuração estática do Traefik (substitua pelos CIDRs oficiais atuais):
 
