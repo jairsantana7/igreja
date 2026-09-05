@@ -5,6 +5,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 ## Contratos
 
 - Login social implementa `ExternalIdentityProvider` em `application/ports/authentication.port.ts`.
+- MFA implementa `MultiFactorProvider`; o projeto não escolhe TOTP, passkey ou fornecedor pelo domínio.
 - Cobranças implementam `PaymentGateway` em `application/ports/payment-gateway.port.ts`.
 - Configurações dependem de `CommunitySettingsRepository`; o adaptador PostgreSQL não vaza para os casos de uso.
 - Cache implementa `CacheStore`; a implementação padrão é no-op e pode ser substituída por Redis ou outro backend.
@@ -30,6 +31,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Payloads não carregam senhas, tokens ou dados pessoais desnecessários.
 - Consumidores são idempotentes e definem política explícita de tentativas, atraso e dead-letter queue.
 - O adaptador não pode confirmar a mensagem antes da conclusão segura do trabalho.
+- Campanhas de evento são persistidas antes do enqueue e usam `events.communication.dispatch` com chave de deduplicação.
 
 ## Logs e captura de erros
 
@@ -56,4 +58,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual e um slot genérico de gateway podem ser configurados. Ainda não há adaptador externo instalado, cobrança de evento, webhook ou vinculação de conta social; portanto esses recursos permanecem **não operacionais** até uma implementação posterior.
+Google, Microsoft, PIX manual e um slot genérico de gateway podem ser configurados. Sessões locais já são revogáveis. Ainda não há adaptador externo de identidade, MFA, fila ou pagamento instalado, cobrança de evento, webhook ou vinculação de conta social; portanto esses recursos permanecem **não operacionais** até uma implementação posterior.

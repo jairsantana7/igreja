@@ -15,7 +15,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 
 - O pastor cria título, descrição, local, início, limite de inscrição, capacidade opcional e formulário.
 - O formulário aceita inicialmente texto curto, texto longo, seleção única e caixa de confirmação.
-- Um evento pode estar em `draft`, `published` ou `cancelled`.
+- Um evento pode estar em `draft`, `published`, `registration_closed`, `cancelled` ou `completed`.
 - Somente `published` é acessível pelo link público.
 - No MVP, um evento está aberto para inscrições quando está publicado, ainda não começou e seu prazo de inscrição não venceu.
 - Editar um evento preserva seu identificador e link público; a edição não altera o status de publicação.
@@ -24,6 +24,10 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Cancelar novamente um evento já cancelado é uma operação idempotente.
 - Campos que já possuem respostas não podem ser removidos durante uma edição; versionamento de formulários ainda precisa de definição.
 - Notificações de cancelamento não são enviadas até que canal, mensagem, tentativas e consentimentos sejam definidos.
+- Fechar inscrições move apenas um evento publicado para `registration_closed`; inscrições existentes são preservadas.
+- Concluir um evento é permitido a partir de `published` ou `registration_closed` e encerra sua operação.
+- Eventos concluídos não podem ser cancelados. Repetir fechamento, conclusão ou cancelamento no mesmo estado é idempotente.
+- As transições de ciclo de vida exigem `events.publish`; o nome do papel nunca participa dessa decisão.
 
 ## Inscrição
 
@@ -33,6 +37,42 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O backend valida campos obrigatórios e opções permitidas.
 - Capacidade esgotada, lista de espera e cancelamento ainda precisam de definição detalhada.
 - A contagem exibida na gestão representa inscrições confirmadas, não presença física no evento.
+
+## Presença e check-in
+
+- Presença é diferente de inscrição e só existe após check-in de uma inscrição confirmada.
+- O MVP permite check-in manual e desfazer check-in; ambas as ações exigem `events.checkin`.
+- Existe no máximo um check-in ativo por inscrição. Repetir a confirmação é idempotente.
+- O registro guarda horário e operador para auditoria, sem copiar respostas do formulário.
+- QR Code, convidados, check-in familiar e funcionamento offline permanecem decisões abertas; o modelo não presume essas regras.
+
+## Versionamento de formulário
+
+- Cada evento começa na versão 1 do formulário.
+- Uma edição administrativa cria uma fotografia imutável da nova versão, mesmo quando só dados gerais do evento mudam; essa escolha favorece rastreabilidade no MVP.
+- A inscrição registra a versão vigente no momento da confirmação.
+- Respostas antigas continuam associadas aos campos originais. Campos respondidos ainda não podem ser removidos.
+- Migração de respostas, edição retroativa e comparação visual entre versões permanecem decisões abertas.
+
+## Comunicação
+
+- Comunicação é um módulo do contexto de eventos, mas o transporte é sempre uma porta `JobQueue` e adaptadores de canal.
+- O MVP permite preparar campanhas para inscritos confirmados, presentes ou ausentes, sem enviar diretamente no request HTTP.
+- Uma campanha só muda para enfileirada depois que o adaptador de fila aceita o trabalho. Sem adaptador, a operação falha de forma explícita e o rascunho é preservado.
+- Consentimento, opt-out, modelos de mensagem, custo, janela de envio e provedores oficiais permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
+
+## Modelos e recorrência
+
+- Um evento pode ser salvo como modelo reutilizável contendo dados editoriais e o formulário, sem inscrições, auditoria ou identificadores públicos.
+- Criar a partir de um modelo sempre gera um novo rascunho e exige informar uma nova data.
+- Recorrência automática não é presumida: periodicidade, exceções e vínculo entre ocorrências permanecem decisões abertas.
+
+## Segurança administrativa
+
+- Tokens de acesso pertencem a uma sessão revogável; o banco persiste somente o identificador opaco da sessão, nunca o token.
+- O usuário pode encerrar suas outras sessões. Operações administrativas de sessões exigem permissão granular.
+- MFA é planejado por porta de provedor e deve ser exigível por política da comunidade antes de integrar TOTP, passkey ou fornecedor externo.
+- A recuperação de emergência (`break-glass`) não usa ausência de tenant nem bypass de RLS; deverá ter identidade explícita, credencial separada e auditoria reforçada.
 
 ## Login social
 
@@ -59,9 +99,11 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quem pode editar/publicar além do pastor?
 - Quais regras valem para capacidade, convidados, pagamentos e cancelamento?
 - Quais dados e consentimentos LGPD são obrigatórios por formulário?
-- Como registrar presença real: check-in manual, código individual, QR Code ou outra forma?
+- Quais regras complementares serão usadas no check-in: QR Code, convidados, família e modo offline?
 - Como eventos definem preço, gratuidade, lotes e política de reembolso?
 - Quais gateways e provedores OIDC serão mantidos oficialmente pelo projeto?
+- Quando uma edição deve ou não criar uma nova versão do formulário?
+- Qual política de MFA e recuperação de emergência será adotada antes da produção?
 
 ## Acesso inicial
 

@@ -45,6 +45,10 @@ pnpm db:down    # encerra containers
 - login do pastor por comunidade;
 - usuário admin inicial para criar os demais papéis e acessos;
 - dashboard de eventos;
+- central operacional por evento com inscrições, presença, formulário, comunicação e auditoria;
+- check-in manual, indicadores de comparecimento e exportação CSV;
+- ciclo de vida com fechamento de inscrições e conclusão;
+- fotografias versionadas do formulário e modelos reutilizáveis de evento;
 - criação de evento, formulário dinâmico e imagens em hero, carrossel ou fundo fixo;
 - página pública para inscrição do membro;
 - conta local de membro e base extensível para login social;
@@ -52,9 +56,12 @@ pnpm db:down    # encerra containers
 - trilha de auditoria para criações, edições e exclusões;
 - configurações desacopladas para login social, PIX e gateways de pagamento;
 - portas substituíveis para logs, cache, filas, pagamentos, identidade externa e armazenamento de mídia;
+- sessões revogáveis e porta de MFA preparada para adaptadores;
 - isolamento de todas as comunidades pelo PostgreSQL RLS.
 
 O adapter de mídia local é voltado ao desenvolvimento. Instalações de produção devem registrar um adapter de object storage e um backend compartilhado para cache/throttling quando houver múltiplas réplicas.
+
+Campanhas ficam como rascunho enquanto não existir um adaptador de fila. Essa falha explícita é intencional: a instalação nunca informa que uma mensagem foi enviada sem confirmação do broker.
 
 ## Projeto
 

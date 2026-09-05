@@ -17,6 +17,11 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |
 | `event_registrations` | tenant-direct | inscrição pertence a evento e comunidade | RLS direta + FKs compostas |
 | `registration_answers` | tenant-direct | resposta pertence à inscrição/campo/evento | RLS direta + FKs compostas para impedir cruzamento |
+| `event_form_versions` | tenant-direct | fotografia versionada do formulário pertence ao evento | RLS direta + FKs compostas para evento e autor |
+| `event_check_ins` | tenant-direct | presença pertence a uma inscrição e evento da comunidade | RLS direta + FKs compostas para inscrição e operador |
+| `event_communications` | tenant-direct | campanha de comunicação pertence a um evento | RLS direta + FKs compostas para evento e autor |
+| `event_templates` | tenant-direct | modelo reutilizável pertence à comunidade | RLS direta + FK composta para autor |
+| `auth_sessions` | tenant-direct | sessão revogável pertence ao usuário da comunidade | RLS direta + FK composta para usuário; token bruto nunca é persistido |
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |
 | `community_integrations` | tenant-direct | configuração de integração pertence à comunidade | RLS direta; segredos ficam fora da tabela |
 | `audit_events` | tenant-direct | trilha de alterações pertence à comunidade | RLS direta; runtime somente leitura e triggers gravam como owner |

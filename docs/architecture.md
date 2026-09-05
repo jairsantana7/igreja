@@ -49,6 +49,8 @@ Invariantes iniciais:
 - respostas só podem apontar para campos do mesmo evento e tenant;
 - evento não publicado não aparece no resolver público.
 
+A central operacional do evento reúne visão geral, inscrições, formulário, comunicação, check-in e auditoria sem deslocar regras para o controller. Presença, versões de formulário, campanhas e modelos possuem portas próprias na aplicação e adaptadores PostgreSQL independentes. O detalhe do evento apenas compõe essas capacidades no cliente Nuxt.
+
 Autenticação social entra pela porta `ExternalIdentityProvider`. Um adaptador futuro troca o código do provedor por uma identidade verificada e a vincula a `external_accounts`; o domínio não conhece detalhes OAuth/OIDC.
 
 ## Bounded context: Configurações da comunidade
@@ -56,6 +58,15 @@ Autenticação social entra pela porta `ExternalIdentityProvider`. Um adaptador 
 Configurações de login social e pagamentos formam um contexto separado de eventos. Os casos de uso dependem de `CommunitySettingsRepository`; PostgreSQL é apenas um adaptador. Provedores externos implementam `ExternalIdentityProvider` ou `PaymentGateway` e são selecionados por uma `providerKey`, mantendo os princípios de responsabilidade única, inversão de dependência e aberto/fechado.
 
 `community_integrations` armazena configuração pública por tenant. Campos privados são referências a secrets externos, nunca o valor da credencial. Salvar a configuração não torna uma integração operacional: a implantação também precisa registrar o adaptador correspondente.
+
+## Contextos preparados
+
+- **Comunicação:** campanhas persistem como intenção de envio; a entrega passa por `JobQueue` e por adaptadores de canal.
+- **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.
+- **Segurança administrativa:** sessões revogáveis e uma futura porta de MFA não alteram o domínio de eventos. Acesso emergencial será um fluxo privilegiado explícito, nunca um tenant vazio.
+- **Modelos de evento:** reutilizam conteúdo e formulário, mas não transformam recorrência em comportamento implícito.
+
+Esses limites evitam que a plataforma cresça como um ERP genérico: o núcleo continua sendo operação de eventos da comunidade.
 
 ## Portas transversais
 
