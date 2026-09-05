@@ -15,6 +15,12 @@ function integer(name: string, fallback: number): number {
   return value;
 }
 
+function jobQueueDriver(): 'disabled' | 'bullmq' {
+  const value = process.env.JOB_QUEUE_DRIVER?.trim().toLowerCase() || 'disabled';
+  if (value !== 'disabled' && value !== 'bullmq') throw new Error('JOB_QUEUE_DRIVER deve ser disabled ou bullmq.');
+  return value;
+}
+
 export const env = Object.freeze({
   appName: required('APP_NAME', 'Minha Comunidade'),
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -30,6 +36,10 @@ export const env = Object.freeze({
   trustProxy: required('TRUST_PROXY', 'loopback,linklocal,uniquelocal'),
   mediaStoragePath: resolve(process.cwd(), process.env.MEDIA_STORAGE_PATH ?? '../../.data/media'),
   metaGraphApiVersion: process.env.META_GRAPH_API_VERSION?.trim() ?? '',
+  jobQueueDriver: jobQueueDriver(),
+  redisUrl: process.env.REDIS_URL?.trim() ?? '',
+  jobQueueName: required('JOB_QUEUE_NAME', 'igreja-jobs'),
+  workerConcurrency: integer('WORKER_CONCURRENCY', 5),
 });
 
 if (env.jwtSecret.length < 32) throw new Error('JWT_SECRET precisa ter ao menos 32 caracteres.');
@@ -42,4 +52,7 @@ if (env.nodeEnv === 'production' && env.sessionBindingSecret === env.jwtSecret) 
 }
 if (env.nodeEnv === 'production' && env.trustProxy.trim().toLowerCase() === 'true') {
   throw new Error('TRUST_PROXY=true é proibido em produção; informe redes confiáveis explícitas.');
+}
+if (env.jobQueueDriver === 'bullmq' && !env.redisUrl) {
+  throw new Error('REDIS_URL é obrigatória quando JOB_QUEUE_DRIVER=bullmq.');
 }

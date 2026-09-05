@@ -16,7 +16,7 @@ Requisitos: Node.js 22.19+, pnpm 11+ e Docker com Compose.
 ```bash
 cp .env.example .env
 pnpm install
-pnpm db:up
+pnpm infra:up
 pnpm db:seed
 pnpm dev
 ```
@@ -36,6 +36,8 @@ Essas credenciais são apenas para desenvolvimento. A API fica em `http://localh
 pnpm dev        # web e API
 pnpm check      # tipos, testes e builds
 pnpm db:up      # inicia PostgreSQL
+pnpm infra:up   # inicia PostgreSQL e Redis
+pnpm worker     # inicia o consumidor BullMQ em outro terminal
 pnpm db:seed    # cria dados sintéticos locais
 pnpm db:down    # encerra containers
 ```
@@ -68,7 +70,7 @@ pnpm db:down    # encerra containers
 
 O adapter de mídia local é voltado ao desenvolvimento. Instalações de produção devem registrar um adapter de object storage e um backend compartilhado para cache/throttling quando houver múltiplas réplicas.
 
-Campanhas e lembretes podem ser configurados, mas não são entregues enquanto não existirem scheduler e adaptador de fila. Essa separação é intencional: a instalação nunca informa que uma mensagem foi enviada sem confirmação do broker.
+O adapter BullMQ/Redis está disponível de forma opt-in. Para usá-lo, configure `JOB_QUEUE_DRIVER=bullmq`, execute `pnpm infra:up` e mantenha `pnpm worker` em outro processo. A fila não equivale a entrega: campanhas e lembretes continuam sem envio enquanto não houver scheduler e adapter do canal.
 
 A central de conversas preserva canais, atendimentos e respostas pendentes. O adapter oficial já sincroniza templates pela WABA, mas Embedded Signup, envio e recebimento ainda exigem configuração da Meta, um `ConversationProvider`, webhook validado e uma implementação compartilhada de `JobQueue`.
 

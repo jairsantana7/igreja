@@ -90,6 +90,8 @@ Esses limites evitam que a plataforma cresça como um ERP genérico: o núcleo c
 
 `ApplicationLogger`, `CacheStore`, `JobQueue` e `MediaStorage` pertencem à camada de aplicação e não conhecem Sentry, Redis, BullMQ, RabbitMQ, disco local, S3 ou R2. A infraestrutura fornece adaptadores substituíveis e `app.module.ts` faz a composição. A implementação padrão de cache é no-op; a de fila falha explicitamente para impedir perda silenciosa de trabalho. O armazenamento local de mídia serve somente ao desenvolvimento e deve ser substituído por armazenamento de objetos em produção.
 
+Quando habilitado, `BullMqJobQueue` existe somente no composition root da API. O processo `worker` possui sua própria conexão persistente ao Redis e abre uma transação PostgreSQL com contexto RLS para cada job. A fila transporta identificadores, não conteúdo de mensagens nem segredos.
+
 ## Autorização granular
 
 Permissões são chaves globais e imutáveis. Cada comunidade define papéis que agrupam essas chaves, e um usuário pode receber vários papéis. O token identifica usuário e tenant, mas o `PermissionsGuard` recarrega papéis e permissões atuais a cada requisição protegida. A camada HTTP bloqueia cedo, e casos de uso mantêm as invariantes de autorização relevantes.

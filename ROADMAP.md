@@ -20,10 +20,11 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - responsável e colaboradores por evento com escopos próprio/global;
 - fundação da central de conversas e canais individuais por pastor.
 - modelos de comunicação versionados e regras de lembrete por evento;
+- adapter compartilhado BullMQ/Redis e worker separado, habilitados de forma explícita;
 
 ## Próximo
 
-- adapter compartilhado de fila e adapter oficial do WhatsApp com webhook validado;
+- adapter de conversa individual para WhatsApp e webhook validado;
 - scheduler de lembretes, consentimento, opt-out, retenção e vínculo com modelos aprovados da Meta;
 - QR Code e fluxo de check-in móvel/offline;
 - comparação e edição avançada de versões do formulário;

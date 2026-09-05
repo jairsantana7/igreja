@@ -37,6 +37,9 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Campanhas de evento são persistidas antes do enqueue e usam `events.communication.dispatch` com chave de deduplicação.
 - Regras de lembrete fixam uma versão do modelo e só podem ser consumidas quando modelo e regra estão ativos. O scheduler futuro deve consultar por tenant e produzir jobs idempotentes sem interpolar conteúdo em logs.
 - Respostas da central são persistidas antes do enqueue e usam `conversations.message.dispatch`; o identificador da mensagem é a chave de deduplicação.
+- O adapter BullMQ é ativado somente com `JOB_QUEUE_DRIVER=bullmq`. A API usa falha rápida no Redis e o comando `pnpm worker` mantém o consumidor separado e reconectável.
+- Redis deve usar `maxmemory-policy=noeviction`. No ambiente local, `pnpm infra:up` também habilita AOF para tornar reinícios menos frágeis.
+- Ter BullMQ ativo não habilita um fornecedor de entrega. Sem `ConversationProvider`, o job falha explicitamente e o registro persistido muda para `failed` após esgotar as tentativas.
 
 ## Canais de conversa
 

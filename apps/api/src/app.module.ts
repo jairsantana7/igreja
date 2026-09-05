@@ -33,6 +33,8 @@ import { NestApplicationLogger } from './infrastructure/observability/nest-appli
 import { NoopCacheStore } from './infrastructure/cache/noop-cache.store';
 import { ApplicationExceptionFilter } from './presentation/http/application-exception.filter';
 import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
+import { BullMqJobQueue } from './infrastructure/queue/bullmq-job.queue';
+import type { JobQueue } from './application/ports/job-queue.port';
 import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
 import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
 import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
@@ -72,7 +74,12 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
     { provide: TOKENS.sessionSecurity, useClass: HmacSessionSecurity },
     { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
-    { provide: TOKENS.jobQueue, useClass: DisabledJobQueue },
+    {
+      provide: TOKENS.jobQueue,
+      useFactory: (): JobQueue => env.jobQueueDriver === 'bullmq'
+        ? BullMqJobQueue.connect(env.redisUrl, env.jobQueueName)
+        : new DisabledJobQueue(),
+    },
     { provide: TOKENS.mediaStorage, useClass: LocalMediaStorage },
     { provide: TOKENS.secretResolver, useClass: EnvironmentSecretResolver },
     {
@@ -248,7 +255,7 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
     },
     {
       provide: TOKENS.queueEventCommunicationUseCase,
-      useFactory: (communications: PostgresEventCommunicationRepository, queue: DisabledJobQueue) => new QueueEventCommunicationUseCase(communications, queue),
+      useFactory: (communications: PostgresEventCommunicationRepository, queue: JobQueue) => new QueueEventCommunicationUseCase(communications, queue),
       inject: [TOKENS.eventCommunicationRepository, TOKENS.jobQueue],
     },
     {
@@ -288,7 +295,7 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
     },
     {
       provide: TOKENS.replyConversationUseCase,
-      useFactory: (conversations: PostgresConversationRepository, queue: DisabledJobQueue) => new ReplyConversationUseCase(conversations, queue),
+      useFactory: (conversations: PostgresConversationRepository, queue: JobQueue) => new ReplyConversationUseCase(conversations, queue),
       inject: [TOKENS.conversationRepository, TOKENS.jobQueue],
     },
     {
