@@ -1,0 +1,18 @@
+export const TOKENS = {
+  authRepository: Symbol('AuthenticationRepository'),
+  eventRepository: Symbol('EventRepository'),
+  registrationRepository: Symbol('EventRegistrationRepository'),
+  accessControlRepository: Symbol('AccessControlRepository'),
+  passwordHasher: Symbol('PasswordHasher'),
+  tokenService: Symbol('TokenService'),
+  loginUseCase: Symbol('LoginUseCase'),
+  eventLoginUseCase: Symbol('EventLoginUseCase'),
+  dashboardUseCase: Symbol('GetDashboardUseCase'),
+  createEventUseCase: Symbol('CreateEventUseCase'),
+  publicEventUseCase: Symbol('GetPublicEventUseCase'),
+  signUpForEventUseCase: Symbol('SignUpForEventUseCase'),
+  registerForEventUseCase: Symbol('RegisterForEventUseCase'),
+  getAccessControlUseCase: Symbol('GetAccessControlUseCase'),
+  createRoleUseCase: Symbol('CreateRoleUseCase'),
+  createUserUseCase: Symbol('CreateUserUseCase'),
+} as const;

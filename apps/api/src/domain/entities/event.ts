@@ -1,0 +1,73 @@
+import { DomainError } from './errors';
+
+export const FORM_FIELD_TYPES = ['short_text', 'long_text', 'single_choice', 'checkbox'] as const;
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+export type EventStatus = 'draft' | 'published' | 'cancelled';
+
+export interface EventFormField {
+  id?: string;
+  key: string;
+  label: string;
+  type: FormFieldType;
+  required: boolean;
+  options: string[];
+}
+
+export interface EventDraftProps {
+  title: string;
+  description: string;
+  location: string;
+  startsAt: Date;
+  registrationDeadline?: Date;
+  capacity?: number;
+  publish: boolean;
+  fields: EventFormField[];
+}
+
+export class EventDraft {
+  private constructor(readonly props: EventDraftProps) {}
+
+  static create(input: EventDraftProps): EventDraft {
+    const title = input.title.trim();
+    if (title.length < 3 || title.length > 160) throw new DomainError('O título deve ter entre 3 e 160 caracteres.');
+    if (Number.isNaN(input.startsAt.getTime())) throw new DomainError('A data do evento é inválida.');
+    if (input.registrationDeadline && input.registrationDeadline > input.startsAt) {
+      throw new DomainError('O limite de inscrição não pode ser posterior ao início do evento.');
+    }
+    if (input.capacity !== undefined && (!Number.isInteger(input.capacity) || input.capacity < 1)) {
+      throw new DomainError('A capacidade deve ser um número inteiro positivo.');
+    }
+
+    const keys = new Set<string>();
+    const fields = input.fields.map((field) => {
+      const key = field.key.trim().toLowerCase();
+      const label = field.label.trim();
+      if (!/^[a-z][a-z0-9_]{1,62}$/.test(key)) throw new DomainError(`A chave de campo “${field.key}” é inválida.`);
+      if (keys.has(key)) throw new DomainError(`A chave de campo “${key}” está duplicada.`);
+      if (label.length < 2 || label.length > 120) throw new DomainError('O rótulo do campo deve ter entre 2 e 120 caracteres.');
+      if (field.type === 'single_choice' && field.options.filter(Boolean).length === 0) {
+        throw new DomainError(`O campo “${label}” precisa de opções.`);
+      }
+      keys.add(key);
+      return { ...field, key, label, options: field.options.map((option) => option.trim()).filter(Boolean) };
+    });
+
+    return new EventDraft({
+      ...input,
+      title,
+      description: input.description.trim(),
+      location: input.location.trim(),
+      fields,
+    });
+  }
+}
+
+export function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 70);
+}
