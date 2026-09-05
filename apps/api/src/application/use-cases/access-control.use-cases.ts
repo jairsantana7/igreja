@@ -15,6 +15,14 @@ export class GetAccessControlUseCase {
   }
 }
 
+export class ListMembersUseCase {
+  constructor(private readonly access: AccessControlRepository) {}
+  execute(principal: AuthenticatedPrincipal) {
+    requirePermission(principal, PERMISSIONS.usersRead);
+    return this.access.listMembers(principal);
+  }
+}
+
 export class CreateRoleUseCase {
   constructor(private readonly access: AccessControlRepository) {}
   execute(principal: AuthenticatedPrincipal, input: { key: string; name: string; permissions: string[] }) {

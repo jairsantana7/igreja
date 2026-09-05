@@ -1,6 +1,7 @@
 export function useApi() {
   const config = useRuntimeConfig();
   const auth = useAuth();
+  const nuxtApp = useNuxtApp();
 
   return async function api<T>(path: string, options: Parameters<typeof $fetch<T>>[1] = {}): Promise<T> {
     const headers = new Headers(options.headers as HeadersInit | undefined);
@@ -10,7 +11,7 @@ export function useApi() {
     } catch (error: any) {
       if (error?.response?.status === 401 && !path.includes('/login')) {
         auth.logout();
-        await navigateTo('/login');
+        await nuxtApp.runWithContext(() => navigateTo('/login'));
       }
       throw error;
     }

@@ -5,7 +5,7 @@ import { TOKENS } from './application/ports/tokens';
 import { CreateEventUseCase, GetDashboardUseCase, GetPublicEventUseCase, ListEventsUseCase } from './application/use-cases/event.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
-import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase } from './application/use-cases/access-control.use-cases';
+import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase } from './application/use-cases/access-control.use-cases';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { PostgresAuthenticationRepository } from './infrastructure/repositories/postgres-authentication.repository';
 import { PostgresEventRepository } from './infrastructure/repositories/postgres-event.repository';
@@ -97,6 +97,11 @@ import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttl
     {
       provide: TOKENS.getAccessControlUseCase,
       useFactory: (access: PostgresAccessControlRepository) => new GetAccessControlUseCase(access),
+      inject: [TOKENS.accessControlRepository],
+    },
+    {
+      provide: TOKENS.listMembersUseCase,
+      useFactory: (access: PostgresAccessControlRepository) => new ListMembersUseCase(access),
       inject: [TOKENS.accessControlRepository],
     },
     {

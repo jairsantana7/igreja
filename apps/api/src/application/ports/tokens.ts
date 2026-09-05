@@ -14,6 +14,7 @@ export const TOKENS = {
   signUpForEventUseCase: Symbol('SignUpForEventUseCase'),
   registerForEventUseCase: Symbol('RegisterForEventUseCase'),
   getAccessControlUseCase: Symbol('GetAccessControlUseCase'),
+  listMembersUseCase: Symbol('ListMembersUseCase'),
   createRoleUseCase: Symbol('CreateRoleUseCase'),
   createUserUseCase: Symbol('CreateUserUseCase'),
 } as const;

@@ -1,4 +1,4 @@
-import type { AccessControlRepository, RoleView } from '../../application/ports/access-control.port';
+import type { AccessControlRepository, MemberView, RoleView } from '../../application/ports/access-control.port';
 import type { AuthenticatedPrincipal, Permission } from '../../domain/entities/permission';
 import { ConflictError } from '../../application/use-cases/errors';
 import { PostgresDatabase } from '../database/postgres.database';
@@ -19,6 +19,45 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
         ORDER BY roles.is_system DESC, roles.name
       `);
       return { permissions: permissions.rows, roles: roles.rows.map(this.mapRole) };
+    });
+  }
+
+  listMembers(principal: AuthenticatedPrincipal): Promise<MemberView[]> {
+    return this.database.withTenant(principal.tenantId, async (client) => {
+      const members = await client.query<{
+        id: string;
+        name: string;
+        email: string;
+        created_at: Date;
+        roles: Pick<RoleView, 'id' | 'key' | 'name'>[];
+        confirmed_registrations: string;
+      }>(`
+        SELECT users.id, users.name, users.email, users.created_at,
+          COALESCE(
+            jsonb_agg(DISTINCT jsonb_build_object('id', roles.id, 'key', roles.key, 'name', roles.name))
+              FILTER (WHERE roles.id IS NOT NULL),
+            '[]'::jsonb
+          ) AS roles,
+          count(DISTINCT registrations.id)
+            FILTER (WHERE registrations.status = 'confirmed')::text AS confirmed_registrations
+        FROM users
+        LEFT JOIN user_roles
+          ON user_roles.user_id = users.id AND user_roles.tenant_id = users.tenant_id
+        LEFT JOIN roles
+          ON roles.id = user_roles.role_id AND roles.tenant_id = user_roles.tenant_id
+        LEFT JOIN event_registrations AS registrations
+          ON registrations.user_id = users.id AND registrations.tenant_id = users.tenant_id
+        GROUP BY users.id
+        ORDER BY users.name, users.id
+      `);
+      return members.rows.map((member) => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        createdAt: member.created_at.toISOString(),
+        roles: member.roles,
+        confirmedRegistrations: Number(member.confirmed_registrations),
+      }));
     });
   }
 

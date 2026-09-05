@@ -7,6 +7,9 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - **Admin:** usuário inicial da comunidade, com permissão para configurar papéis e criar os demais usuários.
 - **Pastor:** papel inicial que recebe permissões para administrar eventos da própria comunidade.
 - **Membro:** entra ou cria uma conta vinculada à comunidade e confirma inscrição em um evento publicado.
+- A tela **Membros** lista as identidades da própria comunidade, inclusive administradores e pastores, conforme seus papéis.
+- Somente usuários com `users.read` podem visualizar a lista de membros.
+- Usuários com `users.create` e acesso à lista de papéis podem cadastrar uma pessoa com senha inicial e ao menos um papel.
 
 ## Eventos
 

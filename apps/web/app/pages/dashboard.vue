@@ -2,7 +2,7 @@
 useHead({ title: 'Visão geral' });
 const api = useApi();
 const auth = useAuth();
-const { data, pending, error, refresh } = await useAsyncData('dashboard', () => api<any>('/dashboard'));
+const { data, pending, error, refresh } = await useAsyncData('dashboard', () => api<any>('/dashboard'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 </script>

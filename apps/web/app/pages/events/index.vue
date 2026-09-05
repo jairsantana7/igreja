@@ -17,7 +17,7 @@ useHead({ title: 'Eventos' });
 const api = useApi();
 const auth = useAuth();
 const filter = ref<'all' | 'open' | EventStatus>('all');
-const { data: events, pending, error, refresh } = await useAsyncData('events', () => api<EventListItem[]>('/events'));
+const { data: events, pending, error, refresh } = await useAsyncData('events', () => api<EventListItem[]>('/events'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
 const filteredEvents = computed(() => (events.value ?? []).filter((event) => {
   if (filter.value === 'all') return true;

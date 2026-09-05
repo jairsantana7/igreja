@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const auth = useAuth();
 const route = useRoute();
+const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
 
 async function leave() {
   auth.logout();
@@ -21,6 +22,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink to="/events/new" class="nav-link" :class="{ active: route.path === '/events/new' }">
           <span aria-hidden="true">＋</span> Novo evento
+        </NuxtLink>
+        <NuxtLink v-if="canReadMembers" to="/members" class="nav-link" :class="{ active: route.path === '/members' }">
+          <span aria-hidden="true">♙</span> Membros
         </NuxtLink>
       </nav>
       <div class="sidebar__account">
