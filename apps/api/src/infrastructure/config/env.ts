@@ -26,11 +26,19 @@ export const env = Object.freeze({
   jwtSecret: required('JWT_SECRET'),
   jwtIssuer: required('JWT_ISSUER', 'igreja-api'),
   jwtAudience: required('JWT_AUDIENCE', 'igreja-web'),
+  sessionBindingSecret: required('SESSION_BINDING_SECRET', process.env.JWT_SECRET),
   trustProxy: required('TRUST_PROXY', 'loopback,linklocal,uniquelocal'),
   mediaStoragePath: resolve(process.cwd(), process.env.MEDIA_STORAGE_PATH ?? '../../.data/media'),
 });
 
 if (env.jwtSecret.length < 32) throw new Error('JWT_SECRET precisa ter ao menos 32 caracteres.');
+if (env.sessionBindingSecret.length < 32) throw new Error('SESSION_BINDING_SECRET precisa ter ao menos 32 caracteres.');
+if (env.corsOrigin.split(',').some((origin) => origin.trim() === '*')) {
+  throw new Error('CORS_ORIGIN não aceita wildcard quando sessões usam cookies.');
+}
+if (env.nodeEnv === 'production' && env.sessionBindingSecret === env.jwtSecret) {
+  throw new Error('SESSION_BINDING_SECRET deve ser diferente de JWT_SECRET em produção.');
+}
 if (env.nodeEnv === 'production' && env.trustProxy.trim().toLowerCase() === 'true') {
   throw new Error('TRUST_PROXY=true é proibido em produção; informe redes confiáveis explícitas.');
 }

@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Request, Response } from 'express';
 import { TOKENS } from '../../../application/ports/tokens';
 import type { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import type { GetPublicEventUseCase } from '../../../application/use-cases/event.use-cases';
@@ -11,6 +12,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
 import { PERMISSIONS } from '../../../domain/entities/permission';
+import { clientSessionContext, establishBrowserSession } from '../session-http';
 
 @Controller('public/events')
 export class PublicEventsController {
@@ -28,15 +30,17 @@ export class PublicEventsController {
 
   @Post(':publicId/login')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async eventLogin(@Param('publicId', new ParseUUIDPipe()) publicId: string, @Body() dto: EventLoginDto) {
+  async eventLogin(@Param('publicId', new ParseUUIDPipe()) publicId: string, @Body() dto: EventLoginDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const event = await this.publicEvent.resolve(publicId);
-    return this.login.executeForTenant({ tenantId: event.tenantId, ...dto });
+    const result = await this.login.executeForTenant({ tenantId: event.tenantId, ...dto }, clientSessionContext(request));
+    return establishBrowserSession(response, result);
   }
 
   @Post(':publicId/signup')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  eventSignUp(@Param('publicId', new ParseUUIDPipe()) publicId: string, @Body() dto: EventSignUpDto) {
-    return this.signUp.execute({ publicId, ...dto });
+  async eventSignUp(@Param('publicId', new ParseUUIDPipe()) publicId: string, @Body() dto: EventSignUpDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    const result = await this.signUp.execute({ publicId, ...dto }, clientSessionContext(request));
+    return establishBrowserSession(response, result);
   }
 
   @Post(':publicId/registrations')

@@ -57,7 +57,7 @@ async function seed(): Promise<void> {
         OR key LIKE 'settings.%'
         OR key IN (
           'conversations.read', 'conversations.reply', 'conversations.assign',
-          'channels.manage_own'
+          'channels.manage_own', 'members.profile_read', 'members.profile_manage'
         )
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.pastorRole]);

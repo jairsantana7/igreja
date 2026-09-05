@@ -11,7 +11,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: true });
   app.set('trust proxy', env.trustProxy);
   app.use(helmet());
-  app.enableCors({ origin: env.corsOrigin.split(',').map((origin) => origin.trim()), credentials: false });
+  app.enableCors({ origin: env.corsOrigin.split(',').map((origin) => origin.trim()), credentials: true });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(app.get(ApplicationExceptionFilter));

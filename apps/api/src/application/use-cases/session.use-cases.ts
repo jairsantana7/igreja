@@ -27,7 +27,6 @@ export class RevokeOtherSessionsUseCase {
 export class RevokeCurrentSessionUseCase {
   constructor(private readonly sessions: SessionRepository) {}
   async execute(principal: AuthenticatedPrincipal) {
-    authorize(principal);
     return { revoked: await this.sessions.revokeCurrent(principal) };
   }
 }

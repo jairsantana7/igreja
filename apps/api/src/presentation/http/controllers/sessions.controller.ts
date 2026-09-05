@@ -1,4 +1,5 @@
-import { Controller, Delete, Get, HttpCode, HttpStatus, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, HttpStatus, Inject, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { TOKENS } from '../../../application/ports/tokens';
 import type { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from '../../../application/use-cases/session.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
@@ -6,6 +7,7 @@ import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
+import { clearBrowserSession } from '../session-http';
 
 @Controller('sessions')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -31,8 +33,9 @@ export class SessionsController {
 
   @Delete('current')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.sessionsManage)
-  revokeCurrent(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
-    return this.revokeCurrentSession.execute(principal);
+  async revokeCurrent(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Res({ passthrough: true }) response: Response) {
+    const result = await this.revokeCurrentSession.execute(principal);
+    clearBrowserSession(response);
+    return result;
   }
 }

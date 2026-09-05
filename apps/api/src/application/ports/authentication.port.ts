@@ -32,9 +32,27 @@ export interface SessionView {
   current: boolean;
 }
 
+export interface SessionClientContext {
+  userAgent: string;
+}
+
+export interface SessionVerification {
+  proofHash: string;
+  userAgentHash: string;
+}
+
+export interface IssuedSessionProof extends SessionVerification {
+  proof: string;
+}
+
+export interface SessionSecurity {
+  issue(context: SessionClientContext): IssuedSessionProof;
+  verify(proof: string, context: SessionClientContext): SessionVerification | null;
+}
+
 export interface SessionRepository {
-  create(principal: AuthenticatedPrincipal): Promise<string>;
-  isActive(principal: AuthenticatedPrincipal): Promise<boolean>;
+  create(principal: AuthenticatedPrincipal, verification: SessionVerification): Promise<string>;
+  isActive(principal: AuthenticatedPrincipal, verification: SessionVerification): Promise<boolean>;
   list(principal: AuthenticatedPrincipal): Promise<SessionView[]>;
   revokeOthers(principal: AuthenticatedPrincipal): Promise<number>;
   revokeCurrent(principal: AuthenticatedPrincipal): Promise<boolean>;

@@ -1,7 +1,7 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { PERMISSIONS } from '../../domain/entities/permission';
 import { AuthorizationError } from './errors';
-import type { PasswordHasher, SessionRepository, TokenService } from '../ports/authentication.port';
+import type { PasswordHasher, SessionClientContext, SessionRepository, SessionSecurity, TokenService } from '../ports/authentication.port';
 import type { EventRegistrationRepository, RegistrationAnswerInput } from '../ports/event.port';
 import { GetPublicEventUseCase, validateAnswers } from './event.use-cases';
 
@@ -12,9 +12,10 @@ export class SignUpForEventUseCase {
     private readonly passwords: PasswordHasher,
     private readonly tokens: TokenService,
     private readonly sessions: SessionRepository,
+    private readonly sessionSecurity: SessionSecurity,
   ) {}
 
-  async execute(input: { publicId: string; name: string; email: string; password: string; answers: RegistrationAnswerInput[] }) {
+  async execute(input: { publicId: string; name: string; email: string; password: string; answers: RegistrationAnswerInput[] }, context: SessionClientContext) {
     const event = await this.publicEvents.resolve(input.publicId);
     validateAnswers(event.fields, input.answers);
     const result = await this.registrations.signUpAndRegister({
@@ -32,8 +33,9 @@ export class SignUpForEventUseCase {
       roles: result.identity.roles,
       permissions: result.identity.permissions,
     };
-    principal.sessionId = await this.sessions.create(principal);
-    return { registrationId: result.registrationId, accessToken: await this.tokens.sign(principal), user: principal };
+    const issued = this.sessionSecurity.issue(context);
+    principal.sessionId = await this.sessions.create(principal, issued);
+    return { registrationId: result.registrationId, accessToken: await this.tokens.sign(principal), sessionProof: issued.proof, user: principal };
   }
 }
 

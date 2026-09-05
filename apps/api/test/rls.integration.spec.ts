@@ -18,6 +18,10 @@ const channelA = 'a7000000-0000-4000-8000-000000000001';
 const channelB = 'b7000000-0000-4000-8000-000000000002';
 const conversationA = 'a8000000-0000-4000-8000-000000000001';
 const conversationB = 'b8000000-0000-4000-8000-000000000002';
+const profileA = 'a9000000-0000-4000-8000-000000000001';
+const profileB = 'b9000000-0000-4000-8000-000000000002';
+const sessionA = 'aa000000-0000-4000-8000-000000000001';
+const sessionB = 'bb000000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -34,6 +38,18 @@ describeDatabase('PostgreSQL RLS', () => {
       INSERT INTO users (id, tenant_id, name, email) VALUES
         ('${userA}', '${tenantA}', 'User A', 'user@a.test'),
         ('${userB}', '${tenantB}', 'User B', 'user@b.test')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO auth_sessions (id, tenant_id, user_id, expires_at, proof_hash, user_agent_hash) VALUES
+        ('${sessionA}', '${tenantA}', '${userA}', now() + interval '1 hour', repeat('a', 64), repeat('1', 64)),
+        ('${sessionB}', '${tenantB}', '${userB}', now() + interval '1 hour', repeat('b', 64), repeat('2', 64))
+      ON CONFLICT DO NOTHING;
+      INSERT INTO member_profiles (id, tenant_id, user_id, city, state, updated_by_user_id) VALUES
+        ('${profileA}', '${tenantA}', '${userA}', 'Cidade A', 'SP', '${userA}'),
+        ('${profileB}', '${tenantB}', '${userB}', 'Cidade B', 'RJ', '${userB}')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO member_children (tenant_id, profile_id, member_user_id, name) VALUES
+        ('${tenantA}', '${profileA}', '${userA}', 'Filho A'),
+        ('${tenantB}', '${profileB}', '${userB}', 'Filho B')
       ON CONFLICT DO NOTHING;
       INSERT INTO events (id, tenant_id, created_by_user_id, public_id, slug, title, starts_at) VALUES
         ('${eventA}', '${tenantA}', '${userA}', '${publicEventA}', 'evento-a', 'Evento A', now() + interval '1 day'),
@@ -77,6 +93,9 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM conversation_messages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_channels WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM member_children WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM member_profiles WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM auth_sessions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_collaborators WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_check_ins WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_registrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -159,6 +178,12 @@ describeDatabase('PostgreSQL RLS', () => {
           VALUES ($1, $2, $3, $4, 'Contato cruzado', '+551188888888')
         `, [tenantA, channelB, eventA, userA])).rejects.toThrow();
       });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO member_children (tenant_id, profile_id, member_user_id, name)
+          VALUES ($1, $2, $3, 'Vínculo cruzado')
+        `, [tenantA, profileB, userA])).rejects.toThrow();
+      });
     } finally { client.release(); }
   });
 
@@ -212,6 +237,18 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('sessões e perfil complementar não atravessam comunidades', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id FROM auth_sessions')).rows.map((row) => row.id)).toEqual([sessionA]);
+        expect((await client.query('SELECT city FROM member_profiles')).rows).toEqual([{ city: 'Cidade A' }]);
+        expect((await client.query('SELECT name FROM member_children')).rows).toEqual([{ name: 'Filho A' }]);
+      });
+      expect((await client.query('SELECT id FROM member_profiles')).rows).toEqual([]);
+    } finally { client.release(); }
+  });
+
   it('auditoria é isolada por tenant e imutável para o runtime', async () => {
     const client = await runtime.connect();
     try {
@@ -249,7 +286,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

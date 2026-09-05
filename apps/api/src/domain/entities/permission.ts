@@ -14,6 +14,8 @@ export const PERMISSIONS = {
   usersRead: 'users.read',
   usersCreate: 'users.create',
   usersUpdate: 'users.update',
+  memberProfilesRead: 'members.profile_read',
+  memberProfilesManage: 'members.profile_manage',
   rolesRead: 'roles.read',
   rolesManage: 'roles.manage',
   settingsRead: 'settings.read',

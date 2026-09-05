@@ -14,6 +14,7 @@ import { PostgresRegistrationRepository } from './infrastructure/repositories/po
 import { PostgresAccessControlRepository } from './infrastructure/repositories/postgres-access-control.repository';
 import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
 import { JoseTokenService } from './infrastructure/security/jose-token.service';
+import { HmacSessionSecurity } from './infrastructure/security/hmac-session-security';
 import { AuthController } from './presentation/http/controllers/auth.controller';
 import { DashboardController } from './presentation/http/controllers/dashboard.controller';
 import { HealthController } from './presentation/http/controllers/health.controller';
@@ -44,10 +45,13 @@ import { SessionsController } from './presentation/http/controllers/sessions.con
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
 import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
+import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
+import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
+import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './application/use-cases/member-profile.use-cases';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -56,6 +60,7 @@ import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConvers
     { provide: APP_GUARD, useClass: RealIpThrottlerGuard },
     { provide: TOKENS.passwordHasher, useClass: BcryptPasswordHasher },
     { provide: TOKENS.tokenService, useClass: JoseTokenService },
+    { provide: TOKENS.sessionSecurity, useClass: HmacSessionSecurity },
     { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
     { provide: TOKENS.jobQueue, useClass: DisabledJobQueue },
@@ -121,10 +126,15 @@ import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConvers
       inject: [PostgresDatabase],
     },
     {
+      provide: TOKENS.memberProfileRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresMemberProfileRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
       provide: TOKENS.loginUseCase,
-      useFactory: (auth: PostgresAuthenticationRepository, passwords: BcryptPasswordHasher, tokens: JoseTokenService, sessions: PostgresSessionRepository) =>
-        new LoginUseCase(auth, passwords, tokens, sessions),
-      inject: [TOKENS.authRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository],
+      useFactory: (auth: PostgresAuthenticationRepository, passwords: BcryptPasswordHasher, tokens: JoseTokenService, sessions: PostgresSessionRepository, security: HmacSessionSecurity) =>
+        new LoginUseCase(auth, passwords, tokens, sessions, security),
+      inject: [TOKENS.authRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository, TOKENS.sessionSecurity],
     },
     {
       provide: TOKENS.dashboardUseCase,
@@ -264,8 +274,9 @@ import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConvers
         passwords: BcryptPasswordHasher,
         tokens: JoseTokenService,
         sessions: PostgresSessionRepository,
-      ) => new SignUpForEventUseCase(publicEvents, registrations, passwords, tokens, sessions),
-      inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository],
+        security: HmacSessionSecurity,
+      ) => new SignUpForEventUseCase(publicEvents, registrations, passwords, tokens, sessions, security),
+      inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository, TOKENS.passwordHasher, TOKENS.tokenService, TOKENS.sessionRepository, TOKENS.sessionSecurity],
     },
     {
       provide: TOKENS.registerForEventUseCase,
@@ -297,6 +308,16 @@ import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConvers
       provide: TOKENS.listMembersUseCase,
       useFactory: (access: PostgresAccessControlRepository) => new ListMembersUseCase(access),
       inject: [TOKENS.accessControlRepository],
+    },
+    {
+      provide: TOKENS.getMemberProfileUseCase,
+      useFactory: (profiles: PostgresMemberProfileRepository) => new GetMemberProfileUseCase(profiles),
+      inject: [TOKENS.memberProfileRepository],
+    },
+    {
+      provide: TOKENS.updateMemberProfileUseCase,
+      useFactory: (profiles: PostgresMemberProfileRepository) => new UpdateMemberProfileUseCase(profiles),
+      inject: [TOKENS.memberProfileRepository],
     },
     {
       provide: TOKENS.createRoleUseCase,
