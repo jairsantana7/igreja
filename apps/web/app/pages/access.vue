@@ -29,6 +29,7 @@ const groupNames: Record<string, string> = {
   conversations: 'Conversas',
   channels: 'Canais de conversa',
   members: 'Perfis de membros',
+  whatsapp: 'WhatsApp oficial',
 };
 const permissionGroups = computed(() => {
   const groups = new Map<string, PermissionOption[]>();

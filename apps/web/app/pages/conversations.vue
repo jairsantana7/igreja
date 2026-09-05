@@ -17,6 +17,10 @@ interface Message {
   sentBy: string | null; createdAt: string;
 }
 interface EventOption { id: string; title: string; owner: { id: string; name: string } }
+interface WhatsAppTemplate {
+  id: string; channelId: string; providerTemplateId: string; name: string; language: string;
+  category: string; status: string; bodyText: string | null; variables: string[]; updatedAt: string;
+}
 
 useHead({ title: 'Conversas' });
 const api = useApi();
@@ -25,6 +29,8 @@ const permissions = computed(() => auth.session.value?.user.permissions ?? []);
 const canManageChannel = computed(() => permissions.value.includes('channels.manage_own') || permissions.value.includes('channels.manage_all'));
 const canReply = computed(() => permissions.value.includes('conversations.reply'));
 const canAssign = computed(() => permissions.value.includes('conversations.assign'));
+const canReadTemplates = computed(() => permissions.value.includes('whatsapp.templates_read'));
+const canSyncTemplates = computed(() => permissions.value.includes('whatsapp.templates_sync'));
 const { data: conversations, pending, error, refresh } = await useAsyncData('conversations', () => api<Conversation[]>('/conversations'), { server: false });
 const { data: channels, refresh: refreshChannels } = await useAsyncData(
   'conversation-channels',
@@ -32,6 +38,12 @@ const { data: channels, refresh: refreshChannels } = await useAsyncData(
   { server: false },
 );
 const { data: events } = await useAsyncData('conversation-event-options', () => api<EventOption[]>('/events'), { server: false });
+const templateChannelId = ref('');
+const { data: whatsappTemplates, pending: templatesPending, error: templatesError } = await useAsyncData(
+  'whatsapp-templates',
+  () => templateChannelId.value && canReadTemplates.value ? api<WhatsAppTemplate[]>(`/conversation-channels/${templateChannelId.value}/templates`) : Promise.resolve([]),
+  { server: false, watch: [templateChannelId] },
+);
 const selectedId = ref<string | null>(null);
 const selected = computed(() => (conversations.value ?? []).find((item) => item.id === selectedId.value) ?? null);
 const { data: messages, pending: messagesPending, refresh: refreshMessages } = await useAsyncData(
@@ -50,6 +62,7 @@ const channelForm = reactive({ providerKey: 'whatsapp_cloud', displayName: '', p
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
+const templateStatusLabels: Record<string, string> = { APPROVED: 'Aprovado', PENDING: 'Em análise', REJECTED: 'Rejeitado', PAUSED: 'Pausado', DISABLED: 'Desabilitado', IN_APPEAL: 'Em recurso' };
 const filtered = computed(() => (conversations.value ?? []).filter((item) => {
   const term = query.value.trim().toLocaleLowerCase('pt-BR');
   const matchesFilter = filter.value === 'active' ? item.status !== 'resolved' : item.status === filter.value;
@@ -58,6 +71,9 @@ const filtered = computed(() => (conversations.value ?? []).filter((item) => {
 
 watch(conversations, (items) => {
   if (!selectedId.value && items?.length) selectedId.value = items[0]!.id;
+}, { immediate: true });
+watch(channels, (items) => {
+  if (!items?.some((item) => item.id === templateChannelId.value)) templateChannelId.value = items?.[0]?.id ?? '';
 }, { immediate: true });
 watch(selectedId, async (id) => {
   if (id) await refreshMessages();
@@ -76,6 +92,18 @@ async function createChannel() {
     await refreshChannels();
   } catch (requestError: any) {
     feedback.value = requestError?.data?.message ?? 'Não foi possível configurar o canal.';
+  } finally { busy.value = false; }
+}
+
+async function syncTemplates() {
+  if (!templateChannelId.value) return;
+  busy.value = true; feedback.value = '';
+  try {
+    whatsappTemplates.value = await api<WhatsAppTemplate[]>(`/conversation-channels/${templateChannelId.value}/templates/sync`, { method: 'POST' });
+    feedback.value = 'Templates e status confirmados com a API oficial da Meta.';
+    await refreshChannels();
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível sincronizar os templates com a Meta.';
   } finally { busy.value = false; }
 }
 
@@ -143,6 +171,14 @@ async function updateStatus(status: ConversationStatus) {
       </form>
       <div v-if="channels?.length" class="channel-list"><article v-for="channel in channels" :key="channel.id"><span class="channel-symbol">◌</span><div><strong>{{ channel.displayName }}</strong><small>{{ channel.phoneNumber }} · {{ channel.owner.name }}</small></div><span class="badge" :class="channel.status === 'connected' ? 'badge--published' : 'badge--draft'">{{ channel.status === 'connected' ? 'Conectado' : channel.status === 'configured' ? 'Configurado' : 'Desconectado' }}</span></article></div>
       <p class="integration-warning"><strong>Status configurado:</strong> o número só envia e recebe mensagens quando uma instalação fornecer o adapter oficial e a fila.</p>
+      <section v-if="channels?.length && canReadTemplates" class="whatsapp-template-panel">
+        <header><div><p class="eyebrow">Meta Cloud API</p><h3>Modelos de mensagem oficiais</h3><p>O sistema mantém uma cópia para consulta; conteúdo e aprovação continuam sob responsabilidade da Meta.</p></div><button v-if="canSyncTemplates" class="button" type="button" :disabled="busy || !templateChannelId" @click="syncTemplates">↻ Sincronizar com a Meta</button></header>
+        <label class="field"><span>Canal</span><select v-model="templateChannelId"><option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.displayName }} · {{ channel.phoneNumber }}</option></select></label>
+        <div v-if="templatesPending" class="form-empty">Carregando templates…</div>
+        <div v-else-if="templatesError" class="form-empty">Não foi possível carregar os templates armazenados.</div>
+        <div v-else-if="!whatsappTemplates?.length" class="form-empty">Nenhum template sincronizado para este canal.</div>
+        <div v-else class="whatsapp-template-list"><article v-for="item in whatsappTemplates" :key="item.id"><div><strong>{{ item.name }}</strong><small>{{ item.language }} · {{ item.category }}<template v-if="item.variables.length"> · {{ item.variables.length }} variáveis</template></small></div><span class="badge" :class="item.status === 'APPROVED' ? 'badge--published' : item.status === 'REJECTED' ? 'badge--cancelled' : 'badge--draft'">{{ templateStatusLabels[item.status] ?? item.status }}</span><p>{{ item.bodyText ?? 'Template sem corpo textual.' }}</p></article></div>
+      </section>
     </section>
 
     <section v-if="showConversationForm" class="conversation-setup-card">

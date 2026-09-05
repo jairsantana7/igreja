@@ -11,6 +11,8 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Cache implementa `CacheStore`; a implementação padrão é no-op e pode ser substituída por Redis ou outro backend.
 - Filas implementam `JobQueue`; a implementação padrão falha explicitamente até BullMQ, RabbitMQ, SQS ou outro broker ser configurado.
 - Mensageria individual implementa `ConversationProvider`; a porta não conhece Meta, WhatsApp Cloud API ou outro fornecedor.
+- Consulta de templates implementa `WhatsAppTemplateProvider`; `MetaWhatsAppTemplateProvider` usa o endpoint oficial `/{WABA-ID}/message_templates`.
+- Segredos são resolvidos por `SecretResolver`; a implementação local lê somente a variável nomeada em `secret_reference`.
 - Logs e captura de exceções implementam `ApplicationLogger`; Sentry e OpenTelemetry entram como adaptadores de infraestrutura.
 - Arquivos implementam `MediaStorage`; disco local, S3 e Cloudflare R2 são adaptadores de infraestrutura.
 - A seleção ocorre por `providerKey`, nunca por condicionais de fornecedor no domínio.
@@ -44,6 +46,15 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Conteúdo, nomes e números são dados pessoais: não os inclua em logs, breadcrumbs ou payloads de erro.
 - Um canal somente recebe estado `connected` após teste real do adapter. Salvar configuração resulta apenas em `configured`.
 
+## Meta WhatsApp Cloud API
+
+- Defina `META_GRAPH_API_VERSION` com uma versão vigente da Graph API; o projeto não fixa silenciosamente uma versão que possa expirar.
+- Em cada canal `whatsapp_cloud`, `provider_account_id` contém o WABA ID e `secret_reference` contém somente o nome da variável que guarda o access token.
+- A sincronização consulta todas as páginas de `/{WABA-ID}/message_templates`, mantém a Meta como fonte oficial e desativa localmente itens que deixaram de ser retornados.
+- Tokens nunca são persistidos, enviados ao navegador ou incluídos em erros. O host do adapter é fixo em `graph.facebook.com` para não transformar paginação externa em SSRF.
+- O endpoint oficial e as operações suportadas estão na [coleção mantida pela Meta](https://www.postman.com/meta/whatsapp-business-platform/folder/lczy75a/templates).
+- Embedded Signup, troca segura de código, assinatura de webhook, idempotência de mensagens e envio por template ainda não estão implementados.
+
 ## Logs e captura de erros
 
 - `ApplicationLogger` recebe eventos estáveis e contexto estruturado.
@@ -69,4 +80,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Ainda não há adaptador externo de identidade, MFA, fila, WhatsApp ou pagamento instalado, cobrança de evento, webhook ou vinculação de conta social; portanto esses recursos permanecem **não operacionais** até uma implementação posterior.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. A consulta oficial de templates da Meta está implementada, mas não há adaptador de envio/recebimento, Embedded Signup, webhook, fila compartilhada, identidade externa, MFA ou pagamento instalado. Portanto conversas externas e cobranças permanecem **não operacionais** até essas implementações.

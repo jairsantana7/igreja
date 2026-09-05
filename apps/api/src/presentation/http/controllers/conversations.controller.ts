@@ -7,6 +7,8 @@ import { RequireAnyPermission, RequirePermissions } from '../decorators/require-
 import { CreateConversationChannelDto, CreateConversationDto, ReplyConversationDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
+import type { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from '../../../application/use-cases/whatsapp-template.use-cases';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -19,6 +21,8 @@ export class ConversationsController {
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
+    @Inject(TOKENS.listWhatsAppTemplatesUseCase) private readonly listWhatsAppTemplates: ListWhatsAppTemplatesUseCase,
+    @Inject(TOKENS.syncWhatsAppTemplatesUseCase) private readonly syncWhatsAppTemplates: SyncWhatsAppTemplatesUseCase,
   ) {}
 
   @Get('conversation-channels')
@@ -28,6 +32,15 @@ export class ConversationsController {
   @Post('conversation-channels')
   @RequireAnyPermission(PERMISSIONS.channelsManageOwn, PERMISSIONS.channelsManageAll)
   addChannel(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: CreateConversationChannelDto) { return this.createChannel.execute(principal, dto); }
+
+  @Get('conversation-channels/:channelId/templates')
+  @RequirePermissions(PERMISSIONS.whatsappTemplatesRead)
+  templates(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('channelId', new ParseUUIDPipe()) id: string) { return this.listWhatsAppTemplates.execute(principal, id); }
+
+  @Post('conversation-channels/:channelId/templates/sync')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions(PERMISSIONS.whatsappTemplatesSync)
+  syncTemplates(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('channelId', new ParseUUIDPipe()) id: string) { return this.syncWhatsAppTemplates.execute(principal, id); }
 
   @Get('conversations')
   @RequirePermissions(PERMISSIONS.conversationsRead)

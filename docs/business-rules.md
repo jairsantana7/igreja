@@ -77,7 +77,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Comunicação é um módulo do contexto de eventos, mas o transporte é sempre uma porta `JobQueue` e adaptadores de canal.
 - O MVP permite preparar campanhas para inscritos confirmados, presentes ou ausentes, sem enviar diretamente no request HTTP.
 - Uma campanha só muda para enfileirada depois que o adaptador de fila aceita o trabalho. Sem adaptador, a operação falha de forma explícita e o rascunho é preservado.
-- Consentimento, opt-out, modelos de mensagem, custo, janela de envio e provedores oficiais permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
+- Consentimento, opt-out, custo, janela de envio e disparo por template permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
 
 ## Central de conversas
 
@@ -92,6 +92,11 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Número completo, nomes, endereços de contato e conteúdo são dados pessoais. Não entram em logs nem na metadata de auditoria e seguem a política de retenção ainda a definir.
 - Client secrets e tokens ficam no secret manager. O banco guarda apenas uma referência e identificadores operacionais não secretos.
 - Um canal configurado não é considerado conectado enquanto a implantação não registrar e validar um adapter oficial.
+- Templates de mensagem do WhatsApp são diferentes de modelos de evento. Cada tradução aprovada pela Meta aparece como uma projeção vinculada ao canal.
+- A Meta é a fonte oficial de conteúdo, categoria e status. O sistema sincroniza e armazena uma cópia para consulta, seleção futura e histórico, sem fingir aprovação local.
+- Ler templates exige `whatsapp.templates_read`; sincronizar com a Meta exige `whatsapp.templates_sync` e acesso ao canal próprio ou `channels.manage_all`.
+- Somente uma sincronização autenticada bem-sucedida pode mudar o canal de `configured` para `connected` nesta etapa.
+- Criar, editar, excluir ou enviar templates permanece bloqueado até serem definidas regras para categorias, exemplos de variáveis, opt-in, janela de atendimento e custos.
 
 ## Modelos e recorrência
 
@@ -170,6 +175,8 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Criações, edições e exclusões em tabelas críticas geram eventos de auditoria com tenant, ator, ação, tipo de recurso e horário.
 - A auditoria não copia senhas, tokens, respostas de formulários nem valores alterados.
 - Registros de auditoria são imutáveis para o papel runtime da aplicação.
+- Listagens de auditoria usam cursor estável, com no máximo 100 registros por página; o padrão da interface é 25.
+- Filtros de ação e evento são aplicados no banco antes da paginação, nunca somente sobre a página carregada.
 - Logs operacionais e ferramentas como Sentry são observabilidade; não substituem a trilha persistente de auditoria.
 - Cache não é usado para decisões de autorização. Alterações de permissão devem valer na próxima requisição ao backend.
 

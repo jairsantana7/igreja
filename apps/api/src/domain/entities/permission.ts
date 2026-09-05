@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   conversationsAssign: 'conversations.assign',
   channelsManageOwn: 'channels.manage_own',
   channelsManageAll: 'channels.manage_all',
+  whatsappTemplatesRead: 'whatsapp.templates_read',
+  whatsappTemplatesSync: 'whatsapp.templates_sync',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

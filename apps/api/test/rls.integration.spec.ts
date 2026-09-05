@@ -76,6 +76,10 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${channelA}', '${tenantA}', '${userA}', 'whatsapp_cloud', 'Canal A', '+551100000001'),
         ('${channelB}', '${tenantB}', '${userB}', 'whatsapp_cloud', 'Canal B', '+551100000002')
       ON CONFLICT DO NOTHING;
+      INSERT INTO whatsapp_message_templates (tenant_id, channel_id, provider_template_id, name, language, category, status, components) VALUES
+        ('${tenantA}', '${channelA}', 'template-a', 'lembrete_a', 'pt_BR', 'UTILITY', 'APPROVED', '[]'),
+        ('${tenantB}', '${channelB}', 'template-b', 'lembrete_b', 'pt_BR', 'UTILITY', 'PENDING', '[]')
+      ON CONFLICT DO NOTHING;
       INSERT INTO conversations (id, tenant_id, channel_id, event_id, assigned_user_id, contact_name, contact_address) VALUES
         ('${conversationA}', '${tenantA}', '${channelA}', '${eventA}', '${userA}', 'Contato A', '+551199999001'),
         ('${conversationB}', '${tenantB}', '${channelB}', '${eventB}', '${userB}', 'Contato B', '+551199999002')
@@ -232,6 +236,7 @@ describeDatabase('PostgreSQL RLS', () => {
         expect((await client.query('SELECT id FROM conversation_channels')).rows.map((row) => row.id)).toEqual([channelA]);
         expect((await client.query('SELECT id FROM conversations')).rows.map((row) => row.id)).toEqual([conversationA]);
         expect((await client.query('SELECT body FROM conversation_messages')).rows.map((row) => row.body)).toEqual(['Mensagem A']);
+        expect((await client.query('SELECT name FROM whatsapp_message_templates')).rows).toEqual([{ name: 'lembrete_a' }]);
       });
       expect((await client.query('SELECT id FROM conversations')).rows).toEqual([]);
     } finally { client.release(); }
@@ -286,7 +291,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'auth_sessions', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_templates', 'events', 'external_accounts', 'member_children', 'member_profiles', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

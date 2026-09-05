@@ -49,6 +49,11 @@ import { PostgresMemberProfileRepository } from './infrastructure/repositories/p
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
 import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './application/use-cases/member-profile.use-cases';
+import { PostgresWhatsAppTemplateRepository } from './infrastructure/repositories/postgres-whatsapp-template.repository';
+import { EnvironmentSecretResolver } from './infrastructure/security/environment-secret-resolver';
+import { MetaWhatsAppTemplateProvider } from './infrastructure/integrations/meta-whatsapp-template.provider';
+import { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from './application/use-cases/whatsapp-template.use-cases';
+import { env } from './infrastructure/config/env';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
@@ -66,6 +71,7 @@ import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './applicati
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
     { provide: TOKENS.jobQueue, useClass: DisabledJobQueue },
     { provide: TOKENS.mediaStorage, useClass: LocalMediaStorage },
+    { provide: TOKENS.secretResolver, useClass: EnvironmentSecretResolver },
     {
       provide: TOKENS.authRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAuthenticationRepository(database),
@@ -130,6 +136,16 @@ import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './applicati
       provide: TOKENS.memberProfileRepository,
       useFactory: (database: PostgresDatabase) => new PostgresMemberProfileRepository(database),
       inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.whatsappTemplateRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresWhatsAppTemplateRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.whatsappTemplateProvider,
+      useFactory: (secrets: EnvironmentSecretResolver) => new MetaWhatsAppTemplateProvider(secrets, env.metaGraphApiVersion),
+      inject: [TOKENS.secretResolver],
     },
     {
       provide: TOKENS.memberOnboardingRepository,
@@ -324,6 +340,16 @@ import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './applicati
       provide: TOKENS.updateMemberProfileUseCase,
       useFactory: (profiles: PostgresMemberProfileRepository) => new UpdateMemberProfileUseCase(profiles),
       inject: [TOKENS.memberProfileRepository],
+    },
+    {
+      provide: TOKENS.listWhatsAppTemplatesUseCase,
+      useFactory: (templates: PostgresWhatsAppTemplateRepository) => new ListWhatsAppTemplatesUseCase(templates),
+      inject: [TOKENS.whatsappTemplateRepository],
+    },
+    {
+      provide: TOKENS.syncWhatsAppTemplatesUseCase,
+      useFactory: (templates: PostgresWhatsAppTemplateRepository, provider: MetaWhatsAppTemplateProvider) => new SyncWhatsAppTemplatesUseCase(templates, provider),
+      inject: [TOKENS.whatsappTemplateRepository, TOKENS.whatsappTemplateProvider],
     },
     {
       provide: TOKENS.createRoleUseCase,

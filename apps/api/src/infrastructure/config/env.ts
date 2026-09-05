@@ -29,6 +29,7 @@ export const env = Object.freeze({
   sessionBindingSecret: required('SESSION_BINDING_SECRET', process.env.JWT_SECRET),
   trustProxy: required('TRUST_PROXY', 'loopback,linklocal,uniquelocal'),
   mediaStoragePath: resolve(process.cwd(), process.env.MEDIA_STORAGE_PATH ?? '../../.data/media'),
+  metaGraphApiVersion: process.env.META_GRAPH_API_VERSION?.trim() ?? '',
 });
 
 if (env.jwtSecret.length < 32) throw new Error('JWT_SECRET precisa ter ao menos 32 caracteres.');

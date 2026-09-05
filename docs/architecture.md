@@ -71,10 +71,15 @@ O cadastro administrativo usa `MemberOnboardingRepository` como porta específic
 
 O banco impõe tenant consistente nas relações com FKs compostas e RLS forçada. A API devolve esses dados somente no endpoint de detalhe com `members.profile_read`; auditoria registra a operação, mas não replica valores pessoais.
 
+## Paginação da auditoria
+
+A trilha usa paginação keyset pela ordenação imutável `(created_at DESC, id DESC)`. O cursor opaco transporta somente essa posição, é validado no caso de uso e resulta em comparação indexada dentro da mesma transação com contexto RLS. Filtros de ação e evento são executados antes do cursor. O cliente guarda o histórico de cursores apenas para permitir voltar às páginas já visitadas.
+
 ## Contextos preparados
 
 - **Comunicação:** campanhas persistem como intenção de envio; a entrega passa por `JobQueue` e por adaptadores de canal.
 - **Conversas:** canais, atendimentos e mensagens formam um bounded context próprio. `ConversationProvider` recebe/envia mensagens e `JobQueue` desacopla a entrega; eventos apenas fornecem um vínculo opcional.
+- **Templates do WhatsApp:** `WhatsAppTemplateProvider` consulta o fornecedor e `WhatsAppTemplateRepository` mantém uma projeção por canal. Casos de uso conhecem status e componentes, mas não conhecem URLs, tokens ou detalhes da Graph API.
 - **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.
 - **Segurança administrativa:** sessões revogáveis e uma futura porta de MFA não alteram o domínio de eventos. Acesso emergencial será um fluxo privilegiado explícito, nunca um tenant vazio.
 - **Modelos de evento:** reutilizam conteúdo e formulário, mas não transformam recorrência em comportamento implícito.

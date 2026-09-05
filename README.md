@@ -48,6 +48,7 @@ pnpm db:down    # encerra containers
 - central operacional por evento com inscrições, presença, formulário, comunicação e auditoria;
 - eventos com responsável e colaboradores, incluindo escopos de acesso próprio e global;
 - central de conversas com canais individuais por pastor e vínculo opcional ao evento;
+- sincronização dos templates oficiais e seus status pela Meta WhatsApp Cloud API;
 - check-in manual, indicadores de comparecimento e exportação CSV;
 - ciclo de vida com fechamento de inscrições e conclusão;
 - fotografias versionadas do formulário e modelos reutilizáveis de evento;
@@ -67,7 +68,7 @@ O adapter de mídia local é voltado ao desenvolvimento. Instalações de produ�
 
 Campanhas ficam como rascunho enquanto não existir um adaptador de fila. Essa falha explícita é intencional: a instalação nunca informa que uma mensagem foi enviada sem confirmação do broker.
 
-A central de conversas já preserva canais, atendimentos e respostas pendentes, mas não conecta um número real por padrão. Cada instalação precisa fornecer um adapter `ConversationProvider`, credenciais em secret manager, webhook validado e uma implementação compartilhada de `JobQueue`.
+A central de conversas preserva canais, atendimentos e respostas pendentes. O adapter oficial já sincroniza templates pela WABA, mas Embedded Signup, envio e recebimento ainda exigem configuração da Meta, um `ConversationProvider`, webhook validado e uma implementação compartilhada de `JobQueue`.
 
 ## Projeto
 
