@@ -16,14 +16,15 @@ export interface MemberChildDraft {
 }
 
 export class MemberProfileDraft {
-  private constructor(readonly props: { address: MemberAddress; children: MemberChildDraft[] }) {}
+  private constructor(readonly props: { birthDate?: string; address: MemberAddress; children: MemberChildDraft[] }) {}
 
-  static create(input: { address?: MemberAddress; children?: MemberChildDraft[] }) {
+  static create(input: { birthDate?: string; address?: MemberAddress; children?: MemberChildDraft[] }) {
     const clean = (value: string | undefined, max: number) => {
       const normalized = value?.trim() || undefined;
       if (normalized && normalized.length > max) throw new DomainError(`Um campo do endereço excede ${max} caracteres.`);
       return normalized;
     };
+    const birthDate = this.validateBirthDate(input.birthDate, 'A data de nascimento do membro é inválida.');
     const address: MemberAddress = {
       postalCode: clean(input.address?.postalCode, 16),
       street: clean(input.address?.street, 160),
@@ -37,15 +38,24 @@ export class MemberProfileDraft {
     const children = (input.children ?? []).map((child) => {
       const name = child.name.trim();
       if (name.length < 2 || name.length > 120) throw new DomainError('O nome do filho deve ter entre 2 e 120 caracteres.');
-      if (child.birthDate) {
-        const birthDate = new Date(`${child.birthDate}T00:00:00.000Z`);
-        if (Number.isNaN(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== child.birthDate || birthDate > new Date()) {
-          throw new DomainError('A data de nascimento do filho é inválida.');
-        }
-      }
-      return { name, birthDate: child.birthDate || undefined };
+      return { name, birthDate: this.validateBirthDate(child.birthDate, 'A data de nascimento do filho é inválida.') };
     });
     if (children.length > 50) throw new DomainError('O perfil aceita no máximo 50 filhos cadastrados.');
-    return new MemberProfileDraft({ address, children });
+    return new MemberProfileDraft({ birthDate, address, children });
+  }
+
+  get isEmpty() {
+    return !this.props.birthDate
+      && Object.values(this.props.address).every((value) => !value)
+      && this.props.children.length === 0;
+  }
+
+  private static validateBirthDate(value: string | undefined, message: string) {
+    if (!value) return undefined;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value || parsed > new Date()) {
+      throw new DomainError(message);
+    }
+    return value;
   }
 }

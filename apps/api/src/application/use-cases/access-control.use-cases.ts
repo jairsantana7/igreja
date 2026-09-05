@@ -1,5 +1,7 @@
 import type { PasswordHasher } from '../ports/authentication.port';
 import type { AccessControlRepository } from '../ports/access-control.port';
+import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
+import { MemberProfileDraft } from '../../domain/entities/member-profile';
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
 import { AuthorizationError } from './errors';
 
@@ -40,14 +42,22 @@ export class UpdateRolePermissionsUseCase {
 }
 
 export class CreateUserUseCase {
-  constructor(private readonly access: AccessControlRepository, private readonly passwords: PasswordHasher) {}
-  async execute(principal: AuthenticatedPrincipal, input: { name: string; email: string; password: string; roleIds: string[] }) {
+  constructor(private readonly onboarding: MemberOnboardingRepository, private readonly passwords: PasswordHasher) {}
+  async execute(principal: AuthenticatedPrincipal, input: {
+    name: string;
+    email: string;
+    password: string;
+    roleIds: string[];
+    profile?: Parameters<typeof MemberProfileDraft.create>[0];
+  }) {
     requirePermission(principal, PERMISSIONS.usersCreate);
-    return this.access.createUser(principal, {
+    if (input.profile) requirePermission(principal, PERMISSIONS.memberProfilesManage);
+    return this.onboarding.create(principal, {
       name: input.name.trim(),
       email: input.email.toLowerCase().trim(),
       passwordHash: await this.passwords.hash(input.password),
       roleIds: [...new Set(input.roleIds)],
+      profile: input.profile ? MemberProfileDraft.create(input.profile) : undefined,
     });
   }
 }

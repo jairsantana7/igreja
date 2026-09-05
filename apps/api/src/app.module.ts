@@ -46,6 +46,7 @@ import { PostgresConversationRepository } from './infrastructure/repositories/po
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
 import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
+import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
 import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './application/use-cases/member-profile.use-cases';
 
@@ -128,6 +129,11 @@ import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './applicati
     {
       provide: TOKENS.memberProfileRepository,
       useFactory: (database: PostgresDatabase) => new PostgresMemberProfileRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.memberOnboardingRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresMemberOnboardingRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -331,8 +337,8 @@ import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './applicati
     },
     {
       provide: TOKENS.createUserUseCase,
-      useFactory: (access: PostgresAccessControlRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(access, passwords),
-      inject: [TOKENS.accessControlRepository, TOKENS.passwordHasher],
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(onboarding, passwords),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher],
     },
     {
       provide: TOKENS.getCommunitySettingsUseCase,

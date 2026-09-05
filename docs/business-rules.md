@@ -46,11 +46,13 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 ## Perfil complementar do membro
 
 - Tornar-se membro ou confirmar um evento não exige preencher perfil complementar.
+- A data de nascimento do membro é opcional, não pode estar no futuro e fica no perfil complementar protegido.
 - O perfil pode guardar endereço estruturado opcional: CEP, logradouro, número, complemento, bairro, cidade e estado.
 - A informação “possui filhos” é derivada da existência de filhos cadastrados, evitando dois dados contraditórios.
 - Para cada filho, o MVP guarda somente nome e data de nascimento opcional. Não há campo livre para informações sensíveis de menores.
 - Ler perfis exige `members.profile_read`; editar exige `members.profile_manage`. `users.read` isoladamente não libera endereço ou filhos.
 - A listagem geral continua exibindo apenas identidade, papéis e contagens. Dados complementares aparecem somente no detalhe protegido.
+- O cadastro administrativo pode criar identidade, papéis e perfil complementar na mesma transação; os dados complementares só são aceitos com `members.profile_manage`.
 - Alterações são auditadas por identidade do registro, sem copiar endereço, nomes ou nascimento para a metadata de auditoria.
 - Autoedição pelo membro, consentimento específico, base legal, retenção, exportação e exclusão desses dados permanecem decisões abertas antes de uso em produção.
 
@@ -143,7 +145,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Qual política de MFA e recuperação de emergência será adotada antes da produção?
 - A duração de oito horas será reduzida ou terá renovação com rotação de credenciais?
 - Qual prazo de retenção, consentimento e opt-out vale para mensagens e contatos?
-- Qual base legal, consentimento, prazo de retenção e processo de exclusão valem para endereço e dados de filhos?
+- Qual base legal, consentimento, prazo de retenção e processo de exclusão valem para nascimento, endereço e dados de filhos?
 - O próprio membro poderá consultar e editar o perfil complementar?
 - A comunidade aceitará múltiplos números por pastor e um número institucional compartilhado?
 

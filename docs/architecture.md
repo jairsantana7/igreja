@@ -65,7 +65,9 @@ Configurações de login social e pagamentos formam um contexto separado de even
 
 ## Bounded context: Membros
 
-A identidade básica em `users` continua suficiente para autenticação e inscrição. `member_profiles` e `member_children` formam um perfil complementar opcional, acessado por casos de uso e portas próprios. Essa separação permite aplicar permissões mais restritas aos dados de endereço e menores sem ampliar implicitamente `users.read`.
+A identidade básica em `users` continua suficiente para autenticação e inscrição. `member_profiles` e `member_children` formam um perfil complementar opcional, acessado por casos de uso e portas próprios. Essa separação permite aplicar permissões mais restritas à data de nascimento, ao endereço e aos dados de menores sem ampliar implicitamente `users.read`.
+
+O cadastro administrativo usa `MemberOnboardingRepository` como porta específica para persistir identidade, papéis e o perfil opcional em uma única transação. O caso de uso exige `users.create` e acrescenta `members.profile_manage` quando recebe dados complementares.
 
 O banco impõe tenant consistente nas relações com FKs compostas e RLS forçada. A API devolve esses dados somente no endpoint de detalhe com `members.profile_read`; auditoria registra a operação, mas não replica valores pessoais.
 

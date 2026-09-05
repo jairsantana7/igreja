@@ -4,6 +4,7 @@ export const TOKENS = {
   eventRepository: Symbol('EventRepository'),
   registrationRepository: Symbol('EventRegistrationRepository'),
   memberProfileRepository: Symbol('MemberProfileRepository'),
+  memberOnboardingRepository: Symbol('MemberOnboardingRepository'),
   conversationRepository: Symbol('ConversationRepository'),
   accessControlRepository: Symbol('AccessControlRepository'),
   communitySettingsRepository: Symbol('CommunitySettingsRepository'),

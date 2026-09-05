@@ -6,7 +6,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 |---|---|---|---|
 | `tenants` | tenant root | representa a própria comunidade | `id = current_tenant_id()` |
 | `users` | tenant-direct | possui `tenant_id` | `tenant_id = current_tenant_id()` em leitura e escrita |
-| `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; endereço é dado pessoal protegido por permissão específica |
+| `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; nascimento e endereço são dados pessoais protegidos por permissão específica |
 | `member_children` | tenant-direct | filho informado pertence ao perfil de um membro da comunidade | RLS direta + FK composta para perfil/usuário; dados de menores não entram na auditoria |
 | `tenant_directory` | global catalog | mapeia slug público para UUID no fluxo mínimo de login | sem acesso direto do runtime; somente função resolver |
 | `event_public_directory` | global catalog | resolve um UUID público opaco para evento/tenant | sem acesso direto do runtime; somente função resolver |

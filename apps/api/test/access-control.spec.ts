@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccessControlRepository } from '../src/application/ports/access-control.port';
-import { ListMembersUseCase, UpdateRolePermissionsUseCase } from '../src/application/use-cases/access-control.use-cases';
+import { CreateUserUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from '../src/application/use-cases/access-control.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
+import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
+import type { PasswordHasher } from '../src/application/ports/authentication.port';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001',
@@ -58,5 +60,32 @@ describe('edição de permissões de papel', () => {
       '20000000-0000-4000-8000-000000000001',
       ['events.read'],
     );
+  });
+});
+
+describe('cadastro administrativo de membro', () => {
+  const passwords = { hash: vi.fn().mockResolvedValue('hashed') } as unknown as PasswordHasher;
+
+  it('exige a permissão de perfil quando recebe dados complementares', async () => {
+    const create = vi.fn();
+    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords);
+    await expect(useCase.execute(principal(['users.create']), {
+      name: 'Pessoa', email: 'pessoa@example.test', password: 'uma-senha-segura', roleIds: ['role'],
+      profile: { birthDate: '1990-01-01' },
+    })).rejects.toThrow(AuthorizationError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('valida e encaminha o perfil para criação atômica', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'member' });
+    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords);
+    await useCase.execute(principal(['users.create', 'members.profile_manage']), {
+      name: ' Pessoa ', email: 'PESSOA@EXAMPLE.TEST', password: 'uma-senha-segura', roleIds: ['role', 'role'],
+      profile: { birthDate: '1990-01-01' },
+    });
+    expect(create).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      name: 'Pessoa', email: 'pessoa@example.test', passwordHash: 'hashed', roleIds: ['role'],
+      profile: expect.objectContaining({ props: expect.objectContaining({ birthDate: '1990-01-01' }) }),
+    }));
   });
 });

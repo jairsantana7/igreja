@@ -54,7 +54,7 @@ pnpm db:down    # encerra containers
 - criação de evento, formulário dinâmico e imagens em hero, carrossel ou fundo fixo;
 - página pública para inscrição do membro;
 - conta local de membro e base extensível para login social;
-- perfil complementar opcional com endereço e filhos, protegido por permissões específicas;
+- perfil complementar opcional com data de nascimento, endereço e filhos, protegido por permissões específicas;
 - papéis editáveis com permissões granulares verificadas no backend;
 - trilha de auditoria para criações, edições e exclusões;
 - configurações desacopladas para login social, PIX e gateways de pagamento;

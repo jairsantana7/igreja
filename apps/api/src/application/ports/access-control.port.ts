@@ -23,5 +23,4 @@ export interface AccessControlRepository {
   createRole(principal: AuthenticatedPrincipal, input: { key: string; name: string; permissions: string[] }): Promise<RoleView>;
   updateRolePermissions(principal: AuthenticatedPrincipal, roleId: string, permissions: string[]): Promise<RoleView>;
   refreshPrincipal(principal: AuthenticatedPrincipal): Promise<AuthenticatedPrincipal | null>;
-  createUser(principal: AuthenticatedPrincipal, input: { name: string; email: string; passwordHash: string; roleIds: string[] }): Promise<{ id: string; name: string; email: string }>;
 }

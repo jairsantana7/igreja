@@ -130,28 +130,6 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
     });
   }
 
-  createUser(principal: AuthenticatedPrincipal, input: { name: string; email: string; passwordHash: string; roleIds: string[] }) {
-    return this.database.withTenant(principal, async (client) => {
-      const roles = await client.query<{ id: string }>('SELECT id FROM roles WHERE id = ANY($1::uuid[])', [input.roleIds]);
-      if (roles.rowCount !== new Set(input.roleIds).size) throw new ConflictError('Um ou mais papéis não pertencem à comunidade.');
-      try {
-        const user = await client.query<{ id: string; name: string; email: string }>(`
-          INSERT INTO users (tenant_id, name, email, password_hash) VALUES ($1, $2, $3, $4)
-          RETURNING id, name, email
-        `, [principal.tenantId, input.name, input.email, input.passwordHash]);
-        for (const role of roles.rows) {
-          await client.query('INSERT INTO user_roles (tenant_id, user_id, role_id) VALUES ($1, $2, $3)', [
-            principal.tenantId, user.rows[0]!.id, role.id,
-          ]);
-        }
-        return user.rows[0]!;
-      } catch (error: any) {
-        if (error?.code === '23505') throw new ConflictError('Já existe um usuário com este e-mail.');
-        throw error;
-      }
-    });
-  }
-
   private mapRole(row: { id: string; key: string; name: string; is_system: boolean; permissions: Permission[] }): RoleView {
     return { id: row.id, key: row.key, name: row.name, isSystem: row.is_system, permissions: row.permissions };
   }
