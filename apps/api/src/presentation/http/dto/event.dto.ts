@@ -23,7 +23,7 @@ export class EventFieldDto {
   options: string[] = [];
 }
 
-export class CreateEventDto {
+export class EventDetailsDto {
   @IsString()
   @Length(3, 160)
   title!: string;
@@ -51,12 +51,16 @@ export class CreateEventDto {
   @IsIn(EVENT_MEDIA_DISPLAY_MODES)
   mediaDisplayMode: EventMediaDisplayMode = 'hero';
 
-  @IsBoolean()
-  publish = false;
-
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => EventFieldDto)
   fields: EventFieldDto[] = [];
 }
+
+export class CreateEventDto extends EventDetailsDto {
+  @IsBoolean()
+  publish = false;
+}
+
+export class UpdateEventDto extends EventDetailsDto {}

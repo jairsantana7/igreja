@@ -1,5 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isRegistrationOpen } from '../src/domain/entities/event';
+import type { EventRepository } from '../src/application/ports/event.port';
+import { CancelEventUseCase, UpdateEventUseCase } from '../src/application/use-cases/event.use-cases';
+import { AuthorizationError } from '../src/application/use-cases/errors';
+import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
+
+const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
+  userId: '10000000-0000-4000-8000-000000000001',
+  tenantId: '00000000-0000-4000-8000-000000000001',
+  name: 'Admin',
+  email: 'admin@example.test',
+  roles: ['admin'],
+  permissions,
+});
+
+const editableEvent = {
+  title: 'Evento atualizado',
+  description: '',
+  location: '',
+  startsAt: new Date('2026-10-10T18:00:00.000Z'),
+  registrationDeadline: undefined,
+  capacity: undefined,
+  mediaDisplayMode: 'hero' as const,
+  fields: [],
+};
 
 describe('abertura de inscrições', () => {
   const now = new Date('2026-09-04T12:00:00.000Z');
@@ -23,5 +47,29 @@ describe('abertura de inscrições', () => {
       startsAt: new Date(`${startsAt}T12:00:00.000Z`),
       registrationDeadline: new Date(`${deadline}T12:00:00.000Z`),
     }, now)).toBe(false);
+  });
+});
+
+describe('gestão de evento existente', () => {
+  it('exige events.update antes de editar', () => {
+    const update = vi.fn();
+    const useCase = new UpdateEventUseCase({ update } as unknown as EventRepository);
+    expect(() => useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001', editableEvent)).toThrow(AuthorizationError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('edita dados sem alterar o status de publicação', async () => {
+    const update = vi.fn().mockResolvedValue({ id: 'event' });
+    const useCase = new UpdateEventUseCase({ update } as unknown as EventRepository);
+    await useCase.execute(principal(['events.update']), '20000000-0000-4000-8000-000000000001', editableEvent);
+    const draft = update.mock.calls[0]![2];
+    expect(draft.props.publish).toBe(false);
+  });
+
+  it('exige events.publish para cancelar', async () => {
+    const cancel = vi.fn();
+    const useCase = new CancelEventUseCase({ cancel } as unknown as EventRepository);
+    await expect(useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001')).rejects.toThrow(AuthorizationError);
+    expect(cancel).not.toHaveBeenCalled();
   });
 });

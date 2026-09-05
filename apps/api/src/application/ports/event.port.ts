@@ -21,6 +21,12 @@ export interface DashboardView {
   events: DashboardEvent[];
 }
 
+export interface ManagedEventView extends DashboardEvent {
+  description: string;
+  mediaDisplayMode: EventMediaDisplayMode;
+  fields: Array<EventFormField & { id: string }>;
+}
+
 export interface PublicEventView {
   id: string;
   publicId: string;
@@ -40,7 +46,10 @@ export interface PublicEventView {
 export interface EventRepository {
   dashboard(principal: AuthenticatedPrincipal): Promise<DashboardView>;
   list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]>;
+  findById(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedEventView | null>;
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent>;
+  update(principal: AuthenticatedPrincipal, eventId: string, draft: EventDraft): Promise<DashboardEvent>;
+  cancel(principal: AuthenticatedPrincipal, eventId: string): Promise<DashboardEvent | null>;
   findPublic(publicId: string): Promise<PublicEventView | null>;
 }
 

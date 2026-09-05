@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
-import { CreateEventUseCase, GetDashboardUseCase, GetPublicEventUseCase, ListEventsUseCase } from './application/use-cases/event.use-cases';
+import { CancelEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
 import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from './application/use-cases/access-control.use-cases';
@@ -105,6 +105,21 @@ import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './applicati
     {
       provide: TOKENS.createEventUseCase,
       useFactory: (events: PostgresEventRepository) => new CreateEventUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.getEventUseCase,
+      useFactory: (events: PostgresEventRepository) => new GetEventUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.updateEventUseCase,
+      useFactory: (events: PostgresEventRepository) => new UpdateEventUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.cancelEventUseCase,
+      useFactory: (events: PostgresEventRepository) => new CancelEventUseCase(events),
       inject: [TOKENS.eventRepository],
     },
     {

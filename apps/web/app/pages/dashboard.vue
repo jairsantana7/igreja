@@ -4,6 +4,7 @@ const api = useApi();
 const auth = useAuth();
 const { data, pending, error, refresh } = await useAsyncData('dashboard', () => api<any>('/dashboard'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
+const canUpdate = computed(() => auth.session.value?.user.permissions.includes('events.update'));
 const canReadAccess = computed(() => auth.session.value?.user.permissions.includes('roles.read'));
 interface DashboardRole { id: string; name: string; key: string; permissions: string[] }
 interface DashboardAccess { roles: DashboardRole[] }
@@ -48,7 +49,7 @@ const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeSt
         <article v-for="event in data.events" :key="event.id" class="event-card">
           <div class="date-tile"><strong>{{ new Date(event.startsAt).getDate() }}</strong><span>{{ new Date(event.startsAt).toLocaleString('pt-BR', { month: 'short' }) }}</span></div>
           <div class="event-card__body"><span class="badge" :class="`badge--${event.status}`">{{ event.status === 'published' ? 'Publicado' : event.status === 'draft' ? 'Rascunho' : 'Cancelado' }}</span><h3>{{ event.title }}</h3><p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template></p></div>
-          <div class="event-card__meta"><strong>{{ event.registrations }}</strong><small>inscrições</small><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`">Abrir link ↗</NuxtLink></div>
+          <div class="event-card__meta"><strong>{{ event.registrations }}</strong><small>inscrições</small><div class="event-card__actions event-card__actions--compact" aria-label="Ações do evento"><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="event-action-button event-action-button--primary"><span aria-hidden="true">✎</span> Editar</NuxtLink><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink></div></div>
         </article>
       </div>
     </section>

@@ -18,6 +18,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Um evento pode estar em `draft`, `published` ou `cancelled`.
 - Somente `published` é acessível pelo link público.
 - No MVP, um evento está aberto para inscrições quando está publicado, ainda não começou e seu prazo de inscrição não venceu.
+- Editar um evento preserva seu identificador e link público; a edição não altera o status de publicação.
+- Cancelar exige `events.publish`, fecha imediatamente o link público e impede novas inscrições.
+- O cancelamento preserva inscrições e respostas existentes para histórico e auditoria.
+- Cancelar novamente um evento já cancelado é uma operação idempotente.
+- Campos que já possuem respostas não podem ser removidos durante uma edição; versionamento de formulários ainda precisa de definição.
+- Notificações de cancelamento não são enviadas até que canal, mensagem, tentativas e consentimentos sejam definidos.
 
 ## Inscrição
 

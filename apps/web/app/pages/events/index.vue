@@ -19,6 +19,11 @@ const auth = useAuth();
 const filter = ref<'all' | 'open' | EventStatus>('all');
 const { data: events, pending, error, refresh } = await useAsyncData('events', () => api<EventListItem[]>('/events'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
+const canUpdate = computed(() => auth.session.value?.user.permissions.includes('events.update'));
+const canCancel = computed(() => auth.session.value?.user.permissions.includes('events.publish'));
+const cancellingId = ref<string | null>(null);
+const eventToCancel = ref<EventListItem | null>(null);
+const actionMessage = ref('');
 const filteredEvents = computed(() => (events.value ?? []).filter((event) => {
   if (filter.value === 'all') return true;
   if (filter.value === 'open') return event.registrationOpen;
@@ -28,6 +33,22 @@ const openCount = computed(() => (events.value ?? []).filter((event) => event.re
 const registrationCount = computed(() => (events.value ?? []).reduce((total, event) => total + event.registrations, 0));
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 const statusLabel: Record<EventStatus, string> = { published: 'Publicado', draft: 'Rascunho', cancelled: 'Cancelado' };
+
+async function cancelEvent() {
+  const event = eventToCancel.value;
+  if (!event) return;
+  cancellingId.value = event.id;
+  actionMessage.value = '';
+  try {
+    await api(`/events/${event.id}/cancel`, { method: 'POST' });
+    await refresh();
+    eventToCancel.value = null;
+  } catch (requestError: any) {
+    actionMessage.value = requestError?.data?.message ?? 'Não foi possível cancelar o evento.';
+  } finally {
+    cancellingId.value = null;
+  }
+}
 </script>
 
 <template>
@@ -44,6 +65,7 @@ const statusLabel: Record<EventStatus, string> = { published: 'Publicado', draft
     </section>
 
     <section class="section-block">
+      <p v-if="actionMessage" class="alert" role="alert">{{ actionMessage }}</p>
       <div class="filter-bar" aria-label="Filtrar eventos">
         <button v-for="option in [
           { value: 'all', label: 'Todos' },
@@ -68,9 +90,20 @@ const statusLabel: Record<EventStatus, string> = { published: 'Publicado', draft
             <p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template></p>
             <p v-if="event.registrationDeadline" class="event-deadline">Inscrições até {{ formatter.format(new Date(event.registrationDeadline)) }}</p>
           </div>
-          <div class="event-card__meta"><strong>{{ event.registrations }}</strong><small>inscrições confirmadas</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`">Abrir link ↗</NuxtLink></div>
+          <div class="event-card__meta">
+            <strong>{{ event.registrations }}</strong><small>inscrições confirmadas</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
+            <div class="event-card__actions" aria-label="Ações do evento">
+              <NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="event-action-button event-action-button--primary"><span aria-hidden="true">✎</span> Editar</NuxtLink>
+              <span v-else class="event-action-placeholder" aria-hidden="true" />
+              <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>
+              <span v-else class="event-action-placeholder" aria-hidden="true" />
+              <button v-if="canCancel && event.status !== 'cancelled'" type="button" class="event-action-button event-action-button--danger" :disabled="cancellingId === event.id" @click="eventToCancel = event"><span aria-hidden="true">⊘</span> {{ cancellingId === event.id ? 'Cancelando…' : 'Cancelar' }}</button>
+              <span v-else class="event-action-placeholder" aria-hidden="true" />
+            </div>
+          </div>
         </article>
       </div>
     </section>
+    <ConfirmDialog :open="Boolean(eventToCancel)" :title="`Cancelar ${eventToCancel?.title ?? 'evento'}?`" description="O link público será fechado imediatamente. Inscrições e respostas existentes continuarão disponíveis no histórico." confirm-label="Cancelar evento" :busy="Boolean(cancellingId)" @cancel="eventToCancel = null" @confirm="cancelEvent" />
   </div>
 </template>

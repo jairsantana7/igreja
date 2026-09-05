@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
-import type { CreateEventUseCase, GetDashboardUseCase, ListEventsUseCase } from '../../../application/use-cases/event.use-cases';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import type { CancelEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
 import { TOKENS } from '../../../application/ports/tokens';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateEventDto } from '../dto/event.dto';
+import { CreateEventDto, UpdateEventDto } from '../dto/event.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -15,6 +15,9 @@ export class DashboardController {
     @Inject(TOKENS.dashboardUseCase) private readonly dashboard: GetDashboardUseCase,
     @Inject(TOKENS.listEventsUseCase) private readonly listEvents: ListEventsUseCase,
     @Inject(TOKENS.createEventUseCase) private readonly createEvent: CreateEventUseCase,
+    @Inject(TOKENS.getEventUseCase) private readonly getEvent: GetEventUseCase,
+    @Inject(TOKENS.updateEventUseCase) private readonly updateEvent: UpdateEventUseCase,
+    @Inject(TOKENS.cancelEventUseCase) private readonly cancelEvent: CancelEventUseCase,
   ) {}
 
   @Get('dashboard')
@@ -29,6 +32,15 @@ export class DashboardController {
     return this.listEvents.execute(principal);
   }
 
+  @Get('events/:eventId')
+  @RequirePermissions(PERMISSIONS.eventsRead)
+  getOne(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.getEvent.execute(principal, eventId);
+  }
+
   @Post('events')
   @RequirePermissions(PERMISSIONS.eventsCreate)
   create(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: CreateEventDto) {
@@ -37,5 +49,29 @@ export class DashboardController {
       startsAt: new Date(dto.startsAt),
       registrationDeadline: dto.registrationDeadline ? new Date(dto.registrationDeadline) : undefined,
     });
+  }
+
+  @Put('events/:eventId')
+  @RequirePermissions(PERMISSIONS.eventsUpdate)
+  update(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Body() dto: UpdateEventDto,
+  ) {
+    return this.updateEvent.execute(principal, eventId, {
+      ...dto,
+      startsAt: new Date(dto.startsAt),
+      registrationDeadline: dto.registrationDeadline ? new Date(dto.registrationDeadline) : undefined,
+    });
+  }
+
+  @Post('events/:eventId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.eventsPublish)
+  cancel(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ) {
+    return this.cancelEvent.execute(principal, eventId);
   }
 }

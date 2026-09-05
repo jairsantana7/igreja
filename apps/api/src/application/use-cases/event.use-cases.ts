@@ -34,6 +34,35 @@ export class CreateEventUseCase {
   }
 }
 
+export class GetEventUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string) {
+    requirePermission(principal, PERMISSIONS.eventsRead);
+    const event = await this.events.findById(principal, eventId);
+    if (!event) throw new NotFoundError('Evento não encontrado nesta comunidade.');
+    return event;
+  }
+}
+
+export class UpdateEventUseCase {
+  constructor(private readonly events: EventRepository) {}
+  execute(principal: AuthenticatedPrincipal, eventId: string, input: Omit<Parameters<typeof EventDraft.create>[0], 'publish'>) {
+    requirePermission(principal, PERMISSIONS.eventsUpdate);
+    const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
+    return this.events.update(principal, eventId, EventDraft.create({ ...input, publish: false, fields }));
+  }
+}
+
+export class CancelEventUseCase {
+  constructor(private readonly events: EventRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string) {
+    requirePermission(principal, PERMISSIONS.eventsPublish);
+    const event = await this.events.cancel(principal, eventId);
+    if (!event) throw new NotFoundError('Evento não encontrado nesta comunidade.');
+    return event;
+  }
+}
+
 export class GetPublicEventUseCase {
   constructor(private readonly events: EventRepository) {}
   async execute(publicId: string) {
