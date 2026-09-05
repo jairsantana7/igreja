@@ -26,6 +26,8 @@ const groupNames: Record<string, string> = {
   roles: 'Papéis e acessos',
   settings: 'Configurações',
   audit: 'Auditoria',
+  conversations: 'Conversas',
+  channels: 'Canais de conversa',
 };
 const permissionGroups = computed(() => {
   const groups = new Map<string, PermissionOption[]>();

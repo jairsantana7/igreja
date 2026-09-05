@@ -12,6 +12,7 @@ interface EventListItem {
   capacity: number | null;
   registrations: number;
   attendance: number;
+  owner: { id: string; name: string };
 }
 
 useHead({ title: 'Eventos' });
@@ -91,6 +92,7 @@ async function cancelEvent() {
             <h3>{{ event.title }}</h3>
             <p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template></p>
             <p v-if="event.registrationDeadline" class="event-deadline">Inscrições até {{ formatter.format(new Date(event.registrationDeadline)) }}</p>
+            <p class="event-deadline">Responsável: {{ event.owner.name }}</p>
           </div>
           <div class="event-card__meta">
             <strong>{{ event.registrations }}</strong><small>inscrições · {{ event.attendance }} presenças</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>

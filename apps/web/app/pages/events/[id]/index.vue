@@ -4,8 +4,11 @@ interface ManagedEvent {
   id: string; publicId: string; title: string; description: string; startsAt: string; registrationDeadline: string | null;
   location: string; status: EventStatus; registrationOpen: boolean; capacity: number | null; registrations: number;
   attendance: number; currentFormVersion: number; mediaDisplayMode: string;
+  owner: { id: string; name: string };
+  collaborators: Array<{ id: string; name: string; email: string }>;
   fields: Array<{ id: string; key: string; label: string; type: string; required: boolean; options: string[] }>;
 }
+interface CollaboratorCandidate { id: string; name: string; email: string }
 interface Registration {
   id: string; member: { id: string; name: string; email: string }; status: 'confirmed' | 'cancelled'; formVersion: number;
   registeredAt: string; checkedInAt: string | null; checkedInBy: string | null;
@@ -31,6 +34,12 @@ const canCommunicate = computed(() => permissions.value.includes('events.communi
 const canTemplate = computed(() => permissions.value.includes('events.templates_manage'));
 const canAudit = computed(() => permissions.value.includes('audit.read'));
 const { data: event, pending, error, refresh } = await useAsyncData(`event-${eventId}`, () => api<ManagedEvent>(`/events/${eventId}`), { server: false });
+const canShareEvent = computed(() => permissions.value.includes('events.collaborators_manage') && Boolean(event.value) && (permissions.value.includes('events.manage_all') || event.value?.owner.id === auth.session.value?.user.userId));
+const { data: collaboratorCandidates } = await useAsyncData(
+  `event-${eventId}-collaborator-candidates`,
+  () => canShareEvent.value ? api<CollaboratorCandidate[]>(`/events/${eventId}/collaborator-candidates`) : Promise.resolve([]),
+  { server: false },
+);
 const { data: registrations, refresh: refreshRegistrations } = await useAsyncData(
   `event-${eventId}-registrations`,
   () => canReadRegistrations.value ? api<Registration[]>(`/events/${eventId}/registrations`) : Promise.resolve([]),
@@ -52,6 +61,7 @@ const search = ref('');
 const busyId = ref<string | null>(null);
 const feedback = ref('');
 const templateName = ref('');
+const selectedCollaborators = ref<string[]>([]);
 const communicationForm = reactive({ audience: 'confirmed' as Communication['audience'], channel: 'email' as Communication['channel'], subject: '', message: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 const statusLabels: Record<EventStatus, string> = { draft: 'Rascunho', published: 'Publicado', registration_closed: 'Inscrições encerradas', cancelled: 'Cancelado', completed: 'Concluído' };
@@ -63,6 +73,7 @@ const filteredRegistrations = computed(() => (registrations.value ?? []).filter(
   const matchesStatus = registrationFilter.value === 'all' || (registrationFilter.value === 'present' ? Boolean(registration.checkedInAt) : !registration.checkedInAt);
   return matchesText && matchesStatus;
 }));
+watch(event, (value) => { selectedCollaborators.value = value?.collaborators.map((item) => item.id) ?? []; }, { immediate: true });
 
 async function changeLifecycle(action: 'close-registrations' | 'complete') {
   busyId.value = action; feedback.value = '';
@@ -98,6 +109,16 @@ async function createCommunication() {
   finally { busyId.value = null; }
 }
 
+async function saveCollaborators() {
+  busyId.value = 'collaborators'; feedback.value = '';
+  try {
+    await api(`/events/${eventId}/collaborators`, { method: 'PUT', body: { userIds: selectedCollaborators.value } });
+    await refresh();
+    feedback.value = 'Equipe do evento atualizada.';
+  } catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível atualizar a equipe.'; }
+  finally { busyId.value = null; }
+}
+
 async function queueCommunication(item: Communication) {
   busyId.value = item.id; feedback.value = '';
   try { await api(`/events/${eventId}/communications/${item.id}/queue`, { method: 'POST' }); await refreshCommunications(); }
@@ -125,7 +146,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
     <div v-else-if="error || !event" class="empty-card"><p>Não foi possível carregar este evento.</p><NuxtLink to="/events" class="button">Voltar para eventos</NuxtLink></div>
     <template v-else>
       <header class="event-operations-header">
-        <div><NuxtLink to="/events" class="back-link">← Todos os eventos</NuxtLink><div class="event-card__badges"><span class="badge" :class="`badge--${event.status}`">{{ statusLabels[event.status] }}</span><span v-if="event.registrationOpen" class="badge badge--open">Inscrições abertas</span></div><h1>{{ event.title }}</h1><p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template></p></div>
+        <div><NuxtLink to="/events" class="back-link">← Todos os eventos</NuxtLink><div class="event-card__badges"><span class="badge" :class="`badge--${event.status}`">{{ statusLabels[event.status] }}</span><span v-if="event.registrationOpen" class="badge badge--open">Inscrições abertas</span></div><h1>{{ event.title }}</h1><p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template> · Responsável: {{ event.owner.name }}</p></div>
         <div class="event-operations-header__actions"><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="button">✎ Editar</NuxtLink><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="button button--primary">↗ Página pública</NuxtLink></div>
       </header>
 
@@ -145,6 +166,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
         <div class="operation-grid">
           <article class="operation-card"><p class="eyebrow">Ciclo de vida</p><h2>Operação do evento</h2><p>Controle a abertura das inscrições e marque o evento como concluído sem perder o histórico.</p><div class="operation-actions"><button v-if="canPublish && event.status === 'published'" class="button" :disabled="Boolean(busyId)" @click="changeLifecycle('close-registrations')">Fechar inscrições</button><button v-if="canPublish && ['published', 'registration_closed'].includes(event.status)" class="button button--primary" :disabled="Boolean(busyId)" @click="changeLifecycle('complete')">Concluir evento</button></div></article>
           <article v-if="canTemplate" class="operation-card"><p class="eyebrow">Reutilização</p><h2>Salvar como modelo</h2><p>Reaproveite descrição, local, capacidade e formulário em um novo evento.</p><form class="inline-operation-form" @submit.prevent="saveTemplate"><label class="field"><span>Nome do modelo</span><input v-model="templateName" maxlength="120" placeholder="Ex.: Encontro mensal" required></label><button class="button" :disabled="busyId === 'template'">Salvar modelo</button></form></article>
+          <article class="operation-card event-team-card"><p class="eyebrow">Responsabilidade</p><h2>Equipe do evento</h2><p><strong>{{ event.owner.name }}</strong> é o responsável. Colaboradores podem operar somente este evento conforme as permissões do papel.</p><div v-if="event.collaborators.length" class="event-team-current"><span v-for="person in event.collaborators" :key="person.id" class="role-chip">{{ person.name }}</span></div><form v-if="canShareEvent" class="event-team-form" @submit.prevent="saveCollaborators"><p v-if="!collaboratorCandidates?.length" class="muted">Não há outros usuários com acesso a eventos disponíveis.</p><label v-for="person in collaboratorCandidates" :key="person.id" class="permission-option"><input v-model="selectedCollaborators" type="checkbox" :value="person.id"><span><strong>{{ person.name }}</strong><code>{{ person.email }}</code></span></label><button class="button" :disabled="busyId === 'collaborators'">Salvar equipe</button></form></article>
         </div>
       </section>
 
