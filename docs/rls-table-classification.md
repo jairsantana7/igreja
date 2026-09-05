@@ -14,6 +14,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `user_roles` | tenant-direct | atribuição pertence à comunidade | RLS direta + FKs compostas |
 | `events` | tenant-direct | evento pertence à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita |
 | `event_form_fields` | tenant-direct | campo pertence a evento e comunidade | RLS direta + FK composta para evento |
+| `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |
 | `event_registrations` | tenant-direct | inscrição pertence a evento e comunidade | RLS direta + FKs compostas |
 | `registration_answers` | tenant-direct | resposta pertence à inscrição/campo/evento | RLS direta + FKs compostas para impedir cruzamento |
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |

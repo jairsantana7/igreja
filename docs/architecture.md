@@ -59,7 +59,7 @@ Configurações de login social e pagamentos formam um contexto separado de even
 
 ## Portas transversais
 
-`ApplicationLogger`, `CacheStore` e `JobQueue` pertencem à camada de aplicação e não conhecem Sentry, Redis, BullMQ ou RabbitMQ. A infraestrutura fornece adaptadores substituíveis e `app.module.ts` faz a composição. A implementação padrão de cache é no-op; a de fila falha explicitamente para impedir perda silenciosa de trabalho.
+`ApplicationLogger`, `CacheStore`, `JobQueue` e `MediaStorage` pertencem à camada de aplicação e não conhecem Sentry, Redis, BullMQ, RabbitMQ, disco local, S3 ou R2. A infraestrutura fornece adaptadores substituíveis e `app.module.ts` faz a composição. A implementação padrão de cache é no-op; a de fila falha explicitamente para impedir perda silenciosa de trabalho. O armazenamento local de mídia serve somente ao desenvolvimento e deve ser substituído por armazenamento de objetos em produção.
 
 ## Autorização granular
 

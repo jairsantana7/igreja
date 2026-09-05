@@ -53,8 +53,8 @@ export class PostgresEventRepository implements EventRepository {
       const eventResult = await client.query<EventRow>(`
         INSERT INTO events (
           tenant_id, created_by_user_id, slug, title, description, location,
-          starts_at, registration_deadline, capacity, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          starts_at, registration_deadline, capacity, media_display_mode, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
           '0'::text AS registrations
       `, [
@@ -67,14 +67,12 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.startsAt,
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
+        draft.props.mediaDisplayMode,
         draft.props.publish ? 'published' : 'draft',
       ]);
       const event = eventResult.rows[0];
       if (!event) throw new Error('Falha ao criar evento.');
-      await client.query(`
-        INSERT INTO event_public_directory (public_id, tenant_id, event_id)
-        VALUES ($1, $2, $3)
-      `, [event.public_id, principal.tenantId, event.id]);
+      await client.query('SELECT app.register_public_event($1, $2, $3)', [event.public_id, principal.tenantId, event.id]);
       await this.insertFields(client, principal.tenantId, event.id, draft);
       return this.mapEvent(event);
     });

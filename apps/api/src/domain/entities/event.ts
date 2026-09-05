@@ -3,6 +3,8 @@ import { DomainError } from './errors';
 export const FORM_FIELD_TYPES = ['short_text', 'long_text', 'single_choice', 'checkbox'] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 export type EventStatus = 'draft' | 'published' | 'cancelled';
+export const EVENT_MEDIA_DISPLAY_MODES = ['hero', 'carousel', 'fixed'] as const;
+export type EventMediaDisplayMode = (typeof EVENT_MEDIA_DISPLAY_MODES)[number];
 
 export function isRegistrationOpen(
   event: { status: EventStatus; startsAt: Date; registrationDeadline?: Date | null },
@@ -29,6 +31,7 @@ export interface EventDraftProps {
   startsAt: Date;
   registrationDeadline?: Date;
   capacity?: number;
+  mediaDisplayMode: EventMediaDisplayMode;
   publish: boolean;
   fields: EventFormField[];
 }
@@ -45,6 +48,9 @@ export class EventDraft {
     }
     if (input.capacity !== undefined && (!Number.isInteger(input.capacity) || input.capacity < 1)) {
       throw new DomainError('A capacidade deve ser um número inteiro positivo.');
+    }
+    if (!EVENT_MEDIA_DISPLAY_MODES.includes(input.mediaDisplayMode)) {
+      throw new DomainError('O modo de exibição das imagens é inválido.');
     }
 
     const keys = new Set<string>();

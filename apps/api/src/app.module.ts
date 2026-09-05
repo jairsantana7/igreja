@@ -31,10 +31,14 @@ import { NestApplicationLogger } from './infrastructure/observability/nest-appli
 import { NoopCacheStore } from './infrastructure/cache/noop-cache.store';
 import { ApplicationExceptionFilter } from './presentation/http/application-exception.filter';
 import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
+import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
+import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
+import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
+import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './application/use-cases/event-media.use-cases';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -46,6 +50,7 @@ import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
     { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
     { provide: TOKENS.jobQueue, useClass: DisabledJobQueue },
+    { provide: TOKENS.mediaStorage, useClass: LocalMediaStorage },
     {
       provide: TOKENS.authRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAuthenticationRepository(database),
@@ -74,6 +79,11 @@ import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
     {
       provide: TOKENS.auditTrailRepository,
       useFactory: (database: PostgresDatabase) => new PostgresAuditTrailRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.eventMediaRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventMediaRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -157,6 +167,16 @@ import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
       provide: TOKENS.listAuditEventsUseCase,
       useFactory: (audit: PostgresAuditTrailRepository) => new ListAuditEventsUseCase(audit),
       inject: [TOKENS.auditTrailRepository],
+    },
+    {
+      provide: TOKENS.uploadEventMediaUseCase,
+      useFactory: (media: PostgresEventMediaRepository, storage: LocalMediaStorage) => new UploadEventMediaUseCase(media, storage),
+      inject: [TOKENS.eventMediaRepository, TOKENS.mediaStorage],
+    },
+    {
+      provide: TOKENS.getPublicEventMediaUseCase,
+      useFactory: (media: PostgresEventMediaRepository, storage: LocalMediaStorage) => new GetPublicEventMediaUseCase(media, storage),
+      inject: [TOKENS.eventMediaRepository, TOKENS.mediaStorage],
     },
   ],
 })

@@ -25,6 +25,7 @@ const resourceLabels: Record<string, string> = {
   event_registrations: 'inscrição',
   registration_answers: 'respostas da inscrição',
   community_integrations: 'configuração da comunidade',
+  event_media: 'imagem do evento',
 };
 const filteredEvents = computed(() => action.value === 'all' ? data.value ?? [] : (data.value ?? []).filter((event) => event.action === action.value));
 </script>

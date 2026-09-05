@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
-import { FORM_FIELD_TYPES, type FormFieldType } from '../../../domain/entities/event';
+import { EVENT_MEDIA_DISPLAY_MODES, FORM_FIELD_TYPES, type EventMediaDisplayMode, type FormFieldType } from '../../../domain/entities/event';
 
 export class EventFieldDto {
   @IsOptional()
@@ -47,6 +47,9 @@ export class CreateEventDto {
   @Min(1)
   @Max(1_000_000)
   capacity?: number;
+
+  @IsIn(EVENT_MEDIA_DISPLAY_MODES)
+  mediaDisplayMode: EventMediaDisplayMode = 'hero';
 
   @IsBoolean()
   publish = false;

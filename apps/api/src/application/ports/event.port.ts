@@ -1,5 +1,5 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
-import type { EventDraft, EventFormField, EventStatus } from '../../domain/entities/event';
+import type { EventDraft, EventFormField, EventMediaDisplayMode, EventStatus } from '../../domain/entities/event';
 import type { LoginIdentity } from './authentication.port';
 
 export interface DashboardEvent {
@@ -32,6 +32,8 @@ export interface PublicEventView {
   startsAt: string;
   registrationDeadline: string | null;
   capacity: number | null;
+  mediaDisplayMode: EventMediaDisplayMode;
+  images: { id: string; altText: string }[];
   fields: Required<Pick<EventFormField, 'id'>>[] & EventFormField[];
 }
 

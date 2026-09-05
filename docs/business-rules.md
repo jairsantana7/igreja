@@ -79,3 +79,13 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Registros de auditoria são imutáveis para o papel runtime da aplicação.
 - Logs operacionais e ferramentas como Sentry são observabilidade; não substituem a trilha persistente de auditoria.
 - Cache não é usado para decisões de autorização. Alterações de permissão devem valer na próxima requisição ao backend.
+
+## Imagens dos eventos
+
+- Um evento pode receber várias imagens durante sua criação.
+- O modo `hero` usa a primeira imagem como capa ampla; `carousel` apresenta todas as imagens em uma galeria navegável; `fixed` usa a primeira imagem como fundo fixo da página pública.
+- A interpretação dos modos é uma decisão inicial de apresentação e pode evoluir sem alterar a propriedade dos arquivos.
+- O binário não fica no PostgreSQL. `event_media` guarda metadados e uma chave opaca do adaptador de armazenamento.
+- Upload exige `events.update`, valida tipo e assinatura JPEG, PNG ou WebP e limita cada arquivo a 5 MiB por segurança operacional.
+- Uma mídia só pode ser lida publicamente quando pertence a um evento publicado.
+- Ainda precisa ser definido pelo produto se haverá imagem destacada manual, reordenação e exclusão de mídias na primeira versão.

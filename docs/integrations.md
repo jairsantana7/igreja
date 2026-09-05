@@ -10,6 +10,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Cache implementa `CacheStore`; a implementação padrão é no-op e pode ser substituída por Redis ou outro backend.
 - Filas implementam `JobQueue`; a implementação padrão falha explicitamente até BullMQ, RabbitMQ, SQS ou outro broker ser configurado.
 - Logs e captura de exceções implementam `ApplicationLogger`; Sentry e OpenTelemetry entram como adaptadores de infraestrutura.
+- Arquivos implementam `MediaStorage`; disco local, S3 e Cloudflare R2 são adaptadores de infraestrutura.
 - A seleção ocorre por `providerKey`, nunca por condicionais de fornecedor no domínio.
 
 ## Adicionando um adaptador

@@ -12,6 +12,10 @@ export default defineNuxtConfig({
   routeRules: {
     '/dashboard': { ssr: false },
     '/events/**': { ssr: false },
+    '/members': { ssr: false },
+    '/access': { ssr: false },
+    '/audit': { ssr: false },
+    '/settings': { ssr: false },
   },
   app: {
     head: {

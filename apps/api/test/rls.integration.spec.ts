@@ -9,6 +9,9 @@ const userA = 'a1000000-0000-4000-8000-000000000001';
 const userB = 'b1000000-0000-4000-8000-000000000002';
 const eventA = 'a2000000-0000-4000-8000-000000000001';
 const eventB = 'b2000000-0000-4000-8000-000000000002';
+const mediaA = 'a3000000-0000-4000-8000-000000000001';
+const mediaB = 'b3000000-0000-4000-8000-000000000002';
+const publicEventA = 'a5000000-0000-4000-8000-000000000001';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -26,9 +29,14 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${userA}', '${tenantA}', 'User A', 'user@a.test'),
         ('${userB}', '${tenantB}', 'User B', 'user@b.test')
       ON CONFLICT DO NOTHING;
-      INSERT INTO events (id, tenant_id, created_by_user_id, slug, title, starts_at) VALUES
-        ('${eventA}', '${tenantA}', '${userA}', 'evento-a', 'Evento A', now() + interval '1 day'),
-        ('${eventB}', '${tenantB}', '${userB}', 'evento-b', 'Evento B', now() + interval '1 day')
+      INSERT INTO events (id, tenant_id, created_by_user_id, public_id, slug, title, starts_at) VALUES
+        ('${eventA}', '${tenantA}', '${userA}', '${publicEventA}', 'evento-a', 'Evento A', now() + interval '1 day'),
+        ('${eventB}', '${tenantB}', '${userB}', 'b5000000-0000-4000-8000-000000000002', 'evento-b', 'Evento B', now() + interval '1 day')
+      ON CONFLICT (id) DO UPDATE SET status = 'draft';
+      DELETE FROM event_public_directory WHERE event_id IN ('${eventA}', '${eventB}');
+      INSERT INTO event_media (id, tenant_id, event_id, storage_key, mime_type, position) VALUES
+        ('${mediaA}', '${tenantA}', '${eventA}', '${mediaA}.jpg', 'image/jpeg', 0),
+        ('${mediaB}', '${tenantB}', '${eventB}', '${mediaB}.jpg', 'image/jpeg', 0)
       ON CONFLICT DO NOTHING;
       INSERT INTO community_integrations (tenant_id, category, provider_key, enabled) VALUES
         ('${tenantA}', 'identity', 'google', false),
@@ -40,6 +48,7 @@ describeDatabase('PostgreSQL RLS', () => {
   afterAll(async () => {
     await admin.query(`
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_media WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM users WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM audit_events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -91,6 +100,12 @@ describeDatabase('PostgreSQL RLS', () => {
         await expect(client.query(`
           INSERT INTO event_form_fields (tenant_id, event_id, field_key, label, type, position)
           VALUES ($1, $2, 'campo_teste', 'Campo teste', 'short_text', 0)
+        `, [tenantA, eventB])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO event_media (tenant_id, event_id, storage_key, mime_type, position)
+          VALUES ($1, $2, 'a4000000-0000-4000-8000-000000000001.jpg', 'image/jpeg', 1)
         `, [tenantA, eventB])).rejects.toThrow();
       });
     } finally { client.release(); }
@@ -149,8 +164,29 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('mídia pública exige evento publicado e mantém o vínculo do tenant', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        await client.query('SELECT app.register_public_event($1, $2, $3)', [publicEventA, tenantA, eventA]);
+      });
+      expect((await client.query(
+        'SELECT storage_key FROM app.resolve_public_event_media($1, $2)', [publicEventA, mediaA],
+      )).rows).toEqual([]);
+      await inTenant(client, tenantA, async () => {
+        await client.query("UPDATE events SET status = 'published' WHERE id = $1", [eventA]);
+      });
+      expect((await client.query(
+        'SELECT storage_key FROM app.resolve_public_event_media($1, $2)', [publicEventA, mediaA],
+      )).rows).toEqual([{ storage_key: `${mediaA}.jpg` }]);
+      expect((await client.query(
+        'SELECT storage_key FROM app.resolve_public_event_media($1, $2)', [publicEventA, mediaB],
+      )).rows).toEqual([]);
+    } finally { client.release(); }
+  });
+
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'community_integrations', 'event_form_fields', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
+    const expected = ['audit_events', 'community_integrations', 'event_form_fields', 'event_media', 'event_registrations', 'events', 'external_accounts', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

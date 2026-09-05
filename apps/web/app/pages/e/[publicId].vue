@@ -52,14 +52,19 @@ async function submit() {
 }
 
 const dateLabel = computed(() => event.value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeStyle: 'short' }).format(new Date(event.value.startsAt)) : '');
+const mediaUrl = (mediaId: string) => `${String(config.public.apiBaseUrl).replace(/\/$/, '')}/public/events/${publicId}/media/${mediaId}`;
 </script>
 
 <template>
   <main class="public-page">
+    <div v-if="event?.images.length && event.mediaDisplayMode === 'fixed'" class="public-fixed-media" aria-hidden="true"><img :src="mediaUrl(event.images[0].id)" alt=""><span /></div>
     <header class="public-header"><AppLogo /><span v-if="event">{{ event.communityName }}</span></header>
     <div v-if="error" class="public-error"><h1>Evento não encontrado</h1><p>O link pode estar incorreto ou o evento ainda não foi publicado.</p></div>
     <div v-else-if="!event" class="public-error">Carregando evento…</div>
-    <div v-else class="public-grid">
+    <template v-else>
+      <section v-if="event.images.length && event.mediaDisplayMode === 'hero'" class="public-event-hero"><img :src="mediaUrl(event.images[0].id)" :alt="event.images[0].altText || event.title"></section>
+      <section v-if="event.images.length && event.mediaDisplayMode === 'carousel'" class="public-event-carousel" aria-label="Imagens do evento"><figure v-for="image in event.images" :key="image.id"><img :src="mediaUrl(image.id)" :alt="image.altText || event.title"></figure></section>
+      <div class="public-grid" :class="{ 'public-grid--fixed': event.images.length && event.mediaDisplayMode === 'fixed' }">
       <section class="event-intro"><p class="eyebrow">Convite para você</p><h1>{{ event.title }}</h1><p class="event-description">{{ event.description }}</p><dl><div><dt>Data e hora</dt><dd>{{ dateLabel }}</dd></div><div v-if="event.location"><dt>Local</dt><dd>{{ event.location }}</dd></div><div v-if="event.capacity"><dt>Vagas</dt><dd>{{ event.capacity }} participantes</dd></div></dl></section>
 
       <section class="registration-card">
@@ -74,6 +79,7 @@ const dateLabel = computed(() => event.value ? new Intl.DateTimeFormat('pt-BR', 
           <p v-if="message" class="alert" role="alert">{{ message }}</p><button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? 'Confirmando…' : 'Confirmar inscrição' }}</button><p class="privacy-note">Ao continuar, seus dados serão compartilhados somente com esta comunidade para organizar o evento.</p>
         </form>
       </section>
-    </div>
+      </div>
+    </template>
   </main>
 </template>

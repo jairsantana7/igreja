@@ -5,6 +5,8 @@ export const TOKENS = {
   accessControlRepository: Symbol('AccessControlRepository'),
   communitySettingsRepository: Symbol('CommunitySettingsRepository'),
   auditTrailRepository: Symbol('AuditTrailRepository'),
+  eventMediaRepository: Symbol('EventMediaRepository'),
+  mediaStorage: Symbol('MediaStorage'),
   applicationLogger: Symbol('ApplicationLogger'),
   cacheStore: Symbol('CacheStore'),
   jobQueue: Symbol('JobQueue'),
@@ -26,4 +28,6 @@ export const TOKENS = {
   getCommunitySettingsUseCase: Symbol('GetCommunitySettingsUseCase'),
   updateCommunitySettingsUseCase: Symbol('UpdateCommunitySettingsUseCase'),
   listAuditEventsUseCase: Symbol('ListAuditEventsUseCase'),
+  uploadEventMediaUseCase: Symbol('UploadEventMediaUseCase'),
+  getPublicEventMediaUseCase: Symbol('GetPublicEventMediaUseCase'),
 } as const;

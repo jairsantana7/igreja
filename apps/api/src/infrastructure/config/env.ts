@@ -27,6 +27,7 @@ export const env = Object.freeze({
   jwtIssuer: required('JWT_ISSUER', 'igreja-api'),
   jwtAudience: required('JWT_AUDIENCE', 'igreja-web'),
   trustProxy: required('TRUST_PROXY', 'loopback,linklocal,uniquelocal'),
+  mediaStoragePath: resolve(process.cwd(), process.env.MEDIA_STORAGE_PATH ?? '../../.data/media'),
 });
 
 if (env.jwtSecret.length < 32) throw new Error('JWT_SECRET precisa ter ao menos 32 caracteres.');
