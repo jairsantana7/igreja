@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const auth = useAuth();
+const api = useApi();
 const route = useRoute();
 const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
 const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
@@ -7,6 +8,7 @@ const canReadAccess = computed(() => auth.session.value?.user.permissions.includ
 const canReadAudit = computed(() => auth.session.value?.user.permissions.includes('audit.read'));
 
 async function leave() {
+  try { await api('/sessions/current', { method: 'DELETE' }); } catch { /* O logout local continua se a API estiver indisponível. */ }
   auth.logout();
   await navigateTo('/login');
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type EventStatus = 'draft' | 'published' | 'cancelled';
+type EventStatus = 'draft' | 'published' | 'registration_closed' | 'cancelled' | 'completed';
 interface EventListItem {
   id: string;
   publicId: string;
@@ -11,6 +11,7 @@ interface EventListItem {
   registrationOpen: boolean;
   capacity: number | null;
   registrations: number;
+  attendance: number;
 }
 
 useHead({ title: 'Eventos' });
@@ -19,7 +20,6 @@ const auth = useAuth();
 const filter = ref<'all' | 'open' | EventStatus>('all');
 const { data: events, pending, error, refresh } = await useAsyncData('events', () => api<EventListItem[]>('/events'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
-const canUpdate = computed(() => auth.session.value?.user.permissions.includes('events.update'));
 const canCancel = computed(() => auth.session.value?.user.permissions.includes('events.publish'));
 const cancellingId = ref<string | null>(null);
 const eventToCancel = ref<EventListItem | null>(null);
@@ -32,7 +32,7 @@ const filteredEvents = computed(() => (events.value ?? []).filter((event) => {
 const openCount = computed(() => (events.value ?? []).filter((event) => event.registrationOpen).length);
 const registrationCount = computed(() => (events.value ?? []).reduce((total, event) => total + event.registrations, 0));
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
-const statusLabel: Record<EventStatus, string> = { published: 'Publicado', draft: 'Rascunho', cancelled: 'Cancelado' };
+const statusLabel: Record<EventStatus, string> = { published: 'Publicado', draft: 'Rascunho', registration_closed: 'Inscrições encerradas', completed: 'Concluído', cancelled: 'Cancelado' };
 
 async function cancelEvent() {
   const event = eventToCancel.value;
@@ -73,6 +73,8 @@ async function cancelEvent() {
           { value: 'published', label: 'Publicados' },
           { value: 'draft', label: 'Rascunhos' },
           { value: 'cancelled', label: 'Cancelados' },
+          { value: 'registration_closed', label: 'Inscrições encerradas' },
+          { value: 'completed', label: 'Concluídos' },
         ]" :key="option.value" type="button" :class="{ active: filter === option.value }" @click="filter = option.value as typeof filter">
           {{ option.label }}
         </button>
@@ -91,13 +93,12 @@ async function cancelEvent() {
             <p v-if="event.registrationDeadline" class="event-deadline">Inscrições até {{ formatter.format(new Date(event.registrationDeadline)) }}</p>
           </div>
           <div class="event-card__meta">
-            <strong>{{ event.registrations }}</strong><small>inscrições confirmadas</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
+            <strong>{{ event.registrations }}</strong><small>inscrições · {{ event.attendance }} presenças</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
             <div class="event-card__actions" aria-label="Ações do evento">
-              <NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="event-action-button event-action-button--primary"><span aria-hidden="true">✎</span> Editar</NuxtLink>
-              <span v-else class="event-action-placeholder" aria-hidden="true" />
+              <NuxtLink :to="`/events/${event.id}`" class="event-action-button event-action-button--primary"><span aria-hidden="true">◎</span> Gerenciar</NuxtLink>
               <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>
               <span v-else class="event-action-placeholder" aria-hidden="true" />
-              <button v-if="canCancel && event.status !== 'cancelled'" type="button" class="event-action-button event-action-button--danger" :disabled="cancellingId === event.id" @click="eventToCancel = event"><span aria-hidden="true">⊘</span> {{ cancellingId === event.id ? 'Cancelando…' : 'Cancelar' }}</button>
+              <button v-if="canCancel && ['draft', 'published', 'registration_closed'].includes(event.status)" type="button" class="event-action-button event-action-button--danger" :disabled="cancellingId === event.id" @click="eventToCancel = event"><span aria-hidden="true">⊘</span> {{ cancellingId === event.id ? 'Cancelando…' : 'Cancelar' }}</button>
               <span v-else class="event-action-placeholder" aria-hidden="true" />
             </div>
           </div>

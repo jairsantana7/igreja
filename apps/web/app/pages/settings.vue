@@ -20,6 +20,7 @@ useHead({ title: 'Configurações' });
 const api = useApi();
 const auth = useAuth();
 const canManage = computed(() => auth.session.value?.user.permissions.includes('settings.manage'));
+const canManageSessions = computed(() => auth.session.value?.user.permissions.includes('sessions.manage'));
 const { data, pending, error, refresh } = await useAsyncData('community-settings', () => api<CommunitySettings>('/settings'), { server: false });
 const form = reactive<CommunitySettings>({
   socialLogin: {
@@ -34,6 +35,20 @@ const form = reactive<CommunitySettings>({
 const hydrated = ref(false);
 const saving = ref(false);
 const feedback = ref<{ type: 'success' | 'error'; message: string } | null>(null);
+interface AuthSession { id: string; createdAt: string; expiresAt: string; current: boolean }
+const { data: sessions, refresh: refreshSessions } = await useAsyncData('auth-sessions', () => canManageSessions.value ? api<AuthSession[]>('/sessions') : Promise.resolve([]), { server: false });
+const sessionFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
+
+async function revokeOtherSessions() {
+  feedback.value = null;
+  try {
+    const result = await api<{ revoked: number }>('/sessions/others', { method: 'DELETE' });
+    await refreshSessions();
+    feedback.value = { type: 'success', message: `${result.revoked} outra(s) sessão(ões) encerrada(s).` };
+  } catch (requestError: any) {
+    feedback.value = { type: 'error', message: requestError?.data?.message ?? 'Não foi possível encerrar as sessões.' };
+  }
+}
 
 watch(data, (settings) => {
   if (!settings || hydrated.value) return;
@@ -90,6 +105,14 @@ async function save() {
               <label class="field"><span>Variável com o Client Secret</span><input v-model="form.socialLogin.microsoft.secretReference" :disabled="!canManage" placeholder="MICROSOFT_OIDC_CLIENT_SECRET"><small>Informe somente o nome da variável, nunca o segredo.</small></label>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section v-if="canManageSessions" class="settings-section">
+        <div class="settings-section__heading"><span class="settings-icon">⌾</span><div><p class="eyebrow">Segurança</p><h2>Sessões e autenticação forte</h2><p>Tokens agora pertencem a sessões revogáveis. MFA permanece desativado até que uma política e um adaptador seguro sejam configurados.</p></div></div>
+        <div class="integration-grid">
+          <article class="integration-card"><header><span class="provider-mark">{{ sessions?.length ?? 0 }}</span><div><h3>Sessões ativas</h3><small>A sessão atual é preservada</small></div></header><div class="integration-fields"><p v-for="session in sessions" :key="session.id" class="session-row"><span><strong>{{ session.current ? 'Sessão atual' : 'Outra sessão' }}</strong><small>Iniciada em {{ sessionFormatter.format(new Date(session.createdAt)) }}</small></span><span class="badge" :class="session.current ? 'badge--published' : 'badge--draft'">{{ session.current ? 'Atual' : 'Ativa' }}</span></p><button type="button" class="button button--danger" :disabled="(sessions?.length ?? 0) < 2" @click="revokeOtherSessions">Encerrar outras sessões</button></div></article>
+          <article class="integration-card"><header><span class="provider-mark">2×</span><div><h3>Autenticação multifator</h3><small>Porta preparada, provedor ainda não instalado</small></div></header><p class="integration-warning"><strong>Antes de ativar:</strong> a comunidade precisa definir TOTP ou passkey, códigos de recuperação e o fluxo de emergência auditado. O sistema não simula proteção inexistente.</p></article>
         </div>
       </section>
 

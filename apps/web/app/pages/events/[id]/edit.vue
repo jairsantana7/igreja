@@ -7,7 +7,7 @@ interface ManagedEvent {
   startsAt: string;
   registrationDeadline: string | null;
   capacity: number | null;
-  status: 'draft' | 'published' | 'cancelled';
+  status: 'draft' | 'published' | 'registration_closed' | 'cancelled' | 'completed';
   mediaDisplayMode: 'hero' | 'carousel' | 'fixed';
   fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>;
 }
@@ -100,7 +100,7 @@ async function cancelEvent() {
 
 <template>
   <div class="page page--narrow">
-    <header class="page-header"><div><NuxtLink to="/events" class="back-link">← Voltar aos eventos</NuxtLink><p class="eyebrow">Eventos</p><h1>Editar evento</h1><p class="muted">O link e as inscrições existentes serão preservados.</p></div><button v-if="canCancel && event && event.status !== 'cancelled'" class="button button--danger" type="button" :disabled="cancelling" @click="cancelDialogOpen = true"><span aria-hidden="true">⊘</span> Cancelar evento</button></header>
+    <header class="page-header"><div><NuxtLink :to="`/events/${eventId}`" class="back-link">← Voltar à gestão</NuxtLink><p class="eyebrow">Eventos</p><h1>Editar evento</h1><p class="muted">O link e as inscrições existentes serão preservados.</p></div><button v-if="canCancel && event && ['draft', 'published', 'registration_closed'].includes(event.status)" class="button button--danger" type="button" :disabled="cancelling" @click="cancelDialogOpen = true"><span aria-hidden="true">⊘</span> Cancelar evento</button></header>
     <div v-if="pending" class="empty-card settings-loading">Carregando evento…</div>
     <div v-else-if="error || !event" class="empty-card settings-loading"><h3>Evento não encontrado</h3><p>Você pode não ter acesso ou o evento não pertence a esta comunidade.</p></div>
     <form v-else class="editor" @submit.prevent="save">
