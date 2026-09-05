@@ -4,6 +4,15 @@ export const FORM_FIELD_TYPES = ['short_text', 'long_text', 'single_choice', 'ch
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 export type EventStatus = 'draft' | 'published' | 'cancelled';
 
+export function isRegistrationOpen(
+  event: { status: EventStatus; startsAt: Date; registrationDeadline?: Date | null },
+  now = new Date(),
+): boolean {
+  return event.status === 'published'
+    && event.startsAt > now
+    && (!event.registrationDeadline || event.registrationDeadline > now);
+}
+
 export interface EventFormField {
   id?: string;
   key: string;

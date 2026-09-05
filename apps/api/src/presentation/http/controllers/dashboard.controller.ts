@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
-import type { CreateEventUseCase, GetDashboardUseCase } from '../../../application/use-cases/event.use-cases';
+import type { CreateEventUseCase, GetDashboardUseCase, ListEventsUseCase } from '../../../application/use-cases/event.use-cases';
 import { TOKENS } from '../../../application/ports/tokens';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
@@ -13,6 +13,7 @@ import { PermissionsGuard } from '../guards/permissions.guard';
 export class DashboardController {
   constructor(
     @Inject(TOKENS.dashboardUseCase) private readonly dashboard: GetDashboardUseCase,
+    @Inject(TOKENS.listEventsUseCase) private readonly listEvents: ListEventsUseCase,
     @Inject(TOKENS.createEventUseCase) private readonly createEvent: CreateEventUseCase,
   ) {}
 
@@ -20,6 +21,12 @@ export class DashboardController {
   @RequirePermissions(PERMISSIONS.eventsRead)
   getDashboard(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
     return this.dashboard.execute(principal);
+  }
+
+  @Get('events')
+  @RequirePermissions(PERMISSIONS.eventsRead)
+  list(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.listEvents.execute(principal);
   }
 
   @Post('events')

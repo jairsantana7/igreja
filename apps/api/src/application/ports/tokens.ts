@@ -8,6 +8,7 @@ export const TOKENS = {
   loginUseCase: Symbol('LoginUseCase'),
   eventLoginUseCase: Symbol('EventLoginUseCase'),
   dashboardUseCase: Symbol('GetDashboardUseCase'),
+  listEventsUseCase: Symbol('ListEventsUseCase'),
   createEventUseCase: Symbol('CreateEventUseCase'),
   publicEventUseCase: Symbol('GetPublicEventUseCase'),
   signUpForEventUseCase: Symbol('SignUpForEventUseCase'),

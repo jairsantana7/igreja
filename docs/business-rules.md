@@ -14,6 +14,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O formulário aceita inicialmente texto curto, texto longo, seleção única e caixa de confirmação.
 - Um evento pode estar em `draft`, `published` ou `cancelled`.
 - Somente `published` é acessível pelo link público.
+- No MVP, um evento está aberto para inscrições quando está publicado, ainda não começou e seu prazo de inscrição não venceu.
 
 ## Inscrição
 
@@ -22,6 +23,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - A combinação membro/evento é única. Repetir a confirmação devolve a inscrição existente sem duplicar.
 - O backend valida campos obrigatórios e opções permitidas.
 - Capacidade esgotada, lista de espera e cancelamento ainda precisam de definição detalhada.
+- A contagem exibida na gestão representa inscrições confirmadas, não presença física no evento.
 
 ## Login social
 
@@ -36,6 +38,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quem pode editar/publicar além do pastor?
 - Quais regras valem para capacidade, convidados, pagamentos e cancelamento?
 - Quais dados e consentimentos LGPD são obrigatórios por formulário?
+- Como registrar presença real: check-in manual, código individual, QR Code ou outra forma?
 
 ## Acesso inicial
 

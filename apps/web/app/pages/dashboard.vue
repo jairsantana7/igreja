@@ -15,13 +15,13 @@ const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeSt
     </header>
 
     <section class="summary-grid" aria-label="Resumo">
-      <article class="summary-card"><span class="summary-icon green">◫</span><p>Próximos eventos</p><strong>{{ data?.events.filter((event: any) => new Date(event.startsAt) > new Date()).length ?? '—' }}</strong><small>programados</small></article>
+      <article class="summary-card"><span class="summary-icon green">◫</span><p>Eventos abertos</p><strong>{{ data?.events.filter((event: any) => event.registrationOpen).length ?? '—' }}</strong><small>recebendo inscrições</small></article>
       <article class="summary-card"><span class="summary-icon gold">✓</span><p>Inscrições</p><strong>{{ data?.events.reduce((total: number, event: any) => total + event.registrations, 0) ?? '—' }}</strong><small>confirmadas</small></article>
       <article class="summary-card"><span class="summary-icon blue">↗</span><p>Eventos publicados</p><strong>{{ data?.events.filter((event: any) => event.status === 'published').length ?? '—' }}</strong><small>com link ativo</small></article>
     </section>
 
     <section class="section-block">
-      <div class="section-heading"><div><h2>Seus eventos</h2><p class="muted">Crie, publique e acompanhe inscrições.</p></div></div>
+      <div class="section-heading"><div><h2>Seus eventos</h2><p class="muted">Crie, publique e acompanhe inscrições confirmadas.</p></div><NuxtLink to="/events" class="section-link">Ver todos →</NuxtLink></div>
       <div v-if="pending" class="empty-card">Carregando eventos…</div>
       <div v-else-if="error" class="empty-card"><p>Não foi possível carregar.</p><button class="button" @click="refresh()">Tentar novamente</button></div>
       <div v-else-if="!data?.events.length" class="empty-card"><span class="empty-icon">＋</span><h3>Seu primeiro evento começa aqui</h3><p>Defina os detalhes e monte o formulário de inscrição.</p><NuxtLink v-if="canCreate" to="/events/new" class="button button--primary">Criar evento</NuxtLink></div>

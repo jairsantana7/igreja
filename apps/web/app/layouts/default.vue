@@ -16,6 +16,9 @@ async function leave() {
         <NuxtLink to="/dashboard" class="nav-link" :class="{ active: route.path === '/dashboard' }">
           <span aria-hidden="true">⌂</span> Visão geral
         </NuxtLink>
+        <NuxtLink to="/events" class="nav-link" :class="{ active: route.path === '/events' }">
+          <span aria-hidden="true">◫</span> Eventos
+        </NuxtLink>
         <NuxtLink to="/events/new" class="nav-link" :class="{ active: route.path === '/events/new' }">
           <span aria-hidden="true">＋</span> Novo evento
         </NuxtLink>

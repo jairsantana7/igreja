@@ -7,8 +7,11 @@ export interface DashboardEvent {
   publicId: string;
   title: string;
   startsAt: string;
+  registrationDeadline: string | null;
   location: string;
   status: EventStatus;
+  registrationOpen: boolean;
+  capacity: number | null;
   registrations: number;
 }
 
@@ -34,6 +37,7 @@ export interface PublicEventView {
 
 export interface EventRepository {
   dashboard(principal: AuthenticatedPrincipal): Promise<DashboardView>;
+  list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]>;
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent>;
   findPublic(publicId: string): Promise<PublicEventView | null>;
 }

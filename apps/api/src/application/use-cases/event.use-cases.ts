@@ -16,6 +16,14 @@ export class GetDashboardUseCase {
   }
 }
 
+export class ListEventsUseCase {
+  constructor(private readonly events: EventRepository) {}
+  execute(principal: AuthenticatedPrincipal) {
+    requirePermission(principal, PERMISSIONS.eventsRead);
+    return this.events.list(principal);
+  }
+}
+
 export class CreateEventUseCase {
   constructor(private readonly events: EventRepository) {}
   execute(principal: AuthenticatedPrincipal, input: Parameters<typeof EventDraft.create>[0]) {

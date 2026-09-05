@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
-import { CreateEventUseCase, GetDashboardUseCase, GetPublicEventUseCase } from './application/use-cases/event.use-cases';
+import { CreateEventUseCase, GetDashboardUseCase, GetPublicEventUseCase, ListEventsUseCase } from './application/use-cases/event.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
 import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase } from './application/use-cases/access-control.use-cases';
@@ -61,6 +61,11 @@ import { RealIpThrottlerGuard } from './presentation/http/guards/real-ip-throttl
     {
       provide: TOKENS.dashboardUseCase,
       useFactory: (events: PostgresEventRepository) => new GetDashboardUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.listEventsUseCase,
+      useFactory: (events: PostgresEventRepository) => new ListEventsUseCase(events),
       inject: [TOKENS.eventRepository],
     },
     {
