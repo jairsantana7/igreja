@@ -16,7 +16,7 @@ async function login() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const response = await api<{ accessToken: string; user: any }>('/auth/login', {
+    const response = await api<{ sessionProof: string; user: any }>('/auth/login', {
       method: 'POST', body: { tenantSlug: tenantSlug.value, email: email.value, password: password.value },
     });
     auth.setSession(response);

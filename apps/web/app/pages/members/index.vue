@@ -22,6 +22,7 @@ const role = ref('all');
 const { data: members, pending, error, refresh } = await useAsyncData('members', () => api<Member[]>('/access/users'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('users.create')
   && auth.session.value?.user.permissions.includes('roles.read'));
+const canReadProfile = computed(() => auth.session.value?.user.permissions.includes('members.profile_read'));
 const roles = computed(() => {
   const byId = new Map<string, MemberRole>();
   for (const member of members.value ?? []) {
@@ -67,13 +68,14 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
       <div v-else-if="!filteredMembers.length" class="empty-card"><span class="empty-icon">♙</span><h3>Nenhum membro encontrado</h3><p>Altere os filtros para consultar outras pessoas.</p></div>
       <div v-else class="member-table-wrap">
         <table class="member-table">
-          <thead><tr><th>Membro</th><th>Papéis</th><th>Desde</th><th>Inscrições confirmadas</th></tr></thead>
+          <thead><tr><th>Membro</th><th>Papéis</th><th>Desde</th><th>Inscrições confirmadas</th><th v-if="canReadProfile">Perfil</th></tr></thead>
           <tbody>
             <tr v-for="member in filteredMembers" :key="member.id">
               <td><div class="member-identity"><span class="member-avatar">{{ member.name.charAt(0).toUpperCase() }}</span><span><strong>{{ member.name }}</strong><small>{{ member.email }}</small></span></div></td>
               <td><div class="role-list"><span v-for="item in member.roles" :key="item.id" class="role-chip">{{ item.name }}</span><span v-if="!member.roles.length" class="muted">Sem papel</span></div></td>
               <td>{{ dateFormatter.format(new Date(member.createdAt)) }}</td>
               <td><strong class="registration-total">{{ member.confirmedRegistrations }}</strong></td>
+              <td v-if="canReadProfile"><NuxtLink :to="`/members/${member.id}`" class="button button--small">Ver perfil</NuxtLink></td>
             </tr>
           </tbody>
         </table>

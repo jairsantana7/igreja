@@ -34,13 +34,13 @@ async function submit() {
     if (auth.session.value) {
       await confirmWithCurrentSession();
     } else if (mode.value === 'signup') {
-      const response = await api<{ accessToken: string; user: any }>(`/public/events/${publicId}/signup`, {
+      const response = await api<{ sessionProof: string; user: any }>(`/public/events/${publicId}/signup`, {
         method: 'POST', body: { name: name.value, email: email.value, password: password.value, answers: payloadAnswers() },
       });
       auth.setSession(response);
       confirmed.value = true;
     } else {
-      const response = await api<{ accessToken: string; user: any }>(`/public/events/${publicId}/login`, {
+      const response = await api<{ sessionProof: string; user: any }>(`/public/events/${publicId}/login`, {
         method: 'POST', body: { email: email.value, password: password.value },
       });
       auth.setSession(response);

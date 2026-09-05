@@ -28,6 +28,7 @@ const groupNames: Record<string, string> = {
   audit: 'Auditoria',
   conversations: 'Conversas',
   channels: 'Canais de conversa',
+  members: 'Perfis de membros',
 };
 const permissionGroups = computed(() => {
   const groups = new Map<string, PermissionOption[]>();

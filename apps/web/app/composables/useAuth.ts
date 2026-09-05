@@ -8,32 +8,38 @@ export interface SessionUser {
 }
 
 interface Session {
-  accessToken: string;
+  sessionProof: string;
   user: SessionUser;
 }
+
+const STORAGE_KEY = 'community.browser-session';
 
 export function useAuth() {
   const session = useState<Session | null>('session', () => null);
 
   function setSession(value: Session) {
     session.value = value;
-    if (import.meta.client) localStorage.setItem('igreja.session', JSON.stringify(value));
+    if (import.meta.client) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   }
 
   function hydrate() {
     if (!import.meta.client || session.value) return;
-    const stored = localStorage.getItem('igreja.session');
+    localStorage.removeItem('igreja.session');
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (!stored) return;
     try {
       session.value = JSON.parse(stored) as Session;
     } catch {
-      localStorage.removeItem('igreja.session');
+      sessionStorage.removeItem(STORAGE_KEY);
     }
   }
 
   function logout() {
     session.value = null;
-    if (import.meta.client) localStorage.removeItem('igreja.session');
+    if (import.meta.client) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('igreja.session');
+    }
   }
 
   return { session, setSession, hydrate, logout };
