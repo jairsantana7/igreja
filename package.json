@@ -4,6 +4,14 @@
   "private": true,
   "description": "Plataforma open source para gestão de comunidades, com Nuxt, NestJS e PostgreSQL RLS.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jairsantana7/igreja.git"
+  },
+  "homepage": "https://github.com/jairsantana7/igreja#readme",
+  "bugs": {
+    "url": "https://github.com/jairsantana7/igreja/issues"
+  },
   "packageManager": "pnpm@11.0.8",
   "engines": {
     "node": ">=22.19.0",
