@@ -55,7 +55,7 @@ Invariantes iniciais:
 
 A central operacional do evento reúne visão geral, inscrições, formulário, comunicação, check-in e auditoria sem deslocar regras para o controller. Presença, versões de formulário, campanhas e modelos possuem portas próprias na aplicação e adaptadores PostgreSQL independentes. O detalhe do evento apenas compõe essas capacidades no cliente Nuxt.
 
-Autenticação social entra pela porta `ExternalIdentityProvider`. Um adaptador futuro troca o código do provedor por uma identidade verificada e a vincula a `external_accounts`; o domínio não conhece detalhes OAuth/OIDC.
+Autenticação social entra pela porta `ExternalIdentityProvider`. O fluxo nasce na página pública do evento, preserva o evento de origem durante o callback e vincula a identidade verificada a `external_accounts`; o domínio não conhece detalhes OAuth/OIDC. A autenticação estabelece a sessão, mas a confirmação explícita da inscrição continua no caso de uso de eventos.
 
 ## Bounded context: Configurações da comunidade
 

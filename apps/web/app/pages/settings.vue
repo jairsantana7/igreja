@@ -87,7 +87,7 @@ async function save() {
     <div v-else-if="error" class="empty-card settings-loading"><p>Não foi possível carregar as configurações.</p><button class="button" @click="refresh()">Tentar novamente</button></div>
     <form v-else class="settings-form" @submit.prevent="save">
       <section class="settings-section">
-        <div class="settings-section__heading"><span class="settings-icon">◎</span><div><p class="eyebrow">Acesso</p><h2>Login pelas redes sociais</h2><p>Configure a intenção de uso. O botão de login só deve ser publicado quando o adaptador OIDC estiver instalado.</p></div></div>
+        <div class="settings-section__heading"><span class="settings-icon">◎</span><div><p class="eyebrow">Inscrição sem atrito</p><h2>Login social dos membros</h2><p>Habilite provedores para o membro entrar pelo convite do evento e continuar a confirmação de presença. O botão público só aparece quando o adaptador OIDC estiver instalado.</p></div></div>
 
         <div class="integration-grid">
           <article class="integration-card">

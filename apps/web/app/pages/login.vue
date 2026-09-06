@@ -65,7 +65,7 @@ async function login() {
         <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p>
         <button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? 'Entrando…' : 'Entrar no sistema' }}</button>
 
-        <div class="social-note"><span>Login social</span><p>Google e Microsoft poderão ser habilitados pelo administrador da instalação.</p></div>
+        <div class="social-note"><span>Acesso da equipe</span><p>Esta entrada é destinada à administração da comunidade. O acesso simplificado dos membros acontece pelo convite de cada evento.</p></div>
         <footer><span>Ambiente protegido</span><span>{{ config.public.appName }}</span></footer>
       </form>
     </section>

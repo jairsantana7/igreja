@@ -164,12 +164,17 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 
 ## Login social
 
+- O objetivo principal do login social é reduzir o atrito do membro na página pública do evento: autenticar, recuperar seu perfil e continuar a confirmação de presença no mesmo fluxo.
+- Os botões sociais pertencem ao cartão de inscrição do evento. Eles não são habilitados automaticamente no login administrativo da equipe.
+- O retorno do provedor deve preservar o evento de origem e levar o membro de volta à revisão de participantes, adicionais e respostas antes da confirmação final.
+- Autenticar socialmente não confirma presença sozinho. A inscrição somente é criada ou atualizada após a confirmação explícita do membro.
 - Provedores sociais são opcionais e configuráveis por implantação.
 - A aplicação só confia em e-mail/subject após validação OIDC no backend.
 - Admin e pastor podem configurar quais provedores sociais a comunidade pretende habilitar.
 - Ativar uma configuração não instala o adaptador: o login somente pode ser oferecido quando a implantação também disponibiliza um adaptador compatível.
 - Client secrets e tokens privados não são armazenados no banco; a configuração guarda somente a referência para uma variável de ambiente ou secret manager.
-- A vinculação automática por e-mail e regras para contas já existentes ainda precisam de decisão; até lá, nenhum adaptador social é habilitado por padrão.
+- Uma identidade externa já vinculada entra na conta existente. Para o primeiro acesso, a identidade verificada cria a conta de membro dentro da comunidade do evento.
+- Se o e-mail verificado já pertencer a uma conta sem o mesmo vínculo externo, o sistema não faz associação silenciosa; deve exigir autenticação da conta existente antes de vincular o provedor.
 
 ## Pagamentos
 

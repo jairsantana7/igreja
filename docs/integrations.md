@@ -5,6 +5,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 ## Contratos
 
 - Login social implementa `ExternalIdentityProvider` em `application/ports/authentication.port.ts`.
+- O adaptador de identidade é consumido pelo convite público do evento para autenticar o membro e devolvê-lo à confirmação; habilitar o provedor não implica login social na área administrativa.
 - MFA implementa `MultiFactorProvider`; o projeto não escolhe TOTP, passkey ou fornecedor pelo domínio.
 - Cobranças implementam `PaymentGateway` em `application/ports/payment-gateway.port.ts`.
 - Configurações dependem de `CommunitySettingsRepository`; o adaptador PostgreSQL não vaza para os casos de uso.
@@ -71,6 +72,8 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Mantenha allowlist exata de URLs de retorno.
 - Valide issuer, audience, assinatura, expiração e e-mail verificado no backend.
 - Não vincule contas existentes apenas pela coincidência de e-mail até a regra de negócio ser decidida.
+- Preserve o identificador público do evento em estado assinado e de uso único; nunca aceite tenant ou URL de retorno arbitrária no callback.
+- O callback cria a sessão, mas não registra presença. O membro ainda revisa e confirma a inscrição explicitamente.
 - Nunca envie tokens do provedor para logs ou para o frontend além do estritamente necessário ao protocolo.
 
 ## Segurança de pagamentos
@@ -84,4 +87,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. Ainda não há scheduler, adaptador de envio/recebimento, Embedded Signup, webhook, fila compartilhada, identidade externa, MFA ou pagamento instalado. Portanto nenhuma regra declara mensagem entregue até essas implementações.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. Ainda não há scheduler, adaptador de envio/recebimento, Embedded Signup, webhook, identidade externa, MFA ou pagamento instalado. Por isso, a página pública ainda não anuncia botões sociais e nenhuma regra declara mensagem entregue até os adaptadores correspondentes existirem.
