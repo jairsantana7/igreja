@@ -45,6 +45,7 @@ export class PublicEventMediaController {
 
   @Get(':publicId/media/:mediaId')
   @Header('Cache-Control', 'public, max-age=86400, immutable')
+  @Header('Cross-Origin-Resource-Policy', 'cross-origin')
   async show(
     @Param('publicId', new ParseUUIDPipe()) publicId: string,
     @Param('mediaId', new ParseUUIDPipe()) mediaId: string,
