@@ -15,6 +15,11 @@ export interface ManagedRegistrationView {
   registeredAt: string;
   checkedInAt: string | null;
   checkedInBy: string | null;
+  participants: Array<{
+    id: string; name: string; sourceType: 'registrant' | 'spouse' | 'child';
+    checkedInAt: string | null; checkedInBy: string | null;
+  }>;
+  offerings: Array<{ id: string; name: string; priceCents: number }>;
   answers: RegistrationAnswerView[];
 }
 
@@ -24,10 +29,18 @@ export interface CheckInView {
   checkedInBy: string;
 }
 
+export interface ParticipantCheckInView {
+  participantId: string;
+  checkedInAt: string | null;
+  checkedInBy: string | null;
+}
+
 export interface EventOperationsRepository {
   listRegistrations(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedRegistrationView[] | null>;
   checkIn(principal: AuthenticatedPrincipal, eventId: string, registrationId: string): Promise<CheckInView | null>;
   undoCheckIn(principal: AuthenticatedPrincipal, eventId: string, registrationId: string): Promise<boolean | null>;
+  checkInParticipant(principal: AuthenticatedPrincipal, eventId: string, registrationId: string, participantId: string): Promise<ParticipantCheckInView | null>;
+  undoParticipantCheckIn(principal: AuthenticatedPrincipal, eventId: string, registrationId: string, participantId: string): Promise<ParticipantCheckInView | null>;
 }
 
 export type CommunicationAudience = 'confirmed' | 'checked_in' | 'not_checked_in';

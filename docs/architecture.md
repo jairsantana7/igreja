@@ -79,6 +79,7 @@ A trilha usa paginação keyset pela ordenação imutável `(created_at DESC, id
 
 - **Comunicação:** modelos editoriais versionados são reutilizados por lembretes de eventos. Cada regra fixa a versão, o canal, o público e a antecedência; a entrega futura passa por scheduler, `JobQueue` e adaptadores de canal.
 - **Acompanhamento pastoral:** agrega a jornada de uma pessoa, seu responsável, etapa, etiquetas, próxima ação e notas internas. Conversas e eventos são referências; o quadro não depende do fornecedor de mensagens.
+- **Cadastro progressivo e inscrições:** a identidade continua individual; o perfil complementar fornece dados reutilizáveis e a inscrição registra fotografias dos participantes e dos adicionais escolhidos. Pagamento permanece atrás de `PaymentGateway` e não é inferido de uma seleção.
 - **Conversas:** canais, atendimentos e mensagens formam um bounded context próprio. `ConversationProvider` recebe/envia mensagens e `JobQueue` desacopla a entrega; eventos apenas fornecem um vínculo opcional.
 - **Templates do WhatsApp:** `WhatsAppTemplateProvider` consulta o fornecedor e `WhatsAppTemplateRepository` mantém uma projeção por canal. Casos de uso conhecem status e componentes, mas não conhecem URLs, tokens ou detalhes da Graph API.
 - **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.

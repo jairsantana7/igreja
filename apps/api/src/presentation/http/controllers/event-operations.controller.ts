@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Par
 import { TOKENS } from '../../../application/ports/tokens';
 import type {
   CheckInRegistrationUseCase,
+  CheckInParticipantUseCase,
   CreateEventCommunicationUseCase,
   CreateEventTemplateUseCase,
   ListEventCommunicationsUseCase,
@@ -9,6 +10,7 @@ import type {
   ListEventTemplatesUseCase,
   QueueEventCommunicationUseCase,
   UndoRegistrationCheckInUseCase,
+  UndoParticipantCheckInUseCase,
 } from '../../../application/use-cases/event-operations.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
@@ -24,6 +26,8 @@ export class EventOperationsController {
     @Inject(TOKENS.listEventRegistrationsUseCase) private readonly listRegistrations: ListEventRegistrationsUseCase,
     @Inject(TOKENS.checkInRegistrationUseCase) private readonly checkIn: CheckInRegistrationUseCase,
     @Inject(TOKENS.undoRegistrationCheckInUseCase) private readonly undoCheckIn: UndoRegistrationCheckInUseCase,
+    @Inject(TOKENS.checkInParticipantUseCase) private readonly checkInParticipant: CheckInParticipantUseCase,
+    @Inject(TOKENS.undoParticipantCheckInUseCase) private readonly undoParticipantCheckIn: UndoParticipantCheckInUseCase,
     @Inject(TOKENS.listEventCommunicationsUseCase) private readonly listCommunications: ListEventCommunicationsUseCase,
     @Inject(TOKENS.createEventCommunicationUseCase) private readonly createCommunication: CreateEventCommunicationUseCase,
     @Inject(TOKENS.queueEventCommunicationUseCase) private readonly queueCommunication: QueueEventCommunicationUseCase,
@@ -56,6 +60,29 @@ export class EventOperationsController {
     @Param('registrationId', new ParseUUIDPipe()) registrationId: string,
   ) {
     return this.undoCheckIn.execute(principal, eventId, registrationId);
+  }
+
+  @Post('events/:eventId/registrations/:registrationId/participants/:participantId/check-in')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.eventsCheckin)
+  confirmParticipantCheckIn(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('registrationId', new ParseUUIDPipe()) registrationId: string,
+    @Param('participantId', new ParseUUIDPipe()) participantId: string,
+  ) {
+    return this.checkInParticipant.execute(principal, eventId, registrationId, participantId);
+  }
+
+  @Delete('events/:eventId/registrations/:registrationId/participants/:participantId/check-in')
+  @RequirePermissions(PERMISSIONS.eventsCheckin)
+  removeParticipantCheckIn(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+    @Param('registrationId', new ParseUUIDPipe()) registrationId: string,
+    @Param('participantId', new ParseUUIDPipe()) participantId: string,
+  ) {
+    return this.undoParticipantCheckIn.execute(principal, eventId, registrationId, participantId);
   }
 
   @Get('events/:eventId/communications')

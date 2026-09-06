@@ -33,6 +33,14 @@ export interface EventFormField {
   options: string[];
 }
 
+export interface EventOffering {
+  id?: string;
+  key: string;
+  name: string;
+  description: string;
+  priceCents: number;
+}
+
 export interface EventDraftProps {
   title: string;
   description: string;
@@ -41,8 +49,10 @@ export interface EventDraftProps {
   registrationDeadline?: Date;
   capacity?: number;
   mediaDisplayMode: EventMediaDisplayMode;
+  familyRegistrationEnabled: boolean;
   publish: boolean;
   fields: EventFormField[];
+  offerings: EventOffering[];
 }
 
 export class EventDraft {
@@ -76,12 +86,30 @@ export class EventDraft {
       return { ...field, key, label, options: field.options.map((option) => option.trim()).filter(Boolean) };
     });
 
+    const offeringKeys = new Set<string>();
+    const offerings = input.offerings.map((offering) => {
+      const key = offering.key.trim().toLowerCase();
+      const name = offering.name.trim();
+      const description = offering.description.trim();
+      if (!/^[a-z][a-z0-9_]{1,62}$/.test(key)) throw new DomainError(`A chave do adicional “${offering.key}” é inválida.`);
+      if (offeringKeys.has(key)) throw new DomainError(`A chave do adicional “${key}” está duplicada.`);
+      if (name.length < 2 || name.length > 120) throw new DomainError('O nome do adicional deve ter entre 2 e 120 caracteres.');
+      if (description.length > 1_000) throw new DomainError('A descrição do adicional deve ter no máximo 1.000 caracteres.');
+      if (!Number.isInteger(offering.priceCents) || offering.priceCents < 0 || offering.priceCents > 100_000_000) {
+        throw new DomainError('O preço do adicional é inválido.');
+      }
+      offeringKeys.add(key);
+      return { ...offering, key, name, description };
+    });
+    if (offerings.length > 20) throw new DomainError('Um evento aceita no máximo 20 adicionais.');
+
     return new EventDraft({
       ...input,
       title,
       description: input.description.trim(),
       location: input.location.trim(),
       fields,
+      offerings,
     });
   }
 }

@@ -126,6 +126,22 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Alterações exigem `followups.manage` e acesso ao acompanhamento. Notas exigem adicionalmente `followups.notes_read` ou `followups.notes_manage`; administrar etapas e etiquetas exige `followups.pipeline_manage`.
 - A interface descreve essas capacidades em linguagem do negócio; as chaves técnicas aparecem somente na administração de acessos.
 
+## Cadastro progressivo, família e participantes do evento
+
+- A conta representa uma pessoa individual. Nome e e-mail não são compartilhados por um casal ou família.
+- Telefone, data de nascimento, endereço, nome do cônjuge, data de casamento e filhos formam um perfil complementar opcional e reutilizável.
+- Quando o evento habilita inscrição familiar, o responsável pela inscrição assinala quais pessoas irão: ele próprio, cônjuge e filhos já apresentados no perfil.
+- A inscrição pertence ao responsável, mas cada pessoa assinalada vira um participante do evento. A lista guarda uma fotografia do nome e da relação no momento da confirmação.
+- O responsável pode corrigir seu perfil durante a inscrição; os dados salvos serão sugeridos em eventos futuros para evitar perguntas repetidas.
+- Deve existir ao menos um participante por inscrição. Em eventos sem seleção familiar, a própria pessoa autenticada é confirmada automaticamente.
+- Não haverá no MVP convite, aprovação do cônjuge ou conciliação complexa entre confirmações feitas pelas duas pessoas do casal. A família coordena quem fará a confirmação.
+- Capacidade e total de pessoas consideram participantes confirmados, não apenas a quantidade de inscrições.
+- A presença pode ser registrada por participante. A ação de check-in da inscrição inteira continua disponível como atalho para marcar ou desmarcar todo o grupo.
+- Um evento pode oferecer itens opcionais, como café da manhã. Não selecionar o item nunca impede a confirmação do evento.
+- Preço de adicional é guardado em centavos. A seleção não comprova pagamento; cobrança, conciliação e reembolso continuam pertencendo ao contexto futuro de pagamentos.
+- Quando houver PIX manual habilitado, a página apresenta os dados públicos do recebedor após uma confirmação que tenha adicional pago selecionado. Segredos de gateway nunca entram na resposta pública.
+- Perfil, participantes e seleções pertencem à comunidade, usam RLS e não aceitam `tenant_id` fornecido pelo cliente.
+
 ## Modelos e recorrência
 
 - Um evento pode ser salvo como modelo reutilizável contendo dados editoriais e o formulário, sem inscrições, auditoria ou identificadores públicos.
@@ -212,6 +228,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 
 - Um evento pode receber várias imagens durante sua criação.
 - O modo `hero` usa a primeira imagem como capa ampla; `carousel` apresenta todas as imagens em uma galeria navegável; `fixed` usa a primeira imagem como fundo fixo da página pública.
+- Na página pública, a capa `hero` ocupa a primeira viewport e o formulário aparece sobreposto na lateral em telas amplas. Formulários longos rolam dentro do cartão; em telas menores, o cartão passa para baixo do resumo do evento.
 - A interpretação dos modos é uma decisão inicial de apresentação e pode evoluir sem alterar a propriedade dos arquivos.
 - O binário não fica no PostgreSQL. `event_media` guarda metadados e uma chave opaca do adaptador de armazenamento.
 - Upload exige `events.update`, valida tipo e assinatura JPEG, PNG ou WebP e limita cada arquivo a 5 MiB por segurança operacional.

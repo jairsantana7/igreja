@@ -3,7 +3,7 @@ type EventStatus = 'draft' | 'published' | 'registration_closed' | 'cancelled' |
 interface ManagedEvent {
   id: string; publicId: string; title: string; description: string; startsAt: string; registrationDeadline: string | null;
   location: string; status: EventStatus; registrationOpen: boolean; capacity: number | null; registrations: number;
-  attendance: number; currentFormVersion: number; mediaDisplayMode: string;
+  participants: number; attendance: number; currentFormVersion: number; mediaDisplayMode: string;
   owner: { id: string; name: string };
   collaborators: Array<{ id: string; name: string; email: string }>;
   fields: Array<{ id: string; key: string; label: string; type: string; required: boolean; options: string[] }>;
@@ -12,6 +12,8 @@ interface CollaboratorCandidate { id: string; name: string; email: string }
 interface Registration {
   id: string; member: { id: string; name: string; email: string }; status: 'confirmed' | 'cancelled'; formVersion: number;
   registeredAt: string; checkedInAt: string | null; checkedInBy: string | null;
+  participants: Array<{ id: string; name: string; sourceType: 'registrant' | 'spouse' | 'child'; checkedInAt: string | null; checkedInBy: string | null }>;
+  offerings: Array<{ id: string; name: string; priceCents: number }>;
   answers: Array<{ fieldId: string; label: string; value: unknown }>;
 }
 interface Communication {
@@ -107,8 +109,9 @@ const activeWhatsAppTemplates = computed(() => (messageTemplates.value ?? []).fi
 const availableReminderChannels = computed(() => (reminderChannels.value ?? []).filter((item) => item.status !== 'disconnected'));
 const filteredRegistrations = computed(() => (registrations.value ?? []).filter((registration) => {
   const term = search.value.toLowerCase().trim();
-  const matchesText = !term || registration.member.name.toLowerCase().includes(term) || registration.member.email.toLowerCase().includes(term);
-  const matchesStatus = registrationFilter.value === 'all' || (registrationFilter.value === 'present' ? Boolean(registration.checkedInAt) : !registration.checkedInAt);
+  const matchesText = !term || registration.member.name.toLowerCase().includes(term) || registration.member.email.toLowerCase().includes(term) || registration.participants.some((person) => person.name.toLowerCase().includes(term));
+  const hasAttendance = registration.participants.some((person) => person.checkedInAt);
+  const matchesStatus = registrationFilter.value === 'all' || (registrationFilter.value === 'present' ? hasAttendance : !hasAttendance);
   return matchesText && matchesStatus;
 }));
 watch(event, (value) => { selectedCollaborators.value = value?.collaborators.map((item) => item.id) ?? []; }, { immediate: true });
@@ -173,6 +176,25 @@ async function toggleCheckIn(registration: Registration) {
   finally { busyId.value = null; }
 }
 
+async function toggleParticipantCheckIn(registration: Registration, participant: Registration['participants'][number]) {
+  busyId.value = participant.id; feedback.value = '';
+  try {
+    await api(`/events/${eventId}/registrations/${registration.id}/participants/${participant.id}/check-in`, {
+      method: participant.checkedInAt ? 'DELETE' : 'POST',
+    });
+    await Promise.all([refreshRegistrations(), refresh()]);
+  } catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível atualizar a presença desta pessoa.'; }
+  finally { busyId.value = null; }
+}
+
+function checkedParticipantCount(registration: Registration) {
+  return registration.participants.filter((person) => person.checkedInAt).length;
+}
+
+function allParticipantsChecked(registration: Registration) {
+  return Boolean(registration.participants.length) && checkedParticipantCount(registration) === registration.participants.length;
+}
+
 async function saveTemplate() {
   if (!templateName.value.trim()) return;
   busyId.value = 'template'; feedback.value = '';
@@ -210,9 +232,9 @@ async function queueCommunication(item: Communication) {
 
 function exportCsv() {
   const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
-  const rows = [['Nome', 'E-mail', 'Situação', 'Presença', 'Inscrição', 'Versão do formulário']];
+  const rows = [['Responsável', 'E-mail', 'Participantes', 'Opções', 'Situação', 'Presença', 'Inscrição', 'Versão do formulário']];
   for (const item of filteredRegistrations.value) rows.push([
-    item.member.name, item.member.email, item.status === 'confirmed' ? 'Confirmada' : 'Cancelada',
+    item.member.name, item.member.email, item.participants.map((person) => person.name).join(', '), item.offerings.map((offering) => offering.name).join(', '), item.status === 'confirmed' ? 'Confirmada' : 'Cancelada',
     item.checkedInAt ? 'Presente' : 'Não registrado', formatter.format(new Date(item.registeredAt)), String(item.formVersion),
   ]);
   const blob = new Blob([`\uFEFF${rows.map((row) => row.map(escape).join(';')).join('\n')}`], { type: 'text/csv;charset=utf-8' });
@@ -244,7 +266,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
       </nav>
 
       <section v-if="activeTab === 'overview'" class="operation-panel">
-        <div class="operation-metrics"><article><span>Inscrições</span><strong>{{ event.registrations }}</strong><small v-if="event.capacity">de {{ event.capacity }} vagas</small><small v-else>sem limite informado</small></article><article><span>Presenças</span><strong>{{ event.attendance }}</strong><small>{{ event.registrations ? Math.round(event.attendance / event.registrations * 100) : 0 }}% dos inscritos</small></article><article><span>Ausências</span><strong>{{ Math.max(event.registrations - event.attendance, 0) }}</strong><small>sem check-in</small></article></div>
+        <div class="operation-metrics"><article><span>Inscrições</span><strong>{{ event.registrations }}</strong><small>{{ event.participants }} {{ event.participants === 1 ? 'pessoa confirmada' : 'pessoas confirmadas' }}</small></article><article><span>Presenças</span><strong>{{ event.attendance }}</strong><small>{{ event.participants ? Math.round(event.attendance / event.participants * 100) : 0 }}% dos participantes</small></article><article><span>Ausências</span><strong>{{ Math.max(event.participants - event.attendance, 0) }}</strong><small>pessoas sem check-in</small></article></div>
         <div class="operation-grid">
           <article class="operation-card"><p class="eyebrow">Ciclo de vida</p><h2>Operação do evento</h2><p>Controle a abertura das inscrições e marque o evento como concluído sem perder o histórico.</p><div class="operation-actions"><button v-if="canPublish && event.status === 'published'" class="button" :disabled="Boolean(busyId)" @click="changeLifecycle('close-registrations')">Fechar inscrições</button><button v-if="canPublish && ['published', 'registration_closed'].includes(event.status)" class="button button--primary" :disabled="Boolean(busyId)" @click="changeLifecycle('complete')">Concluir evento</button></div></article>
           <article v-if="canTemplate" class="operation-card"><p class="eyebrow">Reutilização</p><h2>Salvar como modelo</h2><p>Reaproveite descrição, local, capacidade e formulário em um novo evento.</p><form class="inline-operation-form" @submit.prevent="saveTemplate"><label class="field"><span>Nome do modelo</span><input v-model="templateName" maxlength="120" placeholder="Ex.: Encontro mensal" required></label><button class="button" :disabled="busyId === 'template'">Salvar modelo</button></form></article>
@@ -256,7 +278,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
         <div class="operation-toolbar"><div><h2>Inscrições e presença</h2><p>{{ filteredRegistrations.length }} registros neste filtro</p></div><button class="button" @click="exportCsv">⇩ Exportar CSV</button></div>
         <div class="registration-controls"><label class="search-field"><span>⌕</span><input v-model="search" placeholder="Buscar por nome ou e-mail"></label><div class="filter-bar"><button v-for="option in [{ key: 'all', label: 'Todos' }, { key: 'present', label: 'Presentes' }, { key: 'absent', label: 'Sem check-in' }]" :key="option.key" :class="{ active: registrationFilter === option.key }" @click="registrationFilter = option.key as typeof registrationFilter">{{ option.label }}</button></div></div>
         <div v-if="!filteredRegistrations.length" class="empty-card"><span class="empty-icon">✓</span><h3>Nenhuma inscrição neste filtro</h3><p>As confirmações aparecerão aqui.</p></div>
-        <div v-else class="registration-operations-list"><article v-for="registration in filteredRegistrations" :key="registration.id" class="registration-operation"><span class="member-avatar">{{ registration.member.name.charAt(0).toUpperCase() }}</span><div class="registration-operation__identity"><strong>{{ registration.member.name }}</strong><small>{{ registration.member.email }} · inscrição {{ formatter.format(new Date(registration.registeredAt)) }}</small><details v-if="registration.answers.length"><summary>Ver respostas · formulário v{{ registration.formVersion }}</summary><dl><div v-for="answer in registration.answers" :key="answer.fieldId"><dt>{{ answer.label }}</dt><dd>{{ answerText(answer.value) }}</dd></div></dl></details></div><div class="attendance-state" :class="{ present: registration.checkedInAt }"><strong>{{ registration.checkedInAt ? 'Presente' : 'Aguardando' }}</strong><small v-if="registration.checkedInAt">{{ formatter.format(new Date(registration.checkedInAt)) }}<template v-if="registration.checkedInBy"> · {{ registration.checkedInBy }}</template></small><small v-else>check-in não realizado</small></div><button v-if="canCheckIn && registration.status === 'confirmed'" class="button button--small" :class="registration.checkedInAt ? 'button--danger' : 'button--primary'" :disabled="busyId === registration.id" @click="toggleCheckIn(registration)">{{ registration.checkedInAt ? 'Desfazer' : 'Fazer check-in' }}</button></article></div>
+        <div v-else class="registration-operations-list"><article v-for="registration in filteredRegistrations" :key="registration.id" class="registration-operation"><span class="member-avatar">{{ registration.member.name.charAt(0).toUpperCase() }}</span><div class="registration-operation__identity"><strong>{{ registration.member.name }}</strong><small>{{ registration.member.email }} · inscrição {{ formatter.format(new Date(registration.registeredAt)) }}</small><div v-if="registration.participants.length" class="registration-participants"><button v-for="person in registration.participants" :key="person.id" type="button" :class="{ checked: person.checkedInAt }" :disabled="!canCheckIn || busyId === person.id" :title="person.checkedInAt ? 'Desfazer presença' : 'Confirmar presença'" @click="toggleParticipantCheckIn(registration, person)">{{ person.name }}<b>{{ person.checkedInAt ? ' ✓' : ' +' }}</b></button></div><p v-if="registration.offerings.length" class="registration-offerings">Opções: {{ registration.offerings.map((offering) => offering.name).join(' · ') }}</p><details v-if="registration.answers.length"><summary>Ver respostas · formulário v{{ registration.formVersion }}</summary><dl><div v-for="answer in registration.answers" :key="answer.fieldId"><dt>{{ answer.label }}</dt><dd>{{ answerText(answer.value) }}</dd></div></dl></details></div><div class="attendance-state" :class="{ present: checkedParticipantCount(registration) }"><strong>{{ checkedParticipantCount(registration) }}/{{ registration.participants.length || 1 }} presentes</strong><small>{{ checkedParticipantCount(registration) ? 'Presença registrada por pessoa' : 'check-in não realizado' }}</small></div><button v-if="canCheckIn && registration.status === 'confirmed'" class="button button--small" :class="allParticipantsChecked(registration) ? 'button--danger' : 'button--primary'" :disabled="busyId === registration.id" @click="toggleCheckIn({ ...registration, checkedInAt: allParticipantsChecked(registration) ? registration.checkedInAt || new Date().toISOString() : null })">{{ allParticipantsChecked(registration) ? 'Desfazer todos' : 'Confirmar todos' }}</button></article></div>
       </section>
 
       <section v-else-if="activeTab === 'form'" class="operation-panel"><div class="operation-toolbar"><div><h2>Formulário de inscrição</h2><p>Versão atual {{ event.currentFormVersion }} · novas confirmações guardam esta versão.</p></div><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="button">Editar formulário</NuxtLink></div><div v-if="!event.fields.length" class="empty-card"><span class="empty-icon">☷</span><h3>Sem perguntas adicionais</h3><p>Nome e e-mail continuam sendo coletados pela conta.</p></div><ol v-else class="form-version-list"><li v-for="(field, index) in event.fields" :key="field.id"><span>{{ index + 1 }}</span><div><strong>{{ field.label }}</strong><small>{{ typeLabels[field.type] ?? field.type }} · {{ field.required ? 'Obrigatório' : 'Opcional' }}</small><p v-if="field.options.length">{{ field.options.join(' · ') }}</p></div></li></ol></section>

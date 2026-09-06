@@ -22,6 +22,8 @@ const editableEvent = {
   registrationDeadline: undefined,
   capacity: undefined,
   mediaDisplayMode: 'hero' as const,
+  familyRegistrationEnabled: false,
+  offerings: [],
   fields: [],
 };
 

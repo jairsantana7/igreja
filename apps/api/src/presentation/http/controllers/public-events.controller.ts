@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { TOKENS } from '../../../application/ports/tokens';
 import type { LoginUseCase } from '../../../application/use-cases/login.use-case';
 import type { GetPublicEventUseCase } from '../../../application/use-cases/event.use-cases';
-import type { RegisterForEventUseCase, SignUpForEventUseCase } from '../../../application/use-cases/registration.use-cases';
+import type { GetEventRegistrationContextUseCase, RegisterForEventUseCase, SignUpForEventUseCase } from '../../../application/use-cases/registration.use-cases';
 import type { AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { EventLoginDto, EventSignUpDto, RegistrationDto } from '../dto/auth.dto';
@@ -21,6 +21,7 @@ export class PublicEventsController {
     @Inject(TOKENS.loginUseCase) private readonly login: LoginUseCase,
     @Inject(TOKENS.signUpForEventUseCase) private readonly signUp: SignUpForEventUseCase,
     @Inject(TOKENS.registerForEventUseCase) private readonly register: RegisterForEventUseCase,
+    @Inject(TOKENS.getEventRegistrationContextUseCase) private readonly registrationContext: GetEventRegistrationContextUseCase,
   ) {}
 
   @Get(':publicId')
@@ -51,6 +52,16 @@ export class PublicEventsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: RegistrationDto,
   ) {
-    return this.register.execute(principal, publicId, dto.answers);
+    return this.register.execute(principal, publicId, dto);
+  }
+
+  @Get(':publicId/registration-context')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.eventsRegister)
+  context(
+    @Param('publicId', new ParseUUIDPipe()) publicId: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.registrationContext.execute(principal, publicId);
   }
 }

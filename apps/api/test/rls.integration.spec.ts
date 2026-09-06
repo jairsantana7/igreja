@@ -34,6 +34,10 @@ const followupTagA = 'a1100000-0000-4000-8000-000000000001';
 const followupTagB = 'b1100000-0000-4000-8000-000000000002';
 const followupA = 'a1200000-0000-4000-8000-000000000001';
 const followupB = 'b1200000-0000-4000-8000-000000000002';
+const offeringA = 'a1300000-0000-4000-8000-000000000001';
+const offeringB = 'b1300000-0000-4000-8000-000000000002';
+const participantA = 'a1400000-0000-4000-8000-000000000001';
+const participantB = 'b1400000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -83,6 +87,20 @@ describeDatabase('PostgreSQL RLS', () => {
       INSERT INTO event_registrations (id, tenant_id, event_id, user_id, form_version) VALUES
         ('${registrationA}', '${tenantA}', '${eventA}', '${userA}', 1),
         ('${registrationB}', '${tenantB}', '${eventB}', '${userB}', 1)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO event_offerings (id, tenant_id, event_id, offering_key, name, price_cents, position) VALUES
+        ('${offeringA}', '${tenantA}', '${eventA}', 'cafe_a', 'Café A', 2500, 0),
+        ('${offeringB}', '${tenantB}', '${eventB}', 'cafe_b', 'Café B', 2500, 0)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO event_registration_participants (
+        id, tenant_id, event_id, registration_id, source_type, name, position
+      ) VALUES
+        ('${participantA}', '${tenantA}', '${eventA}', '${registrationA}', 'registrant', 'User A', 0),
+        ('${participantB}', '${tenantB}', '${eventB}', '${registrationB}', 'registrant', 'User B', 0)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO registration_offering_selections (tenant_id, event_id, registration_id, offering_id) VALUES
+        ('${tenantA}', '${eventA}', '${registrationA}', '${offeringA}'),
+        ('${tenantB}', '${eventB}', '${registrationB}', '${offeringB}')
       ON CONFLICT DO NOTHING;
       INSERT INTO conversation_channels (id, tenant_id, owner_user_id, provider_key, display_name, phone_number) VALUES
         ('${channelA}', '${tenantA}', '${userA}', 'whatsapp_cloud', 'Canal A', '+551100000001'),
@@ -160,7 +178,10 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM auth_sessions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_collaborators WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_check_ins WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM registration_offering_selections WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_registration_participants WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_registrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_offerings WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_form_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_media WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM events WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -205,6 +226,9 @@ describeDatabase('PostgreSQL RLS', () => {
     expect((await runtime.query('SELECT id FROM event_reminder_rules')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM pastoral_followups')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM followup_notes')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM event_offerings')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM event_registration_participants')).rows).toEqual([]);
+    expect((await runtime.query('SELECT offering_id FROM registration_offering_selections')).rows).toEqual([]);
     await expect(runtime.query(
       "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Sem contexto', 'sem-contexto@test.local')",
       [tenantA],
@@ -262,6 +286,12 @@ describeDatabase('PostgreSQL RLS', () => {
         await expect(client.query(`
           INSERT INTO followup_tag_assignments (tenant_id, followup_id, tag_id) VALUES ($1, $2, $3)
         `, [tenantA, followupA, followupTagB])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO registration_offering_selections (tenant_id, event_id, registration_id, offering_id)
+          VALUES ($1, $2, $3, $4)
+        `, [tenantA, eventA, registrationA, offeringB])).rejects.toThrow();
       });
     } finally { client.release(); }
   });
@@ -371,6 +401,21 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('participantes e adicionais da inscrição não atravessam comunidades', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id FROM event_offerings')).rows).toEqual([{ id: offeringA }]);
+        expect((await client.query('SELECT id FROM event_registration_participants')).rows).toEqual([{ id: participantA }]);
+        expect((await client.query('SELECT offering_id FROM registration_offering_selections')).rows).toEqual([{ offering_id: offeringA }]);
+      });
+      expect((await client.query('SELECT id FROM event_offerings')).rows).toEqual([]);
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('DELETE FROM event_registration_participants WHERE id = $1', [participantB])).rowCount).toBe(0);
+      });
+    } finally { client.release(); }
+  });
+
   it('auditoria é isolada por tenant e imutável para o runtime', async () => {
     const client = await runtime.connect();
     try {
@@ -408,7 +453,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

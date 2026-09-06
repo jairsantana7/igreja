@@ -30,7 +30,8 @@ export class CreateEventUseCase {
     requirePermission(principal, PERMISSIONS.eventsCreate);
     if (input.publish) requirePermission(principal, PERMISSIONS.eventsPublish);
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
-    return this.events.create(principal, EventDraft.create({ ...input, fields }));
+    const offerings = input.offerings.map((offering, index) => ({ ...offering, key: offering.key || `adicional_${index + 1}_${randomUUID().slice(0, 6)}` }));
+    return this.events.create(principal, EventDraft.create({ ...input, fields, offerings }));
   }
 }
 
@@ -49,7 +50,8 @@ export class UpdateEventUseCase {
   execute(principal: AuthenticatedPrincipal, eventId: string, input: Omit<Parameters<typeof EventDraft.create>[0], 'publish'>) {
     requirePermission(principal, PERMISSIONS.eventsUpdate);
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
-    return this.events.update(principal, eventId, EventDraft.create({ ...input, publish: false, fields }));
+    const offerings = input.offerings.map((offering, index) => ({ ...offering, key: offering.key || `adicional_${index + 1}_${randomUUID().slice(0, 6)}` }));
+    return this.events.update(principal, eventId, EventDraft.create({ ...input, publish: false, fields, offerings }));
   }
 }
 

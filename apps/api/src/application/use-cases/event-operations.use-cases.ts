@@ -37,6 +37,26 @@ export class UndoRegistrationCheckInUseCase {
   }
 }
 
+export class CheckInParticipantUseCase {
+  constructor(private readonly operations: EventOperationsRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string, registrationId: string, participantId: string) {
+    requirePermission(principal, PERMISSIONS.eventsCheckin);
+    const checkIn = await this.operations.checkInParticipant(principal, eventId, registrationId, participantId);
+    if (!checkIn) throw new NotFoundError('Participante não encontrado nesta inscrição.');
+    return checkIn;
+  }
+}
+
+export class UndoParticipantCheckInUseCase {
+  constructor(private readonly operations: EventOperationsRepository) {}
+  async execute(principal: AuthenticatedPrincipal, eventId: string, registrationId: string, participantId: string) {
+    requirePermission(principal, PERMISSIONS.eventsCheckin);
+    const checkIn = await this.operations.undoParticipantCheckIn(principal, eventId, registrationId, participantId);
+    if (!checkIn) throw new NotFoundError('Participante não encontrado nesta inscrição.');
+    return checkIn;
+  }
+}
+
 export class ListEventCommunicationsUseCase {
   constructor(private readonly communications: EventCommunicationRepository) {}
   async execute(principal: AuthenticatedPrincipal, eventId: string) {

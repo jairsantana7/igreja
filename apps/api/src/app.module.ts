@@ -3,9 +3,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
 import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
-import { CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
+import { CheckInParticipantUseCase, CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoParticipantCheckInUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
-import { RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
+import { GetEventRegistrationContextUseCase, RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
 import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from './application/use-cases/access-control.use-cases';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { PostgresAuthenticationRepository } from './infrastructure/repositories/postgres-authentication.repository';
@@ -252,6 +252,16 @@ import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFo
       inject: [TOKENS.eventOperationsRepository],
     },
     {
+      provide: TOKENS.checkInParticipantUseCase,
+      useFactory: (operations: PostgresEventOperationsRepository) => new CheckInParticipantUseCase(operations),
+      inject: [TOKENS.eventOperationsRepository],
+    },
+    {
+      provide: TOKENS.undoParticipantCheckInUseCase,
+      useFactory: (operations: PostgresEventOperationsRepository) => new UndoParticipantCheckInUseCase(operations),
+      inject: [TOKENS.eventOperationsRepository],
+    },
+    {
       provide: TOKENS.listEventCommunicationsUseCase,
       useFactory: (communications: PostgresEventCommunicationRepository) => new ListEventCommunicationsUseCase(communications),
       inject: [TOKENS.eventCommunicationRepository],
@@ -332,6 +342,12 @@ import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFo
       provide: TOKENS.registerForEventUseCase,
       useFactory: (publicEvents: GetPublicEventUseCase, registrations: PostgresRegistrationRepository) =>
         new RegisterForEventUseCase(publicEvents, registrations),
+      inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository],
+    },
+    {
+      provide: TOKENS.getEventRegistrationContextUseCase,
+      useFactory: (publicEvents: GetPublicEventUseCase, registrations: PostgresRegistrationRepository) =>
+        new GetEventRegistrationContextUseCase(publicEvents, registrations),
       inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository],
     },
     {

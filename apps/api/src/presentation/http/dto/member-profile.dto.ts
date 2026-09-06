@@ -17,7 +17,10 @@ export class MemberChildDto {
 }
 
 export class UpdateMemberProfileDto {
+  @IsOptional() @IsString() @Length(8, 32) phone?: string;
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) birthDate?: string;
+  @IsOptional() @IsString() @Length(2, 120) spouseName?: string;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) marriageDate?: string;
   @IsOptional() @ValidateNested() @Type(() => MemberAddressDto) address?: MemberAddressDto;
   @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => MemberChildDto)
   children: MemberChildDto[] = [];

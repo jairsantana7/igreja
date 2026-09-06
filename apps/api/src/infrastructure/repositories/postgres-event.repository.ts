@@ -15,6 +15,7 @@ interface EventRow {
   status: DashboardEvent['status'];
   capacity: number | null;
   registrations: string;
+  participants: string;
   attendance: string;
   created_by_user_id: string;
   owner_name: string;
@@ -24,6 +25,7 @@ interface ManagedEventRow extends EventRow {
   description: string;
   media_display_mode: EventMediaDisplayMode;
   current_form_version: number;
+  family_registration_enabled: boolean;
 }
 
 export class PostgresEventRepository implements EventRepository {
@@ -80,6 +82,10 @@ export class PostgresEventRepository implements EventRepository {
         WHERE event_collaborators.event_id = $1
         ORDER BY users.name
       `, [eventId]);
+      const offerings = await client.query<{ id: string; offering_key: string; name: string; description: string; price_cents: number }>(`
+        SELECT id, offering_key, name, description, price_cents
+        FROM event_offerings WHERE event_id = $1 AND active ORDER BY position, id
+      `, [eventId]);
       return {
         ...this.mapEvent(event),
         description: event.description,
@@ -93,6 +99,11 @@ export class PostgresEventRepository implements EventRepository {
           required: field.required,
           options: field.options,
         })),
+        familyRegistrationEnabled: event.family_registration_enabled,
+        offerings: offerings.rows.map((offering) => ({
+          id: offering.id, key: offering.offering_key, name: offering.name,
+          description: offering.description, priceCents: offering.price_cents,
+        })),
         collaborators: collaborators.rows,
       };
     });
@@ -105,10 +116,11 @@ export class PostgresEventRepository implements EventRepository {
       const eventResult = await client.query<EventRow>(`
         INSERT INTO events (
           tenant_id, created_by_user_id, slug, title, description, location,
-          starts_at, registration_deadline, capacity, media_display_mode, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          starts_at, registration_deadline, capacity, media_display_mode,
+          family_registration_enabled, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
-          '0'::text AS registrations, '0'::text AS attendance,
+          '0'::text AS registrations, '0'::text AS participants, '0'::text AS attendance,
           created_by_user_id, ''::text AS owner_name
       `, [
         principal.tenantId,
@@ -121,12 +133,14 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.familyRegistrationEnabled,
         draft.props.publish ? 'published' : 'draft',
       ]);
       const event = eventResult.rows[0];
       if (!event) throw new Error('Falha ao criar evento.');
       await client.query('SELECT app.register_public_event($1, $2, $3)', [event.public_id, principal.tenantId, event.id]);
       await this.insertFields(client, principal.tenantId, event.id, draft);
+      await this.upsertOfferings(client, principal.tenantId, event.id, draft);
       await this.snapshotForm(client, principal.tenantId, principal.userId, event.id, 1);
       return { ...this.mapEvent(event), owner: { id: principal.userId, name: principal.name } };
     });
@@ -144,6 +158,7 @@ export class PostgresEventRepository implements EventRepository {
           registration_deadline = $6,
           capacity = $7,
           media_display_mode = $8,
+          family_registration_enabled = $9,
           updated_at = now()
         WHERE id = $1
         RETURNING id
@@ -156,9 +171,11 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.familyRegistrationEnabled,
       ]);
       if (!result.rows[0]) throw new NotFoundError('Evento não encontrado nesta comunidade.');
       await this.upsertFields(client, principal.tenantId, eventId, draft);
+      await this.upsertOfferings(client, principal.tenantId, eventId, draft);
       const version = await client.query<{ current_form_version: number }>(`
         UPDATE events SET current_form_version = current_form_version + 1
         WHERE id = $1 RETURNING current_form_version
@@ -275,6 +292,24 @@ export class PostgresEventRepository implements EventRepository {
     `, [tenantId, eventId, version, userId]);
   }
 
+  private async upsertOfferings(client: PoolClient, tenantId: string, eventId: string, draft: EventDraft) {
+    await client.query('UPDATE event_offerings SET active = false, updated_at = now() WHERE event_id = $1', [eventId]);
+    for (const [position, offering] of draft.props.offerings.entries()) {
+      await client.query(`
+        INSERT INTO event_offerings (
+          tenant_id, event_id, offering_key, name, description, price_cents, active, position
+        ) VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+        ON CONFLICT (event_id, offering_key) DO UPDATE SET
+          name = EXCLUDED.name,
+          description = EXCLUDED.description,
+          price_cents = EXCLUDED.price_cents,
+          active = true,
+          position = EXCLUDED.position,
+          updated_at = now()
+      `, [tenantId, eventId, offering.key, offering.name, offering.description, offering.priceCents, position]);
+    }
+  }
+
   private changeStatus(
     principal: AuthenticatedPrincipal,
     eventId: string,
@@ -298,15 +333,20 @@ export class PostgresEventRepository implements EventRepository {
     return client.query<EventRow>(`
       SELECT events.id, events.public_id, events.title, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
-        count(DISTINCT registrations.id)::text AS registrations,
-        count(DISTINCT check_ins.id)::text AS attendance,
+        (SELECT count(*)::text FROM event_registrations registrations
+          WHERE registrations.event_id = events.id AND registrations.status = 'confirmed') AS registrations,
+        (SELECT count(*)::text FROM event_registration_participants participants
+          JOIN event_registrations registrations ON registrations.id = participants.registration_id
+            AND registrations.event_id = participants.event_id AND registrations.tenant_id = participants.tenant_id
+          WHERE participants.event_id = events.id AND registrations.status = 'confirmed') AS participants,
+        (SELECT count(*)::text FROM event_registration_participants participants
+          JOIN event_registrations registrations ON registrations.id = participants.registration_id
+            AND registrations.event_id = participants.event_id AND registrations.tenant_id = participants.tenant_id
+          WHERE participants.event_id = events.id AND registrations.status = 'confirmed'
+            AND participants.checked_in_at IS NOT NULL) AS attendance,
         events.created_by_user_id, owners.name AS owner_name
       FROM events
       JOIN users AS owners ON owners.id = events.created_by_user_id AND owners.tenant_id = events.tenant_id
-      LEFT JOIN event_registrations AS registrations
-        ON registrations.event_id = events.id AND registrations.status = 'confirmed'
-      LEFT JOIN event_check_ins AS check_ins
-        ON check_ins.event_id = events.id
       WHERE $1::boolean
          OR events.created_by_user_id = $2
          OR EXISTS (
@@ -314,7 +354,6 @@ export class PostgresEventRepository implements EventRepository {
            WHERE event_collaborators.event_id = events.id
              AND event_collaborators.user_id = $2
          )
-      GROUP BY events.id, owners.name
       ORDER BY events.starts_at ASC
     `, [principal.permissions.includes('events.read_all'), principal.userId]);
   }
@@ -323,22 +362,26 @@ export class PostgresEventRepository implements EventRepository {
     const result = await client.query<ManagedEventRow>(`
       SELECT events.id, events.public_id, events.title, events.description, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
-        events.media_display_mode, events.current_form_version,
-        count(DISTINCT registrations.id)::text AS registrations,
-        count(DISTINCT check_ins.id)::text AS attendance,
+        events.media_display_mode, events.current_form_version, events.family_registration_enabled,
+        (SELECT count(*)::text FROM event_registrations registrations
+          WHERE registrations.event_id = events.id AND registrations.status = 'confirmed') AS registrations,
+        (SELECT count(*)::text FROM event_registration_participants participants
+          JOIN event_registrations registrations ON registrations.id = participants.registration_id
+            AND registrations.event_id = participants.event_id AND registrations.tenant_id = participants.tenant_id
+          WHERE participants.event_id = events.id AND registrations.status = 'confirmed') AS participants,
+        (SELECT count(*)::text FROM event_registration_participants participants
+          JOIN event_registrations registrations ON registrations.id = participants.registration_id
+            AND registrations.event_id = participants.event_id AND registrations.tenant_id = participants.tenant_id
+          WHERE participants.event_id = events.id AND registrations.status = 'confirmed'
+            AND participants.checked_in_at IS NOT NULL) AS attendance,
         events.created_by_user_id, owners.name AS owner_name
       FROM events
       JOIN users AS owners ON owners.id = events.created_by_user_id AND owners.tenant_id = events.tenant_id
-      LEFT JOIN event_registrations AS registrations
-        ON registrations.event_id = events.id AND registrations.status = 'confirmed'
-      LEFT JOIN event_check_ins AS check_ins
-        ON check_ins.event_id = events.id
       WHERE events.id = $1
         AND ($2::boolean OR events.created_by_user_id = $3 OR EXISTS (
           SELECT 1 FROM event_collaborators
           WHERE event_collaborators.event_id = events.id AND event_collaborators.user_id = $3
         ))
-      GROUP BY events.id, owners.name
     `, [eventId, principal.permissions.includes('events.read_all') || principal.permissions.includes('events.manage_all'), principal.userId]);
     return result.rows[0] ?? null;
   }
@@ -370,6 +413,7 @@ export class PostgresEventRepository implements EventRepository {
       }),
       capacity: row.capacity,
       registrations: Number(row.registrations),
+      participants: Number(row.participants),
       attendance: Number(row.attendance),
       owner: { id: row.created_by_user_id, name: row.owner_name },
     };

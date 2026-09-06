@@ -16,15 +16,26 @@ export interface MemberChildDraft {
 }
 
 export class MemberProfileDraft {
-  private constructor(readonly props: { birthDate?: string; address: MemberAddress; children: MemberChildDraft[] }) {}
+  private constructor(readonly props: {
+    phone?: string; birthDate?: string; spouseName?: string; marriageDate?: string;
+    address: MemberAddress; children: MemberChildDraft[];
+  }) {}
 
-  static create(input: { birthDate?: string; address?: MemberAddress; children?: MemberChildDraft[] }) {
+  static create(input: {
+    phone?: string; birthDate?: string; spouseName?: string; marriageDate?: string;
+    address?: MemberAddress; children?: MemberChildDraft[];
+  }) {
     const clean = (value: string | undefined, max: number) => {
       const normalized = value?.trim() || undefined;
       if (normalized && normalized.length > max) throw new DomainError(`Um campo do endereço excede ${max} caracteres.`);
       return normalized;
     };
+    const phone = clean(input.phone, 32);
+    if (phone && phone.length < 8) throw new DomainError('O telefone deve ter entre 8 e 32 caracteres.');
     const birthDate = this.validateBirthDate(input.birthDate, 'A data de nascimento do membro é inválida.');
+    const spouseName = clean(input.spouseName, 120);
+    if (spouseName && spouseName.length < 2) throw new DomainError('O nome do cônjuge deve ter entre 2 e 120 caracteres.');
+    const marriageDate = this.validateBirthDate(input.marriageDate, 'A data de casamento é inválida.');
     const address: MemberAddress = {
       postalCode: clean(input.address?.postalCode, 16),
       street: clean(input.address?.street, 160),
@@ -41,11 +52,14 @@ export class MemberProfileDraft {
       return { name, birthDate: this.validateBirthDate(child.birthDate, 'A data de nascimento do filho é inválida.') };
     });
     if (children.length > 50) throw new DomainError('O perfil aceita no máximo 50 filhos cadastrados.');
-    return new MemberProfileDraft({ birthDate, address, children });
+    return new MemberProfileDraft({ phone, birthDate, spouseName, marriageDate, address, children });
   }
 
   get isEmpty() {
-    return !this.props.birthDate
+    return !this.props.phone
+      && !this.props.birthDate
+      && !this.props.spouseName
+      && !this.props.marriageDate
       && Object.values(this.props.address).every((value) => !value)
       && this.props.children.length === 0;
   }

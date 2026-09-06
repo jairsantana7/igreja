@@ -11,6 +11,7 @@ interface EventListItem {
   registrationOpen: boolean;
   capacity: number | null;
   registrations: number;
+  participants: number;
   attendance: number;
   owner: { id: string; name: string };
 }
@@ -95,7 +96,7 @@ async function cancelEvent() {
             <p class="event-deadline">Responsável: {{ event.owner.name }}</p>
           </div>
           <div class="event-card__meta">
-            <strong>{{ event.registrations }}</strong><small>inscrições · {{ event.attendance }} presenças</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
+            <strong>{{ event.participants }}</strong><small>pessoas · {{ event.registrations }} inscrições · {{ event.attendance }} presenças</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
             <div class="event-card__actions" aria-label="Ações do evento">
               <NuxtLink :to="`/events/${event.id}`" class="event-action-button event-action-button--primary"><span aria-hidden="true">◎</span> Gerenciar</NuxtLink>
               <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>

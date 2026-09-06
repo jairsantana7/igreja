@@ -1,5 +1,7 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
-import type { EventDraft, EventFormField, EventMediaDisplayMode, EventStatus } from '../../domain/entities/event';
+import type { EventDraft, EventFormField, EventMediaDisplayMode, EventOffering, EventStatus } from '../../domain/entities/event';
+import type { RegistrationParticipantSnapshot } from '../../domain/entities/event-registration';
+import type { MemberProfileDraft } from '../../domain/entities/member-profile';
 import type { LoginIdentity } from './authentication.port';
 
 export interface DashboardEvent {
@@ -13,6 +15,7 @@ export interface DashboardEvent {
   registrationOpen: boolean;
   capacity: number | null;
   registrations: number;
+  participants: number;
   attendance: number;
   owner: { id: string; name: string };
 }
@@ -27,6 +30,8 @@ export interface ManagedEventView extends DashboardEvent {
   description: string;
   mediaDisplayMode: EventMediaDisplayMode;
   fields: Array<EventFormField & { id: string }>;
+  familyRegistrationEnabled: boolean;
+  offerings: Array<EventOffering & { id: string }>;
   currentFormVersion: number;
   collaborators: Array<{ id: string; name: string; email: string }>;
 }
@@ -45,6 +50,19 @@ export interface PublicEventView {
   mediaDisplayMode: EventMediaDisplayMode;
   images: { id: string; altText: string }[];
   fields: Required<Pick<EventFormField, 'id'>>[] & EventFormField[];
+  familyRegistrationEnabled: boolean;
+  offerings: Array<Required<Pick<EventOffering, 'id'>> & EventOffering>;
+  pix: { keyType: string; key: string; recipientName: string; city: string } | null;
+}
+
+export interface RegistrationContextView {
+  profile: {
+    phone: string | null; birthDate: string | null; spouseName: string | null; marriageDate: string | null;
+    children: Array<{ name: string; birthDate: string | null }>;
+  };
+  selectedParticipantKeys: string[];
+  selectedOfferingIds: string[];
+  alreadyRegistered: boolean;
 }
 
 export interface EventRepository {
@@ -73,10 +91,17 @@ export interface EventRegistrationRepository {
     email: string;
     passwordHash: string;
     answers: RegistrationAnswerInput[];
+    profile?: MemberProfileDraft;
+    participants: RegistrationParticipantSnapshot[];
+    offeringIds: string[];
   }): Promise<{ identity: LoginIdentity; registrationId: string }>;
   register(input: {
     principal: AuthenticatedPrincipal;
     event: PublicEventView;
     answers: RegistrationAnswerInput[];
+    profile?: MemberProfileDraft;
+    participants: RegistrationParticipantSnapshot[];
+    offeringIds: string[];
   }): Promise<string>;
+  context(principal: AuthenticatedPrincipal, event: PublicEventView): Promise<RegistrationContextView>;
 }

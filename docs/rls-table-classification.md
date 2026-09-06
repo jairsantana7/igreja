@@ -42,6 +42,9 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `followup_tag_assignments` | tenant-direct | associação de etiqueta deve preservar o mesmo tenant | RLS direta + FKs compostas para acompanhamento e etiqueta |
 | `followup_notes` | tenant-direct | anotação pastoral sensível pertence ao acompanhamento e à comunidade | RLS direta + FKs compostas para acompanhamento e autor |
 | `followup_stage_changes` | tenant-direct | histórico imutável de movimentação pertence ao acompanhamento | RLS direta + FKs compostas para acompanhamento, etapas e ator |
+| `event_offerings` | tenant-direct | opção adicional pertence a um evento da comunidade | RLS direta + FK composta para evento |
+| `event_registration_participants` | tenant-direct | pessoa confirmada é uma fotografia vinculada à inscrição e ao evento | RLS direta + FK composta para inscrição; check-in referencia ator do mesmo tenant |
+| `registration_offering_selections` | tenant-direct | seleção de adicional pertence à inscrição e à oferta do mesmo evento | RLS direta + FKs compostas para inscrição e oferta |
 
 ## Regras para novas tabelas
 

@@ -23,6 +23,13 @@ export class EventFieldDto {
   options: string[] = [];
 }
 
+export class EventOfferingDto {
+  @IsOptional() @IsString() key = '';
+  @IsString() @Length(2, 120) name!: string;
+  @IsString() @Length(0, 1000) description = '';
+  @Type(() => Number) @IsInt() @Min(0) @Max(100_000_000) priceCents = 0;
+}
+
 export class EventDetailsDto {
   @IsString()
   @Length(3, 160)
@@ -51,11 +58,20 @@ export class EventDetailsDto {
   @IsIn(EVENT_MEDIA_DISPLAY_MODES)
   mediaDisplayMode: EventMediaDisplayMode = 'hero';
 
+  @IsBoolean()
+  familyRegistrationEnabled = false;
+
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => EventFieldDto)
   fields: EventFieldDto[] = [];
+
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => EventOfferingDto)
+  offerings: EventOfferingDto[] = [];
 }
 
 export class CreateEventDto extends EventDetailsDto {

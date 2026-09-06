@@ -17,11 +17,14 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
       const address = draft.props.address;
       const profile = await client.query<{ id: string }>(`
         INSERT INTO member_profiles (
-          tenant_id, user_id, birth_date, postal_code, street, address_number, complement,
-          neighborhood, city, state, updated_by_user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          tenant_id, user_id, phone, birth_date, spouse_name, marriage_date,
+          postal_code, street, address_number, complement, neighborhood, city, state, updated_by_user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (user_id, tenant_id) DO UPDATE SET
+          phone = EXCLUDED.phone,
           birth_date = EXCLUDED.birth_date,
+          spouse_name = EXCLUDED.spouse_name,
+          marriage_date = EXCLUDED.marriage_date,
           postal_code = EXCLUDED.postal_code,
           street = EXCLUDED.street,
           address_number = EXCLUDED.address_number,
@@ -33,9 +36,11 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
           updated_at = now()
         RETURNING id
       `, [
-        principal.tenantId, memberId, draft.props.birthDate ?? null, address.postalCode ?? null, address.street ?? null,
-        address.number ?? null, address.complement ?? null, address.neighborhood ?? null,
-        address.city ?? null, address.state ?? null, principal.userId,
+        principal.tenantId, memberId, draft.props.phone ?? null, draft.props.birthDate ?? null,
+        draft.props.spouseName ?? null, draft.props.marriageDate ?? null,
+        address.postalCode ?? null, address.street ?? null, address.number ?? null,
+        address.complement ?? null, address.neighborhood ?? null, address.city ?? null,
+        address.state ?? null, principal.userId,
       ]);
       const profileId = profile.rows[0]!.id;
       await client.query('DELETE FROM member_children WHERE profile_id = $1', [profileId]);
@@ -51,12 +56,15 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
 
   private async findWithClient(client: PoolClient, memberId: string): Promise<MemberProfileView | null> {
     const result = await client.query<{
-      id: string; name: string; email: string; birth_date: string | null; postal_code: string | null; street: string | null;
+      id: string; name: string; email: string; phone: string | null; birth_date: string | null;
+      spouse_name: string | null; marriage_date: string | null; postal_code: string | null; street: string | null;
       address_number: string | null; complement: string | null; neighborhood: string | null;
       city: string | null; state: string | null; updated_at: Date | null;
       children: Array<{ id: string; name: string; birthDate: string | null }>;
     }>(`
-      SELECT users.id, users.name, users.email, to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
+      SELECT users.id, users.name, users.email, profiles.phone,
+        to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
+        profiles.spouse_name, to_char(profiles.marriage_date, 'YYYY-MM-DD') AS marriage_date,
         profiles.postal_code, profiles.street, profiles.address_number, profiles.complement,
         profiles.neighborhood, profiles.city, profiles.state, profiles.updated_at,
         COALESCE((
@@ -75,7 +83,10 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
     if (!row) return null;
     return {
       member: { id: row.id, name: row.name, email: row.email },
+      phone: row.phone,
       birthDate: row.birth_date,
+      spouseName: row.spouse_name,
+      marriageDate: row.marriage_date,
       address: {
         postalCode: row.postal_code, street: row.street, number: row.address_number,
         complement: row.complement, neighborhood: row.neighborhood, city: row.city, state: row.state,

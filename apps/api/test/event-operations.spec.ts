@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 import type { EventOperationsRepository } from '../src/application/ports/event-operations.port';
-import { CheckInRegistrationUseCase, ListEventRegistrationsUseCase, QueueEventCommunicationUseCase } from '../src/application/use-cases/event-operations.use-cases';
+import { CheckInParticipantUseCase, CheckInRegistrationUseCase, ListEventRegistrationsUseCase, QueueEventCommunicationUseCase } from '../src/application/use-cases/event-operations.use-cases';
 import { AuthorizationError, NotFoundError } from '../src/application/use-cases/errors';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
@@ -25,6 +25,13 @@ describe('operações do evento', () => {
     const checkIn = vi.fn().mockResolvedValue(null);
     const useCase = new CheckInRegistrationUseCase({ checkIn } as unknown as EventOperationsRepository);
     await expect(useCase.execute(principal(['events.checkin']), 'event', 'registration')).rejects.toThrow(NotFoundError);
+  });
+
+  it('aplica a mesma permissão granular ao check-in individual', async () => {
+    const checkInParticipant = vi.fn();
+    const useCase = new CheckInParticipantUseCase({ checkInParticipant } as unknown as EventOperationsRepository);
+    await expect(useCase.execute(principal([]), 'event', 'registration', 'participant')).rejects.toThrow(AuthorizationError);
+    expect(checkInParticipant).not.toHaveBeenCalled();
   });
 
   it('preserva o rascunho quando não há adaptador de fila', async () => {

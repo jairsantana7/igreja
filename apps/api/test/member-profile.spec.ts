@@ -14,7 +14,10 @@ describe('perfil complementar do membro', () => {
   it('mantém endereço e filhos opcionais e deriva a existência dos filhos no repositório', () => {
     const draft = MemberProfileDraft.create({ birthDate: '1988-05-10', address: { city: ' São Paulo ', state: 'sp' }, children: [{ name: ' Ana ', birthDate: '2020-01-02' }] });
     expect(draft.props).toEqual({
+      phone: undefined,
       birthDate: '1988-05-10',
+      spouseName: undefined,
+      marriageDate: undefined,
       address: { postalCode: undefined, street: undefined, number: undefined, complement: undefined, neighborhood: undefined, city: 'São Paulo', state: 'SP' },
       children: [{ name: 'Ana', birthDate: '2020-01-02' }],
     });
