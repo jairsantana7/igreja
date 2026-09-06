@@ -99,7 +99,7 @@ async function cancelEvent() {
             <strong>{{ event.participants }}</strong><small>pessoas · {{ event.registrations }} inscrições · {{ event.attendance }} presenças</small><small v-if="event.capacity">Capacidade informada: {{ event.capacity }}</small>
             <div class="event-card__actions" aria-label="Ações do evento">
               <NuxtLink :to="`/events/${event.id}`" class="event-action-button event-action-button--primary"><span aria-hidden="true">◎</span> Gerenciar</NuxtLink>
-              <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>
+              <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" target="_blank" rel="noopener noreferrer" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>
               <span v-else class="event-action-placeholder" aria-hidden="true" />
               <button v-if="canCancel && ['draft', 'published', 'registration_closed'].includes(event.status)" type="button" class="event-action-button event-action-button--danger" :disabled="cancellingId === event.id" @click="eventToCancel = event"><span aria-hidden="true">⊘</span> {{ cancellingId === event.id ? 'Cancelando…' : 'Cancelar' }}</button>
               <span v-else class="event-action-placeholder" aria-hidden="true" />

@@ -251,7 +251,7 @@ function answerText(value: unknown) { return typeof value === 'boolean' ? (value
     <template v-else>
       <header class="event-operations-header">
         <div><NuxtLink to="/events" class="back-link">← Todos os eventos</NuxtLink><div class="event-card__badges"><span class="badge" :class="`badge--${event.status}`">{{ statusLabels[event.status] }}</span><span v-if="event.registrationOpen" class="badge badge--open">Inscrições abertas</span></div><h1>{{ event.title }}</h1><p>{{ formatter.format(new Date(event.startsAt)) }}<template v-if="event.location"> · {{ event.location }}</template> · Responsável: {{ event.owner.name }}</p></div>
-        <div class="event-operations-header__actions"><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="button">✎ Editar</NuxtLink><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" class="button button--primary">↗ Página pública</NuxtLink></div>
+        <div class="event-operations-header__actions"><NuxtLink v-if="canUpdate" :to="`/events/${event.id}/edit`" class="button">✎ Editar</NuxtLink><NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" target="_blank" rel="noopener noreferrer" class="button button--primary">↗ Página pública</NuxtLink></div>
       </header>
 
       <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
