@@ -3,6 +3,17 @@ import { DomainError } from './errors';
 export const CONVERSATION_STATUSES = ['open', 'waiting', 'resolved'] as const;
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
 
+export const CHANNEL_CONNECTION_STATUSES = [
+  'configured',
+  'connecting',
+  'awaiting_qr',
+  'connected',
+  'disconnecting',
+  'disconnected',
+  'failed',
+] as const;
+export type ChannelConnectionStatus = (typeof CHANNEL_CONNECTION_STATUSES)[number];
+
 export class ConversationChannelConfiguration {
   private constructor(readonly props: { providerKey: string; displayName: string; phoneNumber: string; providerAccountId: string; secretReference?: string }) {}
 

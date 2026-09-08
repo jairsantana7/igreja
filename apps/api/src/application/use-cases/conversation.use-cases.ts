@@ -1,11 +1,17 @@
 import { ConversationChannelConfiguration, OutboundConversationMessage, type ConversationStatus } from '../../domain/entities/conversation';
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
-import type { ConversationRepository } from '../ports/conversation.port';
+import type { ConversationProviderCatalog, ConversationRepository } from '../ports/conversation.port';
 import type { JobQueue } from '../ports/job-queue.port';
 import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission) {
   if (!principal.permissions.includes(permission)) throw new AuthorizationError('Você não tem permissão para realizar esta ação.');
+}
+
+function requireChannelManagement(principal: AuthenticatedPrincipal) {
+  if (!principal.permissions.includes(PERMISSIONS.channelsManageOwn) && !principal.permissions.includes(PERMISSIONS.channelsManageAll)) {
+    throw new AuthorizationError('Você não tem permissão para administrar canais.');
+  }
 }
 
 export class ListConversationChannelsUseCase {
@@ -23,6 +29,74 @@ export class CreateConversationChannelUseCase {
     if (ownerUserId === principal.userId && !principal.permissions.includes(PERMISSIONS.channelsManageAll)) requirePermission(principal, PERMISSIONS.channelsManageOwn);
     else requirePermission(principal, PERMISSIONS.channelsManageAll);
     return this.conversations.createChannel(principal, ownerUserId, ConversationChannelConfiguration.create(input));
+  }
+}
+
+export class GetConversationChannelConnectionUseCase {
+  constructor(private readonly conversations: ConversationRepository) {}
+
+  async execute(principal: AuthenticatedPrincipal, channelId: string) {
+    requireChannelManagement(principal);
+    const connection = await this.conversations.connection(principal, channelId);
+    if (!connection) throw new NotFoundError('Canal não encontrado ou sem acesso.');
+    return connection;
+  }
+}
+
+export class ConnectConversationChannelUseCase {
+  constructor(
+    private readonly conversations: ConversationRepository,
+    private readonly queue: JobQueue,
+    private readonly providers: ConversationProviderCatalog,
+  ) {}
+
+  async execute(principal: AuthenticatedPrincipal, channelId: string) {
+    requireChannelManagement(principal);
+    const connection = await this.conversations.connection(principal, channelId);
+    if (!connection) throw new NotFoundError('Canal não encontrado ou sem acesso.');
+    if (!this.providers.supportsConnection(connection.providerKey)) {
+      throw new ConflictError('A instalação não possui um conector habilitado para este canal.');
+    }
+    await this.conversations.markConnectionRequested(principal, channelId);
+    try {
+      await this.queue.enqueue({
+        name: 'conversations.channel.connect',
+        payload: { tenantId: principal.tenantId, channelId },
+        deduplicationKey: `${channelId}:connect`,
+      }, { attempts: 3 });
+    } catch {
+      await this.conversations.markConnectionCommandFailed(principal, channelId, 'queue_unavailable');
+      throw new ConflictError('O worker de WhatsApp não está disponível para iniciar o pareamento.');
+    }
+    return this.conversations.connection(principal, channelId);
+  }
+}
+export class DisconnectConversationChannelUseCase {
+  constructor(
+    private readonly conversations: ConversationRepository,
+    private readonly queue: JobQueue,
+    private readonly providers: ConversationProviderCatalog,
+  ) {}
+
+  async execute(principal: AuthenticatedPrincipal, channelId: string) {
+    requireChannelManagement(principal);
+    const connection = await this.conversations.connection(principal, channelId);
+    if (!connection) throw new NotFoundError('Canal não encontrado ou sem acesso.');
+    if (!this.providers.supportsConnection(connection.providerKey)) {
+      throw new ConflictError('A instalação não possui um conector habilitado para este canal.');
+    }
+    await this.conversations.markDisconnectionRequested(principal, channelId);
+    try {
+      await this.queue.enqueue({
+        name: 'conversations.channel.disconnect',
+        payload: { tenantId: principal.tenantId, channelId },
+        deduplicationKey: `${channelId}:disconnect`,
+      }, { attempts: 1 });
+    } catch {
+      await this.conversations.markConnectionCommandFailed(principal, channelId, 'queue_unavailable');
+      throw new ConflictError('O worker de WhatsApp não está disponível para desconectar o canal.');
+    }
+    return this.conversations.connection(principal, channelId);
   }
 }
 

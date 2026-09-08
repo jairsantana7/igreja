@@ -38,6 +38,7 @@ pnpm check      # tipos, testes e builds
 pnpm db:up      # inicia PostgreSQL
 pnpm infra:up   # inicia PostgreSQL e Redis
 pnpm worker     # inicia o consumidor BullMQ em outro terminal
+pnpm whatsapp:worker # mantém as sessões do WhatsApp Web em outro processo
 pnpm db:seed    # cria dados sintéticos locais
 pnpm db:down    # encerra containers
 ```
@@ -73,7 +74,11 @@ O adapter de mídia local é voltado ao desenvolvimento. Instalações de produ�
 
 O adapter BullMQ/Redis está disponível de forma opt-in. Para usá-lo, configure `JOB_QUEUE_DRIVER=bullmq`, execute `pnpm infra:up` e mantenha `pnpm worker` em outro processo. A fila não equivale a entrega: campanhas e lembretes continuam sem envio enquanto não houver scheduler e adapter do canal.
 
-A central de conversas preserva canais, atendimentos e respostas pendentes. O adapter oficial já sincroniza templates pela WABA, mas Embedded Signup, envio e recebimento ainda exigem configuração da Meta, um `ConversationProvider`, webhook validado e uma implementação compartilhada de `JobQueue`.
+Para testar conversas individuais com o WhatsApp do celular, gere uma chave com `openssl rand -base64 32`, preencha `CONVERSATION_SESSION_ENCRYPTION_KEY`, configure `WHATSAPP_WEB_DRIVER=baileys` e execute `pnpm whatsapp:worker`. No dashboard, abra **Conversas → Canais**, crie um canal do tipo **WhatsApp do celular** e leia o QR. Alternativamente, suba o worker isolado com `docker compose --profile whatsapp up -d --build whatsapp-worker`. A API também deve usar as mesmas variáveis e chave. Execute somente uma réplica desse worker até a instalação possuir um lock distribuído por canal.
+
+Esse conector é não oficial, experimental e limitado a conversas diretas iniciadas ou respondidas por uma pessoa. Não é usado por campanhas nem lembretes automáticos. Instalações que precisam de garantias operacionais devem preferir a Meta Cloud API. O contrato `ConversationProvider` permite substituir Baileys por outro adapter sem alterar casos de uso ou domínio.
+
+A central de conversas preserva canais, atendimentos e respostas pendentes. O adapter oficial já sincroniza templates pela WABA, mas Embedded Signup, envio e recebimento oficiais ainda exigem configuração da Meta e webhook validado. O adapter Baileys opcional oferece apenas o fluxo experimental por QR descrito acima.
 
 ## Projeto
 

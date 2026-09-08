@@ -35,6 +35,7 @@ import { ApplicationExceptionFilter } from './presentation/http/application-exce
 import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
 import { BullMqJobQueue } from './infrastructure/queue/bullmq-job.queue';
 import type { JobQueue } from './application/ports/job-queue.port';
+import type { ConversationProviderCatalog, ConversationProviderStateStore } from './application/ports/conversation.port';
 import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
 import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
 import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
@@ -46,7 +47,7 @@ import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUs
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
-import { CreateConversationChannelUseCase, CreateConversationUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
@@ -62,6 +63,11 @@ import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteE
 import { PostgresPastoralFollowupRepository } from './infrastructure/repositories/postgres-pastoral-followup.repository';
 import { PastoralFollowupController } from './presentation/http/controllers/pastoral-followup.controller';
 import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from './application/use-cases/pastoral-followup.use-cases';
+import { AesGcmStateCipher } from './infrastructure/security/aes-gcm-state.cipher';
+import { DisabledConversationProviderStateStore } from './infrastructure/repositories/disabled-conversation-provider-state.store';
+import { PostgresConversationProviderStateStore } from './infrastructure/repositories/postgres-conversation-provider-state.store';
+import { ConfiguredConversationProviderCatalog } from './infrastructure/integrations/configured-conversation-provider.catalog';
+import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
@@ -79,9 +85,24 @@ import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFo
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
     {
       provide: TOKENS.jobQueue,
-      useFactory: (): JobQueue => env.jobQueueDriver === 'bullmq'
-        ? BullMqJobQueue.connect(env.redisUrl, env.jobQueueName)
-        : new DisabledJobQueue(),
+      useFactory: (): JobQueue => {
+        if (env.jobQueueDriver !== 'bullmq') return new DisabledJobQueue();
+        const fallback = BullMqJobQueue.connect(env.redisUrl, env.jobQueueName);
+        return env.whatsappWebDriver === 'disabled'
+          ? fallback
+          : new RoutedJobQueue(fallback, BullMqJobQueue.connect(env.redisUrl, env.whatsappQueueName));
+      },
+    },
+    {
+      provide: TOKENS.conversationProviderStateStore,
+      useFactory: (database: PostgresDatabase): ConversationProviderStateStore => env.whatsappWebDriver === 'disabled'
+        ? new DisabledConversationProviderStateStore()
+        : new PostgresConversationProviderStateStore(database, new AesGcmStateCipher(env.conversationSessionEncryptionKey)),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.conversationProviderCatalog,
+      useFactory: (): ConversationProviderCatalog => new ConfiguredConversationProviderCatalog(env.whatsappWebDriver),
     },
     { provide: TOKENS.mediaStorage, useClass: LocalMediaStorage },
     { provide: TOKENS.secretResolver, useClass: EnvironmentSecretResolver },
@@ -142,8 +163,8 @@ import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFo
     },
     {
       provide: TOKENS.conversationRepository,
-      useFactory: (database: PostgresDatabase) => new PostgresConversationRepository(database),
-      inject: [PostgresDatabase],
+      useFactory: (database: PostgresDatabase, states: ConversationProviderStateStore) => new PostgresConversationRepository(database, states),
+      inject: [PostgresDatabase, TOKENS.conversationProviderStateStore],
     },
     {
       provide: TOKENS.memberProfileRepository,
@@ -295,6 +316,21 @@ import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFo
       provide: TOKENS.createConversationChannelUseCase,
       useFactory: (conversations: PostgresConversationRepository) => new CreateConversationChannelUseCase(conversations),
       inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.getConversationChannelConnectionUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new GetConversationChannelConnectionUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.connectConversationChannelUseCase,
+      useFactory: (conversations: PostgresConversationRepository, queue: JobQueue, providers: ConversationProviderCatalog) => new ConnectConversationChannelUseCase(conversations, queue, providers),
+      inject: [TOKENS.conversationRepository, TOKENS.jobQueue, TOKENS.conversationProviderCatalog],
+    },
+    {
+      provide: TOKENS.disconnectConversationChannelUseCase,
+      useFactory: (conversations: PostgresConversationRepository, queue: JobQueue, providers: ConversationProviderCatalog) => new DisconnectConversationChannelUseCase(conversations, queue, providers),
+      inject: [TOKENS.conversationRepository, TOKENS.jobQueue, TOKENS.conversationProviderCatalog],
     },
     {
       provide: TOKENS.listConversationsUseCase,

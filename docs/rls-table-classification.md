@@ -29,6 +29,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_templates` | tenant-direct | modelo reutilizável pertence à comunidade | RLS direta + FK composta para autor |
 | `auth_sessions` | tenant-direct | sessão revogável e hashes da prova/assinatura pertencem ao usuário da comunidade | RLS direta + FK composta para usuário; JWT, prova bruta e `User-Agent` nunca são persistidos |
 | `conversation_channels` | tenant-direct | número/canal pertence a um responsável da comunidade | RLS direta + FK composta para o responsável; segredo fica fora do banco |
+| `conversation_provider_states` | tenant-direct | estado opaco e criptografado do dispositivo vinculado pertence a um canal da comunidade | RLS direta + FK composta incluindo `provider_key`; runtime acessa somente dentro da transação do tenant; não possui trigger de auditoria para não registrar rotação de chaves |
 | `conversations` | tenant-direct | atendimento pertence ao canal, contato e comunidade | RLS direta + FKs compostas para canal, evento, membro e responsável |
 | `conversation_messages` | tenant-direct | mensagem pertence a uma conversa da comunidade | RLS direta + FKs compostas para conversa e remetente interno |
 | `whatsapp_message_templates` | tenant-direct | projeção de template pertence ao canal da comunidade | RLS direta + FK composta para canal; Meta é a fonte oficial do conteúdo e status |

@@ -51,6 +51,19 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Conteúdo, nomes e números são dados pessoais: não os inclua em logs, breadcrumbs ou payloads de erro.
 - Um canal somente recebe estado `connected` após teste real do adapter. Salvar configuração resulta apenas em `configured`.
 
+### WhatsApp Web não oficial
+
+- O canal usa `providerKey=whatsapp_web`; a biblioteca concreta é selecionada por `WHATSAPP_WEB_DRIVER`. A implementação incluída é `baileys` e outra pode substituí-la sem mudar os casos de uso.
+- O driver é experimental, não oficial e desabilitado por padrão. Ele é destinado a conversas individuais iniciadas por pessoas, não a campanhas ou lembretes automáticos.
+- Execute `pnpm whatsapp:worker` como serviço persistente com uma única réplica. Um job de inicialização não permanece conectado e não recebe mensagens.
+- O pareamento acontece na Central de conversas. O QR expira rapidamente, usa resposta `no-store` e só é visível ao proprietário do canal ou a quem administra todos os canais.
+- `CONVERSATION_SESSION_ENCRYPTION_KEY` deve conter 32 bytes em base64. Rotacionar essa chave exige um procedimento de recriptografia ainda não implementado; trocar o valor diretamente invalida as sessões existentes.
+- Chaves e credenciais do protocolo são criptografadas antes de chegar ao PostgreSQL. A tabela recebe RLS forçada, FK composta e não é auditada a cada rotação.
+- Use uma versão exata e testada do driver. Atualizações de Baileys podem conter mudanças incompatíveis e precisam passar pelos testes de contrato antes do rollout.
+- Não encaminhe os logs internos do driver sem saneamento: eles podem carregar material de pareamento. O adapter incluído os silencia e publica apenas eventos estruturados sem telefone, conteúdo ou QR pela porta `ApplicationLogger`.
+- O envio é pelo menos uma vez. Em uma interrupção no instante entre o aceite remoto e a atualização local, uma retentativa pode duplicar uma resposta; nenhum adapter deve prometer exactly-once quando o provedor não fornece idempotência.
+- A instalação assume o risco de mudanças no protocolo, desconexões e eventual bloqueio do número. A integração oficial da Meta continua sendo a opção recomendada para operação com suporte.
+
 ## Meta WhatsApp Cloud API
 
 - Defina `META_GRAPH_API_VERSION` com uma versão vigente da Graph API; o projeto não fixa silenciosamente uma versão que possa expirar.
@@ -87,4 +100,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. Ainda não há scheduler, adaptador de envio/recebimento, Embedded Signup, webhook, identidade externa, MFA ou pagamento instalado. Por isso, a página pública ainda não anuncia botões sociais e nenhuma regra declara mensagem entregue até os adaptadores correspondentes existirem.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. O driver Baileys permite testar pareamento e conversas individuais quando habilitado, mas permanece experimental e não atende campanhas nem lembretes automáticos. Ainda não há scheduler, Embedded Signup, webhook oficial, identidade externa, MFA ou pagamento instalado. Por isso, a página pública ainda não anuncia botões sociais e nenhuma regra automática declara mensagem entregue até os adaptadores correspondentes existirem.

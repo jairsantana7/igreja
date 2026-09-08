@@ -1,12 +1,12 @@
 import type { PoolClient } from 'pg';
-import type { ConversationChannelView, ConversationMessageView, ConversationRepository, ConversationSummaryView } from '../../application/ports/conversation.port';
+import type { ConversationChannelConnectionView, ConversationChannelView, ConversationMessageView, ConversationProviderStateStore, ConversationRepository, ConversationSummaryView } from '../../application/ports/conversation.port';
 import type { ConversationChannelConfiguration, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { ConflictError } from '../../application/use-cases/errors';
 import { PostgresDatabase } from '../database/postgres.database';
 
 export class PostgresConversationRepository implements ConversationRepository {
-  constructor(private readonly database: PostgresDatabase) {}
+  constructor(private readonly database: PostgresDatabase, private readonly providerState: ConversationProviderStateStore) {}
 
   listChannels(principal: AuthenticatedPrincipal): Promise<ConversationChannelView[]> {
     return this.database.withTenant(principal, async (client) => {
@@ -117,6 +117,52 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  async connection(principal: AuthenticatedPrincipal, channelId: string): Promise<ConversationChannelConnectionView | null> {
+    const connection = await this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        SELECT id, provider_key, status, pairing_expires_at, connection_error_code, connected_at, last_seen_at
+        FROM conversation_channels
+        WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
+      `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
+      return result.rows[0] ? this.mapConnection(result.rows[0]) : null;
+    });
+    if (!connection || connection.status !== 'awaiting_qr') return connection;
+    const qrCode = await this.providerState.get(principal.tenantId, channelId, connection.providerKey, 'pairing_qr');
+    return { ...connection, qrCode };
+  }
+
+  markConnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        UPDATE conversation_channels
+        SET status = 'connecting', connection_error_code = NULL, pairing_expires_at = NULL, updated_at = now()
+        WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
+      `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
+      return Boolean(result.rowCount);
+    });
+  }
+
+  markDisconnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        UPDATE conversation_channels
+        SET status = 'disconnecting', connection_error_code = NULL, pairing_expires_at = NULL, updated_at = now()
+        WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
+      `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
+      return Boolean(result.rowCount);
+    });
+  }
+
+  async markConnectionCommandFailed(principal: AuthenticatedPrincipal, channelId: string, failureCode: string): Promise<void> {
+    await this.database.withTenant(principal, async (client) => {
+      await client.query(`
+        UPDATE conversation_channels
+        SET status = 'failed', connection_error_code = $4, pairing_expires_at = NULL, updated_at = now()
+        WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
+      `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId, failureCode]);
+    });
+  }
+
   private async canAccess(client: PoolClient, principal: AuthenticatedPrincipal, conversationId: string) {
     const result = await client.query(`
       SELECT 1 FROM conversations
@@ -148,6 +194,20 @@ export class PostgresConversationRepository implements ConversationRepository {
 
   private mapChannel(row: any): ConversationChannelView {
     return { id: row.id, owner: { id: row.owner_user_id, name: row.owner_name }, providerKey: row.provider_key, displayName: row.display_name, phoneNumber: row.phone_number, providerAccountId: row.provider_account_id, secretReference: row.secret_reference, status: row.status };
+  }
+
+  private mapConnection(row: any): ConversationChannelConnectionView {
+    const iso = (value: Date | null): string | null => value ? value.toISOString() : null;
+    return {
+      channelId: row.id,
+      providerKey: row.provider_key,
+      status: row.status,
+      qrCode: null,
+      qrExpiresAt: iso(row.pairing_expires_at),
+      failureCode: row.connection_error_code,
+      connectedAt: iso(row.connected_at),
+      lastSeenAt: iso(row.last_seen_at),
+    };
   }
 
   private mapConversation(row: any): ConversationSummaryView {

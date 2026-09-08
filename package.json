@@ -20,6 +20,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @igreja/api --filter @igreja/web dev",
     "worker": "pnpm --filter @igreja/api worker",
+    "whatsapp:worker": "pnpm --filter @igreja/api whatsapp:worker",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

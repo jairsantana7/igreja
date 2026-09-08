@@ -1,5 +1,5 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
-import type { ConversationChannelConfiguration, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
+import type { ChannelConnectionStatus, ConversationChannelConfiguration, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
 
 export interface ConversationChannelView {
   id: string;
@@ -9,7 +9,18 @@ export interface ConversationChannelView {
   phoneNumber: string;
   providerAccountId: string;
   secretReference: string | null;
-  status: 'configured' | 'connected' | 'disconnected';
+  status: ChannelConnectionStatus;
+}
+
+export interface ConversationChannelConnectionView {
+  channelId: string;
+  providerKey: string;
+  status: ChannelConnectionStatus;
+  qrCode: string | null;
+  qrExpiresAt: string | null;
+  failureCode: string | null;
+  connectedAt: string | null;
+  lastSeenAt: string | null;
 }
 
 export interface ConversationSummaryView {
@@ -41,9 +52,74 @@ export interface ConversationRepository {
   addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null>;
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null>;
   updateStatus(principal: AuthenticatedPrincipal, conversationId: string, status: ConversationStatus): Promise<ConversationSummaryView | null>;
+  connection(principal: AuthenticatedPrincipal, channelId: string): Promise<ConversationChannelConnectionView | null>;
+  markConnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean>;
+  markDisconnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean>;
+  markConnectionCommandFailed(principal: AuthenticatedPrincipal, channelId: string, failureCode: string): Promise<void>;
+}
+
+export interface ConversationRuntimeChannel {
+  id: string;
+  tenantId: string;
+  providerKey: string;
+  phoneNumber: string;
+  ownerUserId: string;
+}
+
+export interface ConversationOutboundDelivery {
+  channel: ConversationRuntimeChannel;
+  conversationId: string;
+  messageId: string;
+  recipient: string;
+  body: string;
+}
+
+export interface ConversationRuntimeRepository {
+  findChannel(tenantId: string, channelId: string): Promise<ConversationRuntimeChannel | null>;
+  findOutbound(tenantId: string, conversationId: string, messageId: string): Promise<ConversationOutboundDelivery | null>;
+  updateConnection(tenantId: string, channelId: string, update: {
+    status: ChannelConnectionStatus;
+    failureCode?: string | null;
+    qrExpiresAt?: Date | null;
+  }): Promise<void>;
+  receiveInbound(input: {
+    tenantId: string;
+    channelId: string;
+    providerMessageId: string;
+    contactName: string;
+    contactAddress: string;
+    body: string;
+    receivedAt: Date;
+  }): Promise<void>;
+  markOutboundSent(tenantId: string, conversationId: string, messageId: string, providerMessageId: string): Promise<void>;
+  markOutboundFailed(tenantId: string, conversationId: string, messageId: string): Promise<void>;
+  updateOutboundDelivery(tenantId: string, channelId: string, providerMessageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void>;
 }
 
 export interface ConversationProvider {
   readonly providerKey: string;
-  send(input: { channelId: string; recipient: string; body: string; idempotencyKey: string }): Promise<{ providerMessageId: string }>;
+  connect(channel: ConversationRuntimeChannel): Promise<void>;
+  disconnect(channel: ConversationRuntimeChannel): Promise<void>;
+  send(input: ConversationOutboundDelivery & { idempotencyKey: string }): Promise<{ providerMessageId: string }>;
+  shutdown(): Promise<void>;
+}
+
+export interface ConversationProviderResolver {
+  resolve(providerKey: string): ConversationProvider | null;
+}
+
+export interface ConversationProviderCatalog {
+  supportsConnection(providerKey: string): boolean;
+}
+
+export interface ConversationProviderStateStore {
+  get(tenantId: string, channelId: string, providerKey: string, stateKey: string): Promise<string | null>;
+  set(input: { tenantId: string; channelId: string; providerKey: string; stateKey: string; value: string; expiresAt?: Date }): Promise<void>;
+  remove(tenantId: string, channelId: string, providerKey: string, stateKey: string): Promise<void>;
+  clear(tenantId: string, channelId: string, providerKey: string): Promise<void>;
+}
+
+export interface SensitiveStateCipher {
+  encrypt(plaintext: string): Buffer;
+  decrypt(ciphertext: Buffer): string;
 }

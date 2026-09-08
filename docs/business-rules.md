@@ -95,7 +95,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Cada canal de conversa pertence a um usuário responsável e a uma comunidade; o proprietário externo do número pode ser a comunidade ou o próprio pastor.
 - Números institucionais são recomendados para preservar continuidade, mas números próprios são permitidos porque fazem parte do trabalho cotidiano de muitas comunidades.
 - Um canal `manual` apenas organiza o número e pode abrir uma conversa direta; ele não captura uma sessão do WhatsApp Web nem declara mensagens como entregues.
-- Um futuro adapter não oficial de WhatsApp Web deve ser opcional, desabilitado por padrão, isolado do processo da API e limitado a conversas individuais. Campanhas e lembretes em massa não podem usar esse adapter.
+- O canal `whatsapp_web` usa um driver não oficial opcional, desabilitado por padrão e isolado em um worker persistente. A implementação inicial usa Baileys, mas o nome da biblioteca não faz parte da regra de negócio.
+- Cada canal `whatsapp_web` possui pareamento próprio por QR. Somente o proprietário ou quem possui `channels.manage_all` pode iniciar, consultar ou revogar a conexão.
+- O QR é efêmero e as credenciais do dispositivo vinculado são criptografadas. Nenhum desses valores entra em logs, respostas de auditoria ou variáveis salvas pelo usuário.
+- O conector não oficial aceita somente conversas individuais. Grupos, status, newsletters, chamadas e anexos sem texto não entram no MVP.
+- Ao receber a primeira mensagem textual de um contato, o sistema cria uma conversa atribuída ao proprietário do canal; mensagens repetidas do provedor são ignoradas de forma idempotente.
+- Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
 - Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
 - Uma conversa possui responsável, estado `open`, `waiting` ou `resolved`, e histórico ordenado de mensagens.
@@ -105,11 +110,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O conector implementa `ConversationProvider`; casos de uso não conhecem Meta, WhatsApp Cloud API ou outro fornecedor.
 - Número completo, nomes, endereços de contato e conteúdo são dados pessoais. Não entram em logs nem na metadata de auditoria e seguem a política de retenção ainda a definir.
 - Client secrets e tokens ficam no secret manager. O banco guarda apenas uma referência e identificadores operacionais não secretos.
-- Um canal configurado não é considerado conectado enquanto a implantação não registrar e validar um adapter oficial.
+- Um canal configurado não é considerado conectado enquanto a implantação não registrar e validar um adapter compatível; conectores experimentais precisam ser habilitados conscientemente pela instalação.
 - Templates de mensagem do WhatsApp são diferentes de modelos de evento. Cada tradução aprovada pela Meta aparece como uma projeção vinculada ao canal.
+- Templates oficiais e seus status de aprovação pertencem apenas ao canal `whatsapp_cloud`; um canal `whatsapp_web` pode usar modelos editoriais locais como apoio, sem apresentá-los como aprovados pela Meta.
 - A Meta é a fonte oficial de conteúdo, categoria e status. O sistema sincroniza e armazena uma cópia para consulta, seleção futura e histórico, sem fingir aprovação local.
 - Ler templates exige `whatsapp.templates_read`; sincronizar com a Meta exige `whatsapp.templates_sync` e acesso ao canal próprio ou `channels.manage_all`.
-- Somente uma sincronização autenticada bem-sucedida pode mudar o canal de `configured` para `connected` nesta etapa.
+- Em canais `whatsapp_cloud`, somente uma sincronização autenticada bem-sucedida pode mudar o estado de `configured` para `connected` nesta etapa. Em `whatsapp_web`, a abertura confirmada da sessão vinculada faz essa transição.
 - Criar, editar, excluir ou enviar templates permanece bloqueado até serem definidas regras para categorias, exemplos de variáveis, opt-in, janela de atendimento e custos.
 
 ## Acompanhamento pastoral

@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import QRCode from 'qrcode';
+
 type ConversationStatus = 'open' | 'waiting' | 'resolved';
+type ChannelConnectionStatus = 'configured' | 'connecting' | 'awaiting_qr' | 'connected' | 'disconnecting' | 'disconnected' | 'failed';
 interface Channel {
   id: string; owner: { id: string; name: string }; providerKey: string; displayName: string;
   phoneNumber: string; providerAccountId: string; secretReference: string | null;
-  status: 'configured' | 'connected' | 'disconnected';
+  status: ChannelConnectionStatus;
+}
+interface ChannelConnection {
+  channelId: string; providerKey: string; status: ChannelConnectionStatus; qrCode: string | null;
+  qrExpiresAt: string | null; failureCode: string | null; connectedAt: string | null; lastSeenAt: string | null;
 }
 interface Conversation {
   id: string; channel: { id: string; displayName: string; phoneNumber: string };
@@ -46,12 +53,19 @@ const query = ref('');
 const showChannelForm = ref(false);
 const showConversationForm = ref(false);
 const busy = ref(false);
+const busyChannelId = ref<string | null>(null);
 const feedback = ref('');
 const replyBody = ref('');
-const channelForm = reactive({ providerKey: 'whatsapp_cloud', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
+const channelForm = reactive({ providerKey: 'whatsapp_web', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
+const channelConnections = reactive<Record<string, ChannelConnection>>({});
+const channelQrImages = reactive<Record<string, string>>({});
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
+const channelStatusLabels: Record<ChannelConnectionStatus, string> = {
+  configured: 'Pronto para conectar', connecting: 'Conectando', awaiting_qr: 'Aguardando leitura do QR',
+  connected: 'Conectado', disconnecting: 'Desconectando', disconnected: 'Desconectado', failed: 'Falha na conexão',
+};
 const filtered = computed(() => (conversations.value ?? []).filter((item) => {
   const term = query.value.trim().toLocaleLowerCase('pt-BR');
   const matchesFilter = filter.value === 'active' ? item.status !== 'resolved' : item.status === filter.value;
@@ -75,14 +89,65 @@ async function createChannel() {
       ...channelForm,
       secretReference: channelForm.secretReference || undefined,
     } });
-    Object.assign(channelForm, { providerKey: 'whatsapp_cloud', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
-    showChannelForm.value = false;
-    feedback.value = 'Canal configurado. Instale e configure o adapter para conectá-lo ao WhatsApp.';
+    Object.assign(channelForm, { providerKey: 'whatsapp_web', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
+    feedback.value = 'Canal salvo. Use “Conectar” e leia o QR no WhatsApp do celular.';
     await refreshChannels();
   } catch (requestError: any) {
     feedback.value = requestError?.data?.message ?? 'Não foi possível configurar o canal.';
   } finally { busy.value = false; }
 }
+
+async function loadConnection(channel: Channel) {
+  if (channel.providerKey !== 'whatsapp_web' || !canManageChannel.value) return;
+  try {
+    const connection = await api<ChannelConnection>(`/conversation-channels/${channel.id}/connection`);
+    channelConnections[channel.id] = connection;
+    if (connection.qrCode) channelQrImages[channel.id] = await QRCode.toDataURL(connection.qrCode, { margin: 1, width: 256 });
+    else delete channelQrImages[channel.id];
+  } catch { /* o feedback de ações explícitas é tratado separadamente */ }
+}
+
+async function refreshConnections() {
+  connectionPollingTick += 1;
+  const refreshAll = connectionPollingTick === 1 || connectionPollingTick % 10 === 0;
+  const candidates = (channels.value ?? []).filter((channel) => {
+    const status = channelConnections[channel.id]?.status ?? channel.status;
+    return refreshAll || status === 'connecting' || status === 'awaiting_qr' || status === 'disconnecting';
+  });
+  await Promise.all(candidates.map(loadConnection));
+}
+
+async function connectChannel(channel: Channel) {
+  busyChannelId.value = channel.id; feedback.value = '';
+  try {
+    channelConnections[channel.id] = await api<ChannelConnection>(`/conversation-channels/${channel.id}/connection`, { method: 'POST' });
+    feedback.value = 'Conexão iniciada. O QR aparecerá abaixo em alguns segundos.';
+    await refreshChannels();
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível iniciar a conexão. Verifique se o worker está ativo.';
+  } finally { busyChannelId.value = null; }
+}
+
+async function disconnectChannel(channel: Channel) {
+  busyChannelId.value = channel.id; feedback.value = '';
+  try {
+    channelConnections[channel.id] = await api<ChannelConnection>(`/conversation-channels/${channel.id}/connection`, { method: 'DELETE' });
+    delete channelQrImages[channel.id];
+    feedback.value = 'Desconexão solicitada. As credenciais locais serão removidas pelo worker.';
+    await refreshChannels();
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível desconectar o canal.';
+  } finally { busyChannelId.value = null; }
+}
+
+let connectionPolling: ReturnType<typeof setInterval> | undefined;
+let connectionPollingTick = 0;
+onMounted(() => {
+  void refreshConnections();
+  connectionPolling = setInterval(() => void refreshConnections(), 3_000);
+});
+onBeforeUnmount(() => { if (connectionPolling) clearInterval(connectionPolling); });
+watch(channels, () => void refreshConnections());
 
 async function startConversation() {
   busy.value = true; feedback.value = '';
@@ -149,16 +214,30 @@ async function startFollowup() {
 
     <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
     <section v-if="showChannelForm" class="conversation-setup-card">
-      <div><p class="eyebrow">Meu número</p><h2>Configurar canal do WhatsApp</h2><p>Credenciais não são armazenadas aqui: informe somente o nome da variável de ambiente usada pelo adapter.</p></div>
+      <div><p class="eyebrow">Meu número</p><h2>Configurar canal do WhatsApp</h2><p>Para testar com seu WhatsApp atual, escolha a conexão pelo celular e leia o QR. Cada pastor mantém o próprio canal.</p></div>
       <form class="conversation-setup-form" @submit.prevent="createChannel">
+        <label class="field"><span>Tipo de conexão</span><select v-model="channelForm.providerKey"><option value="whatsapp_web">WhatsApp do celular (experimental)</option><option value="whatsapp_cloud">Meta Cloud API (oficial)</option><option value="manual">Outro adapter</option></select></label>
         <label class="field"><span>Nome do canal</span><input v-model="channelForm.displayName" minlength="2" maxlength="80" placeholder="WhatsApp do Pr. João" required></label>
         <label class="field"><span>Número</span><input v-model="channelForm.phoneNumber" minlength="8" maxlength="32" placeholder="+55 11 99999-9999" required></label>
-        <label class="field"><span>ID da conta no provedor</span><input v-model="channelForm.providerAccountId" maxlength="180" placeholder="WhatsApp Business Account ID"></label>
-        <label class="field"><span>Variável do segredo</span><input v-model="channelForm.secretReference" pattern="[A-Z][A-Z0-9_]+" maxlength="128" placeholder="WHATSAPP_PASTOR_JOAO_TOKEN"><small>Opcional nesta etapa; nunca cole o token.</small></label>
+        <template v-if="channelForm.providerKey === 'whatsapp_cloud'"><label class="field"><span>ID da conta no provedor</span><input v-model="channelForm.providerAccountId" maxlength="180" placeholder="WhatsApp Business Account ID"></label><label class="field"><span>Variável do segredo</span><input v-model="channelForm.secretReference" pattern="[A-Z][A-Z0-9_]+" maxlength="128" placeholder="WHATSAPP_PASTOR_JOAO_TOKEN"><small>Nunca cole o token: informe a variável de ambiente.</small></label></template>
         <div class="conversation-form-actions"><button class="button" type="button" @click="showChannelForm = false">Cancelar</button><button class="button button--primary" :disabled="busy">{{ busy ? 'Salvando…' : 'Salvar canal' }}</button></div>
       </form>
-      <div v-if="channels?.length" class="channel-list"><article v-for="channel in channels" :key="channel.id"><span class="channel-symbol">◌</span><div><strong>{{ channel.displayName }}</strong><small>{{ channel.phoneNumber }} · {{ channel.owner.name }}</small></div><span class="badge" :class="channel.status === 'connected' ? 'badge--published' : 'badge--draft'">{{ channel.status === 'connected' ? 'Conectado' : channel.status === 'configured' ? 'Configurado' : 'Desconectado' }}</span></article></div>
-      <p class="integration-warning"><strong>Status configurado:</strong> o número só envia e recebe mensagens quando uma instalação fornecer o adapter oficial e a fila.</p>
+      <div v-if="channels?.length" class="channel-list">
+        <article v-for="channel in channels" :key="channel.id" class="channel-card">
+          <span class="channel-symbol">◌</span>
+          <div class="channel-card__identity"><strong>{{ channel.displayName }}</strong><small>{{ channel.phoneNumber }} · {{ channel.owner.name }}</small><small>{{ channel.providerKey === 'whatsapp_web' ? 'WhatsApp do celular' : channel.providerKey === 'whatsapp_cloud' ? 'Meta Cloud API' : channel.providerKey }}</small></div>
+          <div class="channel-card__status">
+            <span class="badge" :class="(channelConnections[channel.id]?.status ?? channel.status) === 'connected' ? 'badge--published' : (channelConnections[channel.id]?.status ?? channel.status) === 'failed' ? 'badge--cancelled' : 'badge--draft'">{{ channelStatusLabels[channelConnections[channel.id]?.status ?? channel.status] }}</span>
+            <template v-if="channel.providerKey === 'whatsapp_web'">
+              <button class="button button--small button--primary" type="button" :disabled="busyChannelId === channel.id || ['connecting', 'awaiting_qr', 'disconnecting'].includes(channelConnections[channel.id]?.status ?? channel.status)" @click="connectChannel(channel)">{{ busyChannelId === channel.id ? 'Aguarde…' : (channelConnections[channel.id]?.status ?? channel.status) === 'connected' ? 'Reconectar' : 'Conectar' }}</button>
+              <button v-if="(channelConnections[channel.id]?.status ?? channel.status) === 'connected'" class="button button--small" type="button" :disabled="busyChannelId === channel.id" @click="disconnectChannel(channel)">Desconectar</button>
+            </template>
+          </div>
+          <div v-if="channelQrImages[channel.id]" class="channel-pairing"><img :src="channelQrImages[channel.id]" alt="QR code temporário para conectar o WhatsApp"><div><strong>Leia com o WhatsApp deste número</strong><p>No celular, abra <b>Aparelhos conectados</b>, toque em <b>Conectar um aparelho</b> e aponte a câmera. Este QR expira rapidamente.</p></div></div>
+          <p v-if="channelConnections[channel.id]?.failureCode" class="channel-card__error">A conexão falhou ({{ channelConnections[channel.id]?.failureCode }}). Confirme se o worker está ativo e tente novamente.</p>
+        </article>
+      </div>
+      <p class="integration-warning"><strong>Conexão experimental:</strong> o modo “WhatsApp do celular” usa um adapter não oficial para conversas individuais. O WhatsApp pode interromper sessões; não use para disparos em massa.</p>
       <NuxtLink v-if="canReadTemplates" to="/communication" class="communication-center-link"><span>✎</span><div><strong>Modelos e lembretes ficam na Central de comunicação</strong><small>Edite modelos locais, consulte o catálogo da Meta e habilite o uso nos eventos.</small></div><b>Ir para a central →</b></NuxtLink>
     </section>
 

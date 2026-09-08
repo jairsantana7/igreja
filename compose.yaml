@@ -42,6 +42,33 @@ services:
     networks:
       - data
 
+  whatsapp-worker:
+    profiles: ["whatsapp"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.whatsapp
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://igreja_runtime:${APP_RUNTIME_PASSWORD:-runtime-local-change-me}@postgres:5432/${POSTGRES_DB:-igreja}
+      JWT_SECRET: ${JWT_SECRET:-local-only-replace-with-at-least-32-random-characters}
+      SESSION_BINDING_SECRET: ${SESSION_BINDING_SECRET:-local-session-binding-replace-with-32-characters}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3100}
+      JOB_QUEUE_DRIVER: bullmq
+      REDIS_URL: redis://redis:6379
+      JOB_QUEUE_NAME: ${JOB_QUEUE_NAME:-igreja-jobs}
+      WHATSAPP_QUEUE_NAME: ${WHATSAPP_QUEUE_NAME:-igreja-whatsapp}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      WHATSAPP_WEB_DRIVER: baileys
+      CONVERSATION_SESSION_ENCRYPTION_KEY: ${CONVERSATION_SESSION_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - data
+
 volumes:
   postgres-data:
   redis-data:

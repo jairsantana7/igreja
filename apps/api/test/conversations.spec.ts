@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { CreateConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
@@ -53,5 +53,25 @@ describe('central de conversas', () => {
     await expect(useCase.execute(principal(['conversations.reply']), 'conversation', 'Lembrete')).resolves.toMatchObject({ status: 'queued' });
     expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ deduplicationKey: message.id }), { attempts: 5 });
     expect(conversations.markQueued).toHaveBeenCalledWith(expect.any(Object), 'conversation', message.id, 'job-1');
+  });
+
+  it('valida permissão e adapter antes de enfileirar o pareamento', async () => {
+    const conversations = {
+      connection: vi.fn().mockResolvedValue({ channelId: 'channel', providerKey: 'whatsapp_web', status: 'configured' }),
+      markConnectionRequested: vi.fn(),
+    };
+    const queue = { enqueue: vi.fn() };
+    const disabled = new ConnectConversationChannelUseCase(conversations as unknown as ConversationRepository, queue, { supportsConnection: () => false });
+    await expect(disabled.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow(ConflictError);
+    expect(queue.enqueue).not.toHaveBeenCalled();
+
+    const enabled = new ConnectConversationChannelUseCase(conversations as unknown as ConversationRepository, queue, { supportsConnection: () => true });
+    queue.enqueue.mockResolvedValue({ jobId: 'connect-1' });
+    await enabled.execute(principal(['channels.manage_own']), 'channel');
+    expect(conversations.markConnectionRequested).toHaveBeenCalledOnce();
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'conversations.channel.connect',
+      deduplicationKey: 'channel:connect',
+    }), { attempts: 3 });
   });
 });

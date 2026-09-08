@@ -21,6 +21,12 @@ function jobQueueDriver(): 'disabled' | 'bullmq' {
   return value;
 }
 
+function whatsappWebDriver(): 'disabled' | 'baileys' {
+  const value = process.env.WHATSAPP_WEB_DRIVER?.trim().toLowerCase() || 'disabled';
+  if (value !== 'disabled' && value !== 'baileys') throw new Error('WHATSAPP_WEB_DRIVER deve ser disabled ou baileys.');
+  return value;
+}
+
 export const env = Object.freeze({
   appName: required('APP_NAME', 'Minha Comunidade'),
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -39,7 +45,10 @@ export const env = Object.freeze({
   jobQueueDriver: jobQueueDriver(),
   redisUrl: process.env.REDIS_URL?.trim() ?? '',
   jobQueueName: required('JOB_QUEUE_NAME', 'igreja-jobs'),
+  whatsappQueueName: required('WHATSAPP_QUEUE_NAME', 'igreja-whatsapp'),
   workerConcurrency: integer('WORKER_CONCURRENCY', 5),
+  whatsappWebDriver: whatsappWebDriver(),
+  conversationSessionEncryptionKey: process.env.CONVERSATION_SESSION_ENCRYPTION_KEY?.trim() ?? '',
 });
 
 if (env.jwtSecret.length < 32) throw new Error('JWT_SECRET precisa ter ao menos 32 caracteres.');
@@ -55,4 +64,11 @@ if (env.nodeEnv === 'production' && env.trustProxy.trim().toLowerCase() === 'tru
 }
 if (env.jobQueueDriver === 'bullmq' && !env.redisUrl) {
   throw new Error('REDIS_URL é obrigatória quando JOB_QUEUE_DRIVER=bullmq.');
+}
+if (env.whatsappWebDriver !== 'disabled') {
+  if (env.jobQueueDriver !== 'bullmq') throw new Error('WHATSAPP_WEB_DRIVER exige JOB_QUEUE_DRIVER=bullmq.');
+  const key = Buffer.from(env.conversationSessionEncryptionKey, 'base64');
+  if (key.length !== 32 || key.toString('base64') !== env.conversationSessionEncryptionKey) {
+    throw new Error('CONVERSATION_SESSION_ENCRYPTION_KEY deve conter exatamente 32 bytes em base64.');
+  }
 }
