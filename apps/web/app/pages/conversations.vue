@@ -118,7 +118,7 @@ watch(selectedId, async (id) => {
     await refreshMessages();
     void requestHistorySync(id);
   }
-});
+}, { immediate: true });
 watch(messages, (items) => {
   if (!import.meta.client || !selectedId.value) return;
   for (const message of items ?? []) {
