@@ -55,6 +55,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - O download do binário é autenticado e também verifica o acesso do usuário à conversa. Não exponha o bucket nem transforme `storage_key` em URL pública.
 - O composer envia um arquivo por `multipart/form-data`. A aplicação valida o conteúdo, persiste mensagem e metadados antes do enqueue e entrega ao adapter por um contrato neutro de imagem ou áudio.
 - Invalidações em tempo real usam SSE entre API e navegador e a porta `ConversationRealtimeBus` entre processos. O adapter Redis publica apenas tenant e tipo do recurso; configure o proxy com buffering desabilitado para `/api/conversations/events`.
+- O worker restaura sessões conectáveis na inicialização. A descoberta usa uma função de banco estreita que retorna apenas tenant e canal; a leitura do canal e de suas credenciais continua ocorrendo sob RLS com contexto transacional.
 
 ### WhatsApp Web não oficial
 

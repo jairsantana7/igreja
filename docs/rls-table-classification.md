@@ -48,6 +48,12 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_registration_participants` | tenant-direct | pessoa confirmada é uma fotografia vinculada à inscrição e ao evento | RLS direta + FK composta para inscrição; check-in referencia ator do mesmo tenant |
 | `registration_offering_selections` | tenant-direct | seleção de adicional pertence à inscrição e à oferta do mesmo evento | RLS direta + FKs compostas para inscrição e oferta |
 
+## Funções estreitas sem contexto prévio
+
+- `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.
+- `app.list_restorable_conversation_channels`: percorre o catálogo de tenants e entra em cada contexto RLS; retorna ao worker apenas `tenant_id` e `channel_id` de sessões WhatsApp restauráveis.
+- O runtime não recebe `SELECT` direto em `tenant_directory`. Ambas usam `SECURITY DEFINER`, `search_path` fixo, owner sem `BYPASSRLS` e `EXECUTE` explícito.
+
 ## Regras para novas tabelas
 
 1. Escolha uma classe: tenant-direct, tenant-derived, tenant root, global catalog ou platform-privileged.

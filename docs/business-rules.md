@@ -100,6 +100,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Números institucionais são recomendados para preservar continuidade, mas números próprios são permitidos porque fazem parte do trabalho cotidiano de muitas comunidades.
 - Um canal `manual` apenas organiza o número e pode abrir uma conversa direta; ele não captura uma sessão do WhatsApp Web nem declara mensagens como entregues.
 - O canal `whatsapp_web` usa um driver não oficial opcional, desabilitado por padrão e isolado em um worker persistente. A implementação inicial usa Baileys, mas o nome da biblioteca não faz parte da regra de negócio.
+- Ao reiniciar, o worker restaura somente canais com estado operacional compatível e credencial persistida; canais desconectados ou em desconexão nunca são reconectados automaticamente.
 - Cada canal `whatsapp_web` possui pareamento próprio por QR. Somente o proprietário ou quem possui `channels.manage_all` pode iniciar, consultar ou revogar a conexão.
 - Somente o proprietário ou quem possui `channels.manage_all` pode excluir um canal. A exclusão exige estado `configured` ou `disconnected` e ausência de conversas ou lembretes vinculados; histórico operacional nunca é apagado em cascata.
 - O QR é efêmero e as credenciais do dispositivo vinculado são criptografadas. Nenhum desses valores entra em logs, respostas de auditoria ou variáveis salvas pelo usuário.

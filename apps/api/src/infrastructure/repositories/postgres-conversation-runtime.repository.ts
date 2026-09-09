@@ -11,6 +11,13 @@ import type { ConversationRealtimeBus, ConversationRealtimeResource } from '../.
 export class PostgresConversationRuntimeRepository implements ConversationRuntimeRepository {
   constructor(private readonly database: PostgresDatabase, private readonly realtime: ConversationRealtimeBus) {}
 
+  async listRestorableChannels(): Promise<Array<{ tenantId: string; channelId: string }>> {
+    const result = await this.database.queryPublic<{ tenant_id: string; channel_id: string }>(
+      'SELECT tenant_id, channel_id FROM app.list_restorable_conversation_channels()',
+    );
+    return result.rows.map((row) => ({ tenantId: row.tenant_id, channelId: row.channel_id }));
+  }
+
   findChannel(tenantId: string, channelId: string): Promise<ConversationRuntimeChannel | null> {
     return this.database.withTenant(tenantId, async (client) => {
       const result = await client.query(`

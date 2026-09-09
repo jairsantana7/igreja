@@ -16,6 +16,8 @@ const registrationA = 'a6000000-0000-4000-8000-000000000001';
 const registrationB = 'b6000000-0000-4000-8000-000000000002';
 const channelA = 'a7000000-0000-4000-8000-000000000001';
 const channelB = 'b7000000-0000-4000-8000-000000000002';
+const restorableChannelA = 'a7100000-0000-4000-8000-000000000001';
+const restorableChannelB = 'b7100000-0000-4000-8000-000000000002';
 const conversationA = 'a8000000-0000-4000-8000-000000000001';
 const conversationB = 'b8000000-0000-4000-8000-000000000002';
 const profileA = 'a9000000-0000-4000-8000-000000000001';
@@ -116,6 +118,14 @@ describeDatabase('PostgreSQL RLS', () => {
       INSERT INTO conversation_provider_states (tenant_id, channel_id, provider_key, state_key, encrypted_value) VALUES
         ('${tenantA}', '${channelA}', 'whatsapp_cloud', 'test-state', decode(repeat('aa', 30), 'hex')),
         ('${tenantB}', '${channelB}', 'whatsapp_cloud', 'test-state', decode(repeat('bb', 30), 'hex'))
+      ON CONFLICT DO NOTHING;
+      INSERT INTO conversation_channels (id, tenant_id, owner_user_id, provider_key, display_name, phone_number, status) VALUES
+        ('${restorableChannelA}', '${tenantA}', '${userA}', 'whatsapp_web', 'Canal restaurável A', '+551100000011', 'connected'),
+        ('${restorableChannelB}', '${tenantB}', '${userB}', 'whatsapp_web', 'Canal restaurável B', '+551100000012', 'connected')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO conversation_provider_states (tenant_id, channel_id, provider_key, state_key, encrypted_value) VALUES
+        ('${tenantA}', '${restorableChannelA}', 'whatsapp_web', 'baileys:creds', decode(repeat('ca', 30), 'hex')),
+        ('${tenantB}', '${restorableChannelB}', 'whatsapp_web', 'baileys:creds', decode(repeat('cb', 30), 'hex'))
       ON CONFLICT DO NOTHING;
       INSERT INTO whatsapp_message_templates (tenant_id, channel_id, provider_template_id, name, language, category, status, components) VALUES
         ('${tenantA}', '${channelA}', 'template-a', 'lembrete_a', 'pt_BR', 'UTILITY', 'APPROVED', '[]'),
@@ -378,11 +388,13 @@ describeDatabase('PostgreSQL RLS', () => {
     const client = await runtime.connect();
     try {
       await inTenant(client, tenantA, async () => {
-        expect((await client.query('SELECT id FROM conversation_channels')).rows.map((row) => row.id)).toEqual([channelA]);
+        expect((await client.query('SELECT id FROM conversation_channels')).rows.map((row) => row.id).sort())
+          .toEqual([channelA, restorableChannelA].sort());
         expect((await client.query('SELECT id FROM conversations')).rows.map((row) => row.id)).toEqual([conversationA]);
         expect((await client.query('SELECT body FROM conversation_messages')).rows.map((row) => row.body)).toEqual(['Mensagem A']);
         expect((await client.query('SELECT media_kind FROM conversation_message_attachments')).rows).toEqual([{ media_kind: 'image' }]);
-        expect((await client.query('SELECT state_key FROM conversation_provider_states')).rows).toEqual([{ state_key: 'test-state' }]);
+        expect((await client.query('SELECT state_key FROM conversation_provider_states')).rows
+          .map((row) => row.state_key).sort()).toEqual(['baileys:creds', 'test-state']);
         expect((await client.query('SELECT name FROM whatsapp_message_templates')).rows).toEqual([{ name: 'lembrete_a' }]);
       });
       await inTenant(client, tenantA, async () => {
@@ -499,6 +511,20 @@ describeDatabase('PostgreSQL RLS', () => {
         'SELECT storage_key FROM app.resolve_public_event_media($1, $2)', [publicEventA, mediaB],
       )).rows).toEqual([]);
     } finally { client.release(); }
+  });
+
+  it('expõe ao worker somente referências mínimas de canais restauráveis', async () => {
+    const result = await runtime.query<{ tenant_id: string; channel_id: string }>(
+      'SELECT tenant_id, channel_id FROM app.list_restorable_conversation_channels()',
+    );
+    const fixtures = result.rows
+      .filter((row) => [restorableChannelA, restorableChannelB].includes(row.channel_id))
+      .sort((left, right) => left.channel_id.localeCompare(right.channel_id));
+    expect(fixtures).toEqual([
+      { tenant_id: tenantA, channel_id: restorableChannelA },
+      { tenant_id: tenantB, channel_id: restorableChannelB },
+    ]);
+    expect(Object.keys(fixtures[0] ?? {}).sort()).toEqual(['channel_id', 'tenant_id']);
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {

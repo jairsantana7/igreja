@@ -92,6 +92,7 @@ export interface ConversationOutboundDelivery {
 }
 
 export interface ConversationRuntimeRepository {
+  listRestorableChannels(): Promise<Array<{ tenantId: string; channelId: string }>>;
   findChannel(tenantId: string, channelId: string): Promise<ConversationRuntimeChannel | null>;
   findOutbound(tenantId: string, conversationId: string, messageId: string): Promise<ConversationOutboundDelivery | null>;
   updateConnection(tenantId: string, channelId: string, update: {

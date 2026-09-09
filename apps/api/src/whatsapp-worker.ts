@@ -81,6 +81,26 @@ async function bootstrap(): Promise<void> {
   });
   worker.on('error', (error) => logger.error({ event: 'whatsapp_worker_error', errorType: error.name }));
 
+  const restorableChannels = await runtime.listRestorableChannels();
+  let restoredChannels = 0;
+  for (const reference of restorableChannels) {
+    try {
+      await connectChannel.execute(reference.tenantId, reference.channelId);
+      restoredChannels += 1;
+    } catch (error) {
+      await runtime.updateConnection(reference.tenantId, reference.channelId, {
+        status: 'failed',
+        failureCode: 'startup_restore_failed',
+      }).catch(() => undefined);
+      applicationLogger.captureException(error, {
+        event: 'whatsapp_channel_restore_failed',
+        tenantId: reference.tenantId,
+        channelId: reference.channelId,
+      });
+    }
+  }
+  logger.log({ event: 'whatsapp_channels_restore_requested', count: restoredChannels });
+
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
