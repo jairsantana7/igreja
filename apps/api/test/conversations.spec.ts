@@ -79,10 +79,12 @@ describe('central de conversas', () => {
     const deleteChannel = vi.fn().mockResolvedValue('connected');
     const useCase = new DeleteConversationChannelUseCase({ deleteChannel } as unknown as ConversationRepository);
     await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow('Desconecte o canal');
-    deleteChannel.mockResolvedValue('in_use');
+    deleteChannel.mockResolvedValue('has_conversations');
     await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow('precisa ser preservado');
+    deleteChannel.mockResolvedValue('has_reminders');
+    await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow('Remova os lembretes');
     deleteChannel.mockResolvedValue('deleted');
     await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).resolves.toBeUndefined();
-    expect(deleteChannel).toHaveBeenCalledTimes(3);
+    expect(deleteChannel).toHaveBeenCalledTimes(4);
   });
 });

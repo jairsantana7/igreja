@@ -4,6 +4,7 @@ defineProps<{
   title: string;
   description: string;
   confirmLabel?: string;
+  busyLabel?: string;
   busy?: boolean;
 }>();
 
@@ -19,7 +20,7 @@ defineEmits<{ confirm: []; cancel: [] }>();
         <p class="eyebrow">Ação importante</p>
         <h2 id="confirm-dialog-title">{{ title }}</h2>
         <p>{{ description }}</p>
-        <footer><button class="button" type="button" :disabled="busy" @click="$emit('cancel')">Voltar</button><button class="button button--danger-solid" type="button" :disabled="busy" @click="$emit('confirm')">{{ busy ? 'Cancelando…' : confirmLabel ?? 'Confirmar' }}</button></footer>
+        <footer><button class="button" type="button" :disabled="busy" @click="$emit('cancel')">Voltar</button><button class="button button--danger-solid" type="button" :disabled="busy" @click="$emit('confirm')">{{ busy ? busyLabel ?? 'Cancelando…' : confirmLabel ?? 'Confirmar' }}</button></footer>
       </section>
     </div>
   </Teleport>

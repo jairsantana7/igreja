@@ -108,7 +108,8 @@ export class DeleteConversationChannelUseCase {
     const result = await this.conversations.deleteChannel(principal, channelId);
     if (result === 'not_found') throw new NotFoundError('Canal não encontrado ou sem acesso.');
     if (result === 'connected') throw new ConflictError('Desconecte o canal antes de excluí-lo.');
-    if (result === 'in_use') throw new ConflictError('Este canal possui conversas ou lembretes e precisa ser preservado no histórico.');
+    if (result === 'has_conversations') throw new ConflictError('Este canal possui conversas e precisa ser preservado no histórico.');
+    if (result === 'has_reminders') throw new ConflictError('Remova os lembretes vinculados aos eventos antes de excluir este canal.');
   }
 }
 

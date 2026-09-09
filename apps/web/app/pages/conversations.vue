@@ -60,6 +60,7 @@ const channelForm = reactive({ providerKey: 'whatsapp_web', displayName: '', pho
 const channelConnections = reactive<Record<string, ChannelConnection>>({});
 const channelQrImages = reactive<Record<string, string>>({});
 const channelToDelete = ref<Channel | null>(null);
+const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
@@ -150,11 +151,23 @@ async function deleteChannel() {
     delete channelConnections[channel.id];
     delete channelQrImages[channel.id];
     channelToDelete.value = null;
+    channelDeleteError.value = '';
     feedback.value = 'Canal excluído.';
     await refreshChannels();
   } catch (requestError: any) {
-    feedback.value = requestError?.data?.message ?? 'Não foi possível excluir o canal.';
+    channelDeleteError.value = requestError?.data?.message ?? 'Não foi possível excluir o canal.';
+    feedback.value = channelDeleteError.value;
   } finally { busyChannelId.value = null; }
+}
+
+function requestChannelDeletion(channel: Channel) {
+  channelDeleteError.value = '';
+  channelToDelete.value = channel;
+}
+
+function cancelChannelDeletion() {
+  channelDeleteError.value = '';
+  channelToDelete.value = null;
 }
 
 let connectionPolling: ReturnType<typeof setInterval> | undefined;
@@ -249,7 +262,7 @@ async function startFollowup() {
               <button class="button button--small button--primary" type="button" :disabled="busyChannelId === channel.id || ['connecting', 'awaiting_qr', 'disconnecting'].includes(channelConnections[channel.id]?.status ?? channel.status)" @click="connectChannel(channel)">{{ busyChannelId === channel.id ? 'Aguarde…' : (channelConnections[channel.id]?.status ?? channel.status) === 'connected' ? 'Reconectar' : 'Conectar' }}</button>
               <button v-if="['connecting', 'awaiting_qr', 'connected', 'failed'].includes(channelConnections[channel.id]?.status ?? channel.status)" class="button button--small" type="button" :disabled="busyChannelId === channel.id" @click="disconnectChannel(channel)">Desconectar</button>
             </template>
-            <button v-if="['configured', 'disconnected'].includes(channelConnections[channel.id]?.status ?? channel.status)" class="button button--small button--danger" type="button" :disabled="busyChannelId === channel.id" @click="channelToDelete = channel">Excluir</button>
+            <button v-if="['configured', 'disconnected'].includes(channelConnections[channel.id]?.status ?? channel.status)" class="button button--small button--danger" type="button" :disabled="busyChannelId === channel.id" @click="requestChannelDeletion(channel)">Excluir</button>
           </div>
           <div v-if="channelQrImages[channel.id]" class="channel-pairing"><img :src="channelQrImages[channel.id]" alt="QR code temporário para conectar o WhatsApp"><div><strong>Leia com o WhatsApp deste número</strong><p>No celular, abra <b>Aparelhos conectados</b>, toque em <b>Conectar um aparelho</b> e aponte a câmera. Este QR expira rapidamente.</p></div></div>
           <p v-if="channelConnections[channel.id]?.failureCode" class="channel-card__error">A conexão falhou ({{ channelConnections[channel.id]?.failureCode }}). Confirme se o worker está ativo e tente novamente.</p>
@@ -296,6 +309,6 @@ async function startFollowup() {
       </article>
       <article v-else class="conversation-thread conversation-thread--empty"><span>◌</span><h2>Selecione uma conversa</h2><p>Você acompanha aqui os atendimentos dos seus próprios números. Pessoas responsáveis pela supervisão também podem acompanhar as conversas da comunidade.</p></article>
     </section>
-    <ConfirmDialog :open="Boolean(channelToDelete)" :title="`Excluir ${channelToDelete?.displayName ?? 'canal'}?`" description="A exclusão só será concluída se o canal estiver desconectado e não possuir conversas ou lembretes vinculados." confirm-label="Excluir canal" :busy="Boolean(busyChannelId && channelToDelete)" @cancel="channelToDelete = null" @confirm="deleteChannel" />
+    <ConfirmDialog :open="Boolean(channelToDelete)" :title="`Excluir ${channelToDelete?.displayName ?? 'canal'}?`" :description="channelDeleteError || 'A exclusão só será concluída se o canal estiver desconectado e não possuir conversas ou lembretes vinculados.'" confirm-label="Excluir canal" busy-label="Excluindo…" :busy="Boolean(busyChannelId && channelToDelete)" @cancel="cancelChannelDeletion" @confirm="deleteChannel" />
   </div>
 </template>
