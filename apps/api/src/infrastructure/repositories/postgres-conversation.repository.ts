@@ -163,6 +163,25 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  deleteChannel(principal: AuthenticatedPrincipal, channelId: string): Promise<'deleted' | 'not_found' | 'connected' | 'in_use'> {
+    return this.database.withTenant(principal, async (client) => {
+      const channel = await client.query<{ status: string }>(`
+        SELECT status FROM conversation_channels
+        WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
+        FOR UPDATE
+      `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
+      if (!channel.rows[0]) return 'not_found';
+      if (!['configured', 'disconnected'].includes(channel.rows[0].status)) return 'connected';
+      const references = await client.query<{ in_use: boolean }>(`
+        SELECT EXISTS (SELECT 1 FROM conversations WHERE channel_id = $1)
+          OR EXISTS (SELECT 1 FROM event_reminder_rules WHERE channel_id = $1) AS in_use
+      `, [channelId]);
+      if (references.rows[0]?.in_use) return 'in_use';
+      await client.query('DELETE FROM conversation_channels WHERE id = $1', [channelId]);
+      return 'deleted';
+    });
+  }
+
   private async canAccess(client: PoolClient, principal: AuthenticatedPrincipal, conversationId: string) {
     const result = await client.query(`
       SELECT 1 FROM conversations

@@ -34,6 +34,7 @@ export const TOKENS = {
   getConversationChannelConnectionUseCase: Symbol('GetConversationChannelConnectionUseCase'),
   connectConversationChannelUseCase: Symbol('ConnectConversationChannelUseCase'),
   disconnectConversationChannelUseCase: Symbol('DisconnectConversationChannelUseCase'),
+  deleteConversationChannelUseCase: Symbol('DeleteConversationChannelUseCase'),
   listConversationsUseCase: Symbol('ListConversationsUseCase'),
   createConversationUseCase: Symbol('CreateConversationUseCase'),
   getConversationMessagesUseCase: Symbol('GetConversationMessagesUseCase'),

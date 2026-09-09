@@ -100,6 +100,18 @@ export class DisconnectConversationChannelUseCase {
   }
 }
 
+export class DeleteConversationChannelUseCase {
+  constructor(private readonly conversations: ConversationRepository) {}
+
+  async execute(principal: AuthenticatedPrincipal, channelId: string): Promise<void> {
+    requireChannelManagement(principal);
+    const result = await this.conversations.deleteChannel(principal, channelId);
+    if (result === 'not_found') throw new NotFoundError('Canal não encontrado ou sem acesso.');
+    if (result === 'connected') throw new ConflictError('Desconecte o canal antes de excluí-lo.');
+    if (result === 'in_use') throw new ConflictError('Este canal possui conversas ou lembretes e precisa ser preservado no histórico.');
+  }
+}
+
 export class ListConversationsUseCase {
   constructor(private readonly conversations: ConversationRepository) {}
   execute(principal: AuthenticatedPrincipal) {

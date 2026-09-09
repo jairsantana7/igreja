@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, DeleteConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
@@ -73,5 +73,16 @@ describe('central de conversas', () => {
       name: 'conversations.channel.connect',
       deduplicationKey: 'channel:connect',
     }), { attempts: 3 });
+  });
+
+  it('só exclui canal desconectado e sem histórico', async () => {
+    const deleteChannel = vi.fn().mockResolvedValue('connected');
+    const useCase = new DeleteConversationChannelUseCase({ deleteChannel } as unknown as ConversationRepository);
+    await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow('Desconecte o canal');
+    deleteChannel.mockResolvedValue('in_use');
+    await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).rejects.toThrow('precisa ser preservado');
+    deleteChannel.mockResolvedValue('deleted');
+    await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).resolves.toBeUndefined();
+    expect(deleteChannel).toHaveBeenCalledTimes(3);
   });
 });

@@ -56,6 +56,7 @@ export interface ConversationRepository {
   markConnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean>;
   markDisconnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean>;
   markConnectionCommandFailed(principal: AuthenticatedPrincipal, channelId: string, failureCode: string): Promise<void>;
+  deleteChannel(principal: AuthenticatedPrincipal, channelId: string): Promise<'deleted' | 'not_found' | 'connected' | 'in_use'>;
 }
 
 export interface ConversationRuntimeChannel {

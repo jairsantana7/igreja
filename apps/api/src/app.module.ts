@@ -47,7 +47,7 @@ import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUs
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
@@ -331,6 +331,11 @@ import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
       provide: TOKENS.disconnectConversationChannelUseCase,
       useFactory: (conversations: PostgresConversationRepository, queue: JobQueue, providers: ConversationProviderCatalog) => new DisconnectConversationChannelUseCase(conversations, queue, providers),
       inject: [TOKENS.conversationRepository, TOKENS.jobQueue, TOKENS.conversationProviderCatalog],
+    },
+    {
+      provide: TOKENS.deleteConversationChannelUseCase,
+      useFactory: (conversations: PostgresConversationRepository) => new DeleteConversationChannelUseCase(conversations),
+      inject: [TOKENS.conversationRepository],
     },
     {
       provide: TOKENS.listConversationsUseCase,

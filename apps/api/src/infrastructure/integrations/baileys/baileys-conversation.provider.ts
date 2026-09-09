@@ -187,6 +187,7 @@ export class BaileysConversationProvider implements ConversationProvider {
     disconnectError?: unknown,
   ): Promise<void> {
     try {
+      if (session.manuallyClosing) return;
       if (qr) {
         const expiresAt = new Date(Date.now() + QR_TTL_MS);
         await this.states.set({

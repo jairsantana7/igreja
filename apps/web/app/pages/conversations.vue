@@ -59,6 +59,7 @@ const replyBody = ref('');
 const channelForm = reactive({ providerKey: 'whatsapp_web', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
 const channelConnections = reactive<Record<string, ChannelConnection>>({});
 const channelQrImages = reactive<Record<string, string>>({});
+const channelToDelete = ref<Channel | null>(null);
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
@@ -140,6 +141,22 @@ async function disconnectChannel(channel: Channel) {
   } finally { busyChannelId.value = null; }
 }
 
+async function deleteChannel() {
+  const channel = channelToDelete.value;
+  if (!channel) return;
+  busyChannelId.value = channel.id; feedback.value = '';
+  try {
+    await api(`/conversation-channels/${channel.id}`, { method: 'DELETE' });
+    delete channelConnections[channel.id];
+    delete channelQrImages[channel.id];
+    channelToDelete.value = null;
+    feedback.value = 'Canal excluído.';
+    await refreshChannels();
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível excluir o canal.';
+  } finally { busyChannelId.value = null; }
+}
+
 let connectionPolling: ReturnType<typeof setInterval> | undefined;
 let connectionPollingTick = 0;
 onMounted(() => {
@@ -216,7 +233,7 @@ async function startFollowup() {
     <section v-if="showChannelForm" class="conversation-setup-card">
       <div><p class="eyebrow">Meu número</p><h2>Configurar canal do WhatsApp</h2><p>Para testar com seu WhatsApp atual, escolha a conexão pelo celular e leia o QR. Cada pastor mantém o próprio canal.</p></div>
       <form class="conversation-setup-form" @submit.prevent="createChannel">
-        <label class="field"><span>Tipo de conexão</span><select v-model="channelForm.providerKey"><option value="whatsapp_web">WhatsApp do celular (experimental)</option><option value="whatsapp_cloud">Meta Cloud API (oficial)</option><option value="manual">Outro adapter</option></select></label>
+        <label class="field"><span>Tipo de conexão</span><select v-model="channelForm.providerKey"><option value="whatsapp_web">WhatsApp via QR Code</option><option value="whatsapp_cloud">Meta Cloud API (oficial)</option><option value="manual">Outro adapter</option></select></label>
         <label class="field"><span>Nome do canal</span><input v-model="channelForm.displayName" minlength="2" maxlength="80" placeholder="WhatsApp do Pr. João" required></label>
         <label class="field"><span>Número</span><input v-model="channelForm.phoneNumber" minlength="8" maxlength="32" placeholder="+55 11 99999-9999" required></label>
         <template v-if="channelForm.providerKey === 'whatsapp_cloud'"><label class="field"><span>ID da conta no provedor</span><input v-model="channelForm.providerAccountId" maxlength="180" placeholder="WhatsApp Business Account ID"></label><label class="field"><span>Variável do segredo</span><input v-model="channelForm.secretReference" pattern="[A-Z][A-Z0-9_]+" maxlength="128" placeholder="WHATSAPP_PASTOR_JOAO_TOKEN"><small>Nunca cole o token: informe a variável de ambiente.</small></label></template>
@@ -225,19 +242,20 @@ async function startFollowup() {
       <div v-if="channels?.length" class="channel-list">
         <article v-for="channel in channels" :key="channel.id" class="channel-card">
           <span class="channel-symbol">◌</span>
-          <div class="channel-card__identity"><strong>{{ channel.displayName }}</strong><small>{{ channel.phoneNumber }} · {{ channel.owner.name }}</small><small>{{ channel.providerKey === 'whatsapp_web' ? 'WhatsApp do celular' : channel.providerKey === 'whatsapp_cloud' ? 'Meta Cloud API' : channel.providerKey }}</small></div>
+          <div class="channel-card__identity"><strong>{{ channel.displayName }}</strong><small>{{ channel.phoneNumber }} · {{ channel.owner.name }}</small><small>{{ channel.providerKey === 'whatsapp_web' ? 'WhatsApp via QR Code' : channel.providerKey === 'whatsapp_cloud' ? 'Meta Cloud API' : channel.providerKey }}</small></div>
           <div class="channel-card__status">
             <span class="badge" :class="(channelConnections[channel.id]?.status ?? channel.status) === 'connected' ? 'badge--published' : (channelConnections[channel.id]?.status ?? channel.status) === 'failed' ? 'badge--cancelled' : 'badge--draft'">{{ channelStatusLabels[channelConnections[channel.id]?.status ?? channel.status] }}</span>
             <template v-if="channel.providerKey === 'whatsapp_web'">
               <button class="button button--small button--primary" type="button" :disabled="busyChannelId === channel.id || ['connecting', 'awaiting_qr', 'disconnecting'].includes(channelConnections[channel.id]?.status ?? channel.status)" @click="connectChannel(channel)">{{ busyChannelId === channel.id ? 'Aguarde…' : (channelConnections[channel.id]?.status ?? channel.status) === 'connected' ? 'Reconectar' : 'Conectar' }}</button>
-              <button v-if="(channelConnections[channel.id]?.status ?? channel.status) === 'connected'" class="button button--small" type="button" :disabled="busyChannelId === channel.id" @click="disconnectChannel(channel)">Desconectar</button>
+              <button v-if="['connecting', 'awaiting_qr', 'connected', 'failed'].includes(channelConnections[channel.id]?.status ?? channel.status)" class="button button--small" type="button" :disabled="busyChannelId === channel.id" @click="disconnectChannel(channel)">Desconectar</button>
             </template>
+            <button v-if="['configured', 'disconnected'].includes(channelConnections[channel.id]?.status ?? channel.status)" class="button button--small button--danger" type="button" :disabled="busyChannelId === channel.id" @click="channelToDelete = channel">Excluir</button>
           </div>
           <div v-if="channelQrImages[channel.id]" class="channel-pairing"><img :src="channelQrImages[channel.id]" alt="QR code temporário para conectar o WhatsApp"><div><strong>Leia com o WhatsApp deste número</strong><p>No celular, abra <b>Aparelhos conectados</b>, toque em <b>Conectar um aparelho</b> e aponte a câmera. Este QR expira rapidamente.</p></div></div>
           <p v-if="channelConnections[channel.id]?.failureCode" class="channel-card__error">A conexão falhou ({{ channelConnections[channel.id]?.failureCode }}). Confirme se o worker está ativo e tente novamente.</p>
         </article>
       </div>
-      <p class="integration-warning"><strong>Conexão experimental:</strong> o modo “WhatsApp do celular” usa um adapter não oficial para conversas individuais. O WhatsApp pode interromper sessões; não use para disparos em massa.</p>
+      <p class="integration-warning"><strong>Integração via QR Code:</strong> este modo usa um adapter não oficial para conversas individuais. O WhatsApp pode interromper sessões; não use para disparos em massa.</p>
       <NuxtLink v-if="canReadTemplates" to="/communication" class="communication-center-link"><span>✎</span><div><strong>Modelos e lembretes ficam na Central de comunicação</strong><small>Edite modelos locais, consulte o catálogo da Meta e habilite o uso nos eventos.</small></div><b>Ir para a central →</b></NuxtLink>
     </section>
 
@@ -278,5 +296,6 @@ async function startFollowup() {
       </article>
       <article v-else class="conversation-thread conversation-thread--empty"><span>◌</span><h2>Selecione uma conversa</h2><p>Você acompanha aqui os atendimentos dos seus próprios números. Pessoas responsáveis pela supervisão também podem acompanhar as conversas da comunidade.</p></article>
     </section>
+    <ConfirmDialog :open="Boolean(channelToDelete)" :title="`Excluir ${channelToDelete?.displayName ?? 'canal'}?`" description="A exclusão só será concluída se o canal estiver desconectado e não possuir conversas ou lembretes vinculados." confirm-label="Excluir canal" :busy="Boolean(busyChannelId && channelToDelete)" @cancel="channelToDelete = null" @confirm="deleteChannel" />
   </div>
 </template>

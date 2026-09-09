@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Header, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -19,6 +19,7 @@ export class ConversationsController {
     @Inject(TOKENS.getConversationChannelConnectionUseCase) private readonly getConnection: GetConversationChannelConnectionUseCase,
     @Inject(TOKENS.connectConversationChannelUseCase) private readonly connectChannel: ConnectConversationChannelUseCase,
     @Inject(TOKENS.disconnectConversationChannelUseCase) private readonly disconnectChannel: DisconnectConversationChannelUseCase,
+    @Inject(TOKENS.deleteConversationChannelUseCase) private readonly deleteChannel: DeleteConversationChannelUseCase,
     @Inject(TOKENS.listConversationsUseCase) private readonly listConversations: ListConversationsUseCase,
     @Inject(TOKENS.createConversationUseCase) private readonly createConversation: CreateConversationUseCase,
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
@@ -53,6 +54,12 @@ export class ConversationsController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @RequireAnyPermission(PERMISSIONS.channelsManageOwn, PERMISSIONS.channelsManageAll)
   disconnect(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('channelId', new ParseUUIDPipe()) id: string) { return this.disconnectChannel.execute(principal, id); }
+
+  @Delete('conversation-channels/:channelId')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @RequireAnyPermission(PERMISSIONS.channelsManageOwn, PERMISSIONS.channelsManageAll)
+  removeChannel(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('channelId', new ParseUUIDPipe()) id: string) { return this.deleteChannel.execute(principal, id); }
 
   @Get('conversation-channels/:channelId/templates')
   @RequirePermissions(PERMISSIONS.whatsappTemplatesRead)
