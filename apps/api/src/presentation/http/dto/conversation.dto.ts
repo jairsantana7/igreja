@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length } from 'class-validator';
 import { CONVERSATION_REACTION_EMOJIS, type ConversationStatus } from '../../../domain/entities/conversation';
 
 export class CreateConversationChannelDto {
@@ -35,10 +35,6 @@ export class SendConversationMediaDto {
 export class CreateMemberFromConversationDto {
   @IsEmail()
   email!: string;
-
-  @IsString()
-  @MinLength(10)
-  password!: string;
 }
 
 export class UpdateConversationStatusDto {

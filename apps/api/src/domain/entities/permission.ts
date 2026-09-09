@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   usersUpdate: 'users.update',
   memberProfilesRead: 'members.profile_read',
   memberProfilesManage: 'members.profile_manage',
+  memberCredentialsManage: 'members.credentials_manage',
   rolesRead: 'roles.read',
   rolesManage: 'roles.manage',
   settingsRead: 'settings.read',

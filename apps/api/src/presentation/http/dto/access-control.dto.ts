@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsOptional, IsString, IsUUID, Length, Matches, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsString, IsUUID, Length, Matches, ValidateNested } from 'class-validator';
 import { UpdateMemberProfileDto } from './member-profile.dto';
 
 export class CreateRoleDto {
@@ -25,20 +25,15 @@ export class CreateUserDto {
   @IsEmail()
   email!: string;
 
-  @IsString()
-  @MinLength(10)
-  password!: string;
-
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(20)
   @IsUUID('4', { each: true })
   roleIds!: string[];
 
-  @IsOptional()
   @ValidateNested()
   @Type(() => UpdateMemberProfileDto)
-  profile?: UpdateMemberProfileDto;
+  profile!: UpdateMemberProfileDto;
 }
 
 export class UpdateRolePermissionsDto {

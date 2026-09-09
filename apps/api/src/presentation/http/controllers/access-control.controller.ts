@@ -48,7 +48,7 @@ export class AccessControlController {
   }
 
   @Post('users')
-  @RequirePermissions(PERMISSIONS.usersCreate)
+  @RequirePermissions(PERMISSIONS.usersCreate, PERMISSIONS.memberProfilesManage)
   createUser(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: CreateUserDto) {
     return this.createUserUseCase.execute(principal, dto);
   }

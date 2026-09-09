@@ -8,6 +8,8 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `users` | tenant-direct | possui `tenant_id` | `tenant_id = current_tenant_id()` em leitura e escrita |
 | `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; telefone, autorização de comunicação, nascimento e endereço são dados pessoais protegidos por permissão específica |
 | `member_children` | tenant-direct | filho informado pertence ao perfil de um membro da comunidade | RLS direta + FK composta para perfil/usuário; dados de menores não entram na auditoria |
+| `member_onboarding_deliveries` | tenant-direct | entrega temporária pertence ao membro e à comunidade | RLS direta + FKs compostas para membro e criador; payload cifrado não entra em logs ou auditoria |
+| `member_onboarding_directory` | global catalog | resolve UUID público opaco para o tenant da entrega | sem acesso direto do runtime; mantido por trigger e consultado somente por função resolver estreita |
 | `tenant_directory` | global catalog | mapeia slug público para UUID no fluxo mínimo de login | sem acesso direto do runtime; somente função resolver |
 | `event_public_directory` | global catalog | resolve um UUID público opaco para evento/tenant | sem acesso direto do runtime; somente função resolver |
 | `permissions` | global catalog | chaves estáveis compartilhadas pelo produto | runtime somente leitura |
@@ -52,8 +54,9 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 ## Funções estreitas sem contexto prévio
 
 - `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.
+- `app.resolve_member_onboarding_tenant`: resolve somente o tenant de uma entrega ativa a partir de UUID público opaco e entra no contexto antes de consultar a tabela protegida.
 - `app.list_restorable_conversation_channels`: percorre o catálogo de tenants e entra em cada contexto RLS; retorna ao worker apenas `tenant_id` e `channel_id` de sessões WhatsApp restauráveis.
-- O runtime não recebe `SELECT` direto em `tenant_directory`. Ambas usam `SECURITY DEFINER`, `search_path` fixo, owner sem `BYPASSRLS` e `EXECUTE` explícito.
+- O runtime não recebe `SELECT` direto nos catálogos globais. As funções usam `SECURITY DEFINER`, `search_path` fixo, owner sem `BYPASSRLS` e `EXECUTE` explícito.
 
 ## Regras para novas tabelas
 

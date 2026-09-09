@@ -67,7 +67,7 @@ Configurações de login social e pagamentos formam um contexto separado de even
 
 A identidade básica em `users` continua suficiente para autenticação e inscrição. `member_profiles` e `member_children` formam um perfil complementar opcional, acessado por casos de uso e portas próprios. Essa separação permite aplicar permissões mais restritas à data de nascimento, ao endereço e aos dados de menores sem ampliar implicitamente `users.read`.
 
-O cadastro administrativo usa `MemberOnboardingRepository` como porta específica para persistir identidade, papéis e o perfil opcional em uma única transação. O caso de uso exige `users.create` e acrescenta `members.profile_manage` quando recebe dados complementares.
+O cadastro administrativo usa `MemberOnboardingRepository` como porta específica para persistir identidade, papéis, perfil e entrega temporária em uma única transação. `MemberOnboardingSecurity` gera frase-senha/token e protege o payload; o caso de uso não conhece AES nem PostgreSQL. A fila de entrega é estado persistente do contexto de Membros e não transporta segredos pelo `JobQueue`.
 
 O banco impõe tenant consistente nas relações com FKs compostas e RLS forçada. A API devolve esses dados somente no endpoint de detalhe com `members.profile_read`; auditoria registra a operação, mas não replica valores pessoais.
 

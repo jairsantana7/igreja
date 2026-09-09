@@ -3,6 +3,7 @@ import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../..
 import type { ConversationProviderCatalog, ConversationRepository } from '../ports/conversation.port';
 import type { JobQueue } from '../ports/job-queue.port';
 import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
+import type { MemberOnboardingSecurity } from '../ports/member-onboarding-security.port';
 import type { PasswordHasher } from '../ports/authentication.port';
 import type { MediaStorage } from '../ports/media-storage.port';
 import { DomainError } from '../../domain/entities/errors';
@@ -145,16 +146,23 @@ export class CreateMemberFromConversationUseCase {
   constructor(
     private readonly onboarding: MemberOnboardingRepository,
     private readonly passwords: PasswordHasher,
+    private readonly security: MemberOnboardingSecurity,
   ) {}
 
-  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { email: string; password: string }) {
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { email: string }) {
     requirePermission(principal, PERMISSIONS.conversationsRead);
     requirePermission(principal, PERMISSIONS.usersCreate);
     requirePermission(principal, PERMISSIONS.memberProfilesManage);
+    const generated = this.security.generate();
     const member = await this.onboarding.createFromConversation(principal, {
       conversationId,
       email: input.email.toLowerCase().trim(),
-      passwordHash: await this.passwords.hash(input.password),
+      passwordHash: await this.passwords.hash(generated.temporaryPassword),
+      delivery: {
+        tokenHash: generated.tokenHash,
+        encryptedPayload: generated.encryptedPayload,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000),
+      },
     });
     if (!member) throw new NotFoundError('Conversa não encontrada ou sem acesso.');
     return member;

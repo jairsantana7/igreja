@@ -46,6 +46,8 @@ const conversationMediaA = 'a1600000-0000-4000-8000-000000000001';
 const conversationMediaB = 'b1600000-0000-4000-8000-000000000002';
 const conversationReactionA = 'a1700000-0000-4000-8000-000000000001';
 const conversationReactionB = 'b1700000-0000-4000-8000-000000000002';
+const onboardingDeliveryA = 'a1800000-0000-4000-8000-000000000001';
+const onboardingDeliveryB = 'b1800000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -62,6 +64,12 @@ describeDatabase('PostgreSQL RLS', () => {
       INSERT INTO users (id, tenant_id, name, email) VALUES
         ('${userA}', '${tenantA}', 'User A', 'user@a.test'),
         ('${userB}', '${tenantB}', 'User B', 'user@b.test')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO member_onboarding_deliveries (
+        id, tenant_id, member_user_id, phone, token_hash, encrypted_payload, expires_at, created_by_user_id
+      ) VALUES
+        ('${onboardingDeliveryA}', '${tenantA}', '${userA}', '+551100000001', repeat('a', 64), decode('010203', 'hex'), now() + interval '1 day', '${userA}'),
+        ('${onboardingDeliveryB}', '${tenantB}', '${userB}', '+551100000002', repeat('b', 64), decode('040506', 'hex'), now() + interval '1 day', '${userB}')
       ON CONFLICT DO NOTHING;
       INSERT INTO auth_sessions (id, tenant_id, user_id, expires_at, proof_hash, user_agent_hash) VALUES
         ('${sessionA}', '${tenantA}', '${userA}', now() + interval '1 hour', repeat('a', 64), repeat('1', 64)),
@@ -213,6 +221,7 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM conversation_channels WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM member_children WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM member_profiles WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM member_onboarding_deliveries WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM auth_sessions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_collaborators WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_check_ins WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -422,6 +431,23 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('entregas de acesso não atravessam comunidades nem vinculam outro tenant', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        expect((await client.query('SELECT id, phone FROM member_onboarding_deliveries')).rows)
+          .toEqual([{ id: onboardingDeliveryA, phone: '+551100000001' }]);
+        await expect(client.query(`
+          INSERT INTO member_onboarding_deliveries (
+            tenant_id, member_user_id, phone, token_hash, encrypted_payload, expires_at, created_by_user_id
+          ) VALUES ($1, $2, '+551100000003', $3, decode('01', 'hex'), now() + interval '1 day', $4)
+        `, [tenantA, userB, 'c'.repeat(64), userA])).rejects.toThrow();
+      });
+      expect((await client.query('SELECT id FROM member_onboarding_deliveries')).rows).toEqual([]);
+      await expect(client.query('SELECT * FROM member_onboarding_directory')).rejects.toThrow();
+    } finally { client.release(); }
+  });
+
   it('modelos, versões e lembretes não atravessam comunidades', async () => {
     const client = await runtime.connect();
     try {
@@ -542,8 +568,46 @@ describeDatabase('PostgreSQL RLS', () => {
     expect(Object.keys(fixtures[0] ?? {}).sort()).toEqual(['channel_id', 'tenant_id']);
   });
 
+  it('resolve publicamente somente o tenant de uma entrega ativa e opaca', async () => {
+    const active = await runtime.query<{ tenant_id: string | null }>(
+      'SELECT app.resolve_member_onboarding_tenant($1) AS tenant_id', [onboardingDeliveryA],
+    );
+    expect(active.rows).toEqual([{ tenant_id: tenantA }]);
+    const absent = await runtime.query<{ tenant_id: string | null }>(
+      'SELECT app.resolve_member_onboarding_tenant($1) AS tenant_id', ['cc000000-0000-4000-8000-000000000099'],
+    );
+    expect(absent.rows).toEqual([{ tenant_id: null }]);
+  });
+
+  it('impede autenticação local com uma senha temporária expirada', async () => {
+    try {
+      await admin.query(`
+        UPDATE users
+        SET password_hash = 'hash-temporario', temporary_password_expires_at = now() - interval '1 minute'
+        WHERE id = $1
+      `, [userA]);
+      const result = await runtime.query<{ password_hash: string | null }>(`
+        SELECT password_hash FROM app.resolve_login_identity($1, $2)
+      `, ['rls-tenant-a', 'user@a.test']);
+      expect(result.rows).toEqual([{ password_hash: null }]);
+    } finally {
+      await admin.query(`
+        UPDATE users SET password_hash = NULL, temporary_password_expires_at = NULL WHERE id = $1
+      `, [userA]);
+    }
+  });
+
+  it('não concede a função de resolução pública ao papel PUBLIC', async () => {
+    const result = await admin.query<{ public_can_execute: boolean; runtime_can_execute: boolean }>(`
+      SELECT
+        has_function_privilege('public', 'app.resolve_member_onboarding_tenant(uuid)', 'EXECUTE') AS public_can_execute,
+        has_function_privilege('igreja_runtime', 'app.resolve_member_onboarding_tenant(uuid)', 'EXECUTE') AS runtime_can_execute
+    `);
+    expect(result.rows).toEqual([{ public_can_execute: false, runtime_can_execute: true }]);
+  });
+
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_message_attachments', 'conversation_message_reactions', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_message_attachments', 'conversation_message_reactions', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_onboarding_deliveries', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

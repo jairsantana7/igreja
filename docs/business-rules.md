@@ -117,7 +117,8 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
 - Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
-- Um contato externo pode virar membro pela conversa quando o operador possui `conversations.read`, `users.create` e `members.profile_manage`. Nome e WhatsApp são obtidos da conversa pelo servidor; o operador informa e-mail e senha inicial, e o novo usuário recebe somente o papel de sistema `member`.
+- Um contato externo pode virar membro pela conversa quando o operador possui `conversations.read`, `users.create` e `members.profile_manage`. Nome e WhatsApp são obtidos da conversa pelo servidor; o operador informa o e-mail e o novo usuário recebe somente o papel de sistema `member`.
+- Cadastros administrativos geram uma frase-senha temporária e um link de atualização cadastral com validade de sete dias. Os segredos permanecem criptografados em uma fila de entrega manual acessível somente com `members.credentials_manage`; nunca trafegam por jobs ou logs.
 - Cadastro, perfil, papel, vínculo da conversa e vínculo de eventual acompanhamento pastoral são persistidos atomicamente. E-mail já existente não é associado de forma implícita.
 - Converter o contato em membro não ativa sua autorização de WhatsApp. O membro ainda precisa concedê-la explicitamente para que a comunidade inicie contatos futuros.
 - Uma conversa possui responsável, estado `open`, `waiting` ou `resolved`, e histórico ordenado de mensagens.
@@ -230,7 +231,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 ## Acesso inicial
 
 - O seed de desenvolvimento cria somente um usuário `admin`.
-- A senha inicial deve ser alterada ou substituída por fluxo de convite antes de produção.
+- A senha inicial do administrador de desenvolvimento deve ser alterada antes de produção. Novos membros recebem uma entrega temporária e escolhem outra senha ao concluir a atualização cadastral.
 - Papéis `pastor` e `member` são modelos de sistema; novos usuários recebem um ou mais papéis pelo módulo de acesso.
 - Migrações concedem capacidades novas ao papel administrativo de sistema para preservar a possibilidade de delegação; outros papéis não recebem ampliação automática fora do seed de desenvolvimento.
 

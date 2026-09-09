@@ -76,7 +76,7 @@ const channelQrImages = reactive<Record<string, string>>({});
 const channelToDelete = ref<Channel | null>(null);
 const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
-const memberForm = reactive({ email: '', password: '' });
+const memberForm = reactive({ email: '' });
 const mediaUrls = reactive<Record<string, string>>({});
 const mediaErrors = reactive<Record<string, boolean>>({});
 const mediaLoading = reactive<Record<string, boolean>>({});
@@ -109,7 +109,7 @@ watch(selectedId, async (id) => {
   replyingTo.value = null;
   openReactionId.value = null;
   showMemberForm.value = false;
-  Object.assign(memberForm, { email: '', password: '' });
+  Object.assign(memberForm, { email: '' });
   if (id) {
     await refreshMessages();
     void requestHistorySync(id);
@@ -459,9 +459,9 @@ async function createMemberFromConversation() {
     const member = await api<{ id: string; name: string }>(`/conversations/${selected.value.id}/member`, {
       method: 'POST', body: memberForm,
     });
-    Object.assign(memberForm, { email: '', password: '' });
+    Object.assign(memberForm, { email: '' });
     showMemberForm.value = false;
-    feedback.value = `${member.name} foi adicionado aos membros. A autorização para novos contatos continua desativada.`;
+    feedback.value = `${member.name} foi adicionado. A senha temporária e o link estão na fila de entregas.`;
     await refresh();
   } catch (requestError: any) {
     const message = requestError?.data?.message;
@@ -540,10 +540,10 @@ function clearMediaUrls() {
     </section>
 
     <section v-if="showMemberForm && selected && !selected.member" class="conversation-setup-card">
-      <div><p class="eyebrow">Cadastro de membro</p><h2>Adicionar {{ selected.contact.name }}</h2><p>O nome e o WhatsApp vêm desta conversa. Informe as credenciais iniciais; o membro poderá completar o perfil depois.</p><p><strong>WhatsApp:</strong> {{ selected.contact.address }}</p></div>
+      <div><p class="eyebrow">Cadastro de membro</p><h2>Adicionar {{ selected.contact.name }}</h2><p>O nome e o WhatsApp vêm desta conversa. O sistema criará uma senha temporária e um link para o membro completar o perfil.</p><p><strong>WhatsApp:</strong> {{ selected.contact.address }}</p></div>
       <form class="conversation-setup-form" @submit.prevent="createMemberFromConversation">
         <label class="field"><span>E-mail</span><input v-model="memberForm.email" type="email" autocomplete="off" maxlength="254" required></label>
-        <label class="field"><span>Senha inicial</span><input v-model="memberForm.password" type="password" autocomplete="new-password" minlength="10" required><small>Use ao menos 10 caracteres e compartilhe por um canal seguro.</small></label>
+        <div class="integration-warning"><strong>Entrega manual:</strong> depois do cadastro, abra Membros → Entregas de acesso para copiar a mensagem pronta.</div>
         <p class="member-consent-notice">A autorização para a comunidade iniciar novas conversas ficará desativada até o próprio membro consentir.</p>
         <div class="conversation-form-actions"><button class="button" type="button" @click="showMemberForm = false">Cancelar</button><button class="button button--primary" :disabled="busy">{{ busy ? 'Adicionando…' : 'Adicionar membro' }}</button></div>
       </form>

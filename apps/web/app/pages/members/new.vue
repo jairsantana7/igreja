@@ -6,13 +6,13 @@ useHead({ title: 'Novo membro' });
 const api = useApi();
 const auth = useAuth();
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('users.create')
-  && auth.session.value?.user.permissions.includes('roles.read'));
+  && auth.session.value?.user.permissions.includes('roles.read')
+  && auth.session.value?.user.permissions.includes('members.profile_manage'));
 const canManageProfile = computed(() => auth.session.value?.user.permissions.includes('members.profile_manage'));
 const { data: access, pending, error } = await useAsyncData('member-role-options', () => api<AccessView>('/access'), { server: false });
 const form = reactive({
   name: '',
   email: '',
-  password: '',
   roleIds: [] as string[],
   phone: '',
   birthDate: '',
@@ -25,13 +25,10 @@ const today = new Date().toISOString().slice(0, 10);
 
 function addChild() { form.children.push({ name: '', birthDate: '' }); }
 
-function optionalProfile() {
-  if (!canManageProfile.value) return undefined;
+function profilePayload() {
   const address = Object.fromEntries(Object.entries(form.address).map(([key, value]) => [key, value.trim() || undefined]));
-  const hasAddress = Object.values(address).some(Boolean);
-  if (!form.phone.trim() && !form.birthDate && !hasAddress && !form.children.length) return undefined;
   return {
-    phone: form.phone.trim() || undefined,
+    phone: form.phone.trim(),
     birthDate: form.birthDate || undefined,
     address,
     children: form.children.map((child) => ({ name: child.name, birthDate: child.birthDate || undefined })),
@@ -46,12 +43,11 @@ async function submit() {
     await api('/access/users', { method: 'POST', body: {
       name: form.name,
       email: form.email,
-      password: form.password,
       roleIds: form.roleIds,
-      profile: optionalProfile(),
+      profile: profilePayload(),
     } });
     await refreshNuxtData('members');
-    await navigateTo('/members');
+    await navigateTo('/members/deliveries');
   } catch (requestError: any) {
     const message = requestError?.data?.message;
     errorMessage.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível cadastrar o membro.';
@@ -70,18 +66,17 @@ async function submit() {
     <div v-else-if="!canCreate" class="empty-card"><p>Você não tem permissão para cadastrar membros.</p><NuxtLink to="/members" class="button">Voltar</NuxtLink></div>
     <form v-else class="editor" @submit.prevent="submit">
       <section class="editor-card">
-        <div class="editor-card__heading"><span>1</span><div><h2>Dados de acesso</h2><p>Informe os dados que a pessoa usará para entrar.</p></div></div>
+        <div class="editor-card__heading"><span>1</span><div><h2>Dados de acesso</h2><p>O sistema criará uma senha temporária legível e um link para a pessoa completar o cadastro.</p></div></div>
         <div class="form-grid">
           <label class="field field--wide"><span>Nome completo <b>*</b></span><input v-model="form.name" autocomplete="name" minlength="2" maxlength="120" required></label>
           <label class="field"><span>E-mail <b>*</b></span><input v-model="form.email" type="email" autocomplete="email" required></label>
-          <label class="field"><span>Senha inicial <b>*</b></span><input v-model="form.password" type="password" autocomplete="new-password" minlength="10" required><small>A senha precisa ter pelo menos 10 caracteres.</small></label>
+          <label class="field"><span>WhatsApp <b>*</b></span><input v-model="form.phone" autocomplete="tel" inputmode="tel" minlength="8" maxlength="32" placeholder="(00) 00000-0000" required><small>A credencial ficará na fila para envio manual.</small></label>
         </div>
       </section>
 
       <section v-if="canManageProfile" class="editor-card">
         <div class="editor-card__heading"><span>2</span><div><h2>Perfil complementar</h2><p>Essas informações são opcionais e não impedem o cadastro.</p></div></div>
         <div class="form-grid">
-          <label class="field"><span>WhatsApp</span><input v-model="form.phone" autocomplete="tel" inputmode="tel" minlength="8" maxlength="32" placeholder="(00) 00000-0000"><small>A pessoa autoriza o contato no próprio fluxo de inscrição.</small></label>
           <label class="field"><span>Data de nascimento</span><input v-model="form.birthDate" type="date" :max="today" autocomplete="bday"></label>
           <label class="field"><span>CEP</span><input v-model="form.address.postalCode" maxlength="16" autocomplete="postal-code"></label>
           <label class="field"><span>Logradouro</span><input v-model="form.address.street" maxlength="160" autocomplete="street-address"></label>
@@ -111,7 +106,7 @@ async function submit() {
       </section>
 
       <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p>
-      <footer class="editor-actions"><span class="muted">A pessoa poderá entrar assim que o cadastro for concluído.</span><div><NuxtLink to="/members" class="button">Cancelar</NuxtLink><button class="button button--primary" type="submit" :disabled="saving || !form.roleIds.length">{{ saving ? 'Cadastrando…' : 'Cadastrar membro' }}</button></div></footer>
+      <footer class="editor-actions"><span class="muted">Depois do cadastro, você poderá copiar a mensagem na fila de entregas.</span><div><NuxtLink to="/members" class="button">Cancelar</NuxtLink><button class="button button--primary" type="submit" :disabled="saving || !form.roleIds.length">{{ saving ? 'Preparando acesso…' : 'Cadastrar e preparar acesso' }}</button></div></footer>
     </form>
   </div>
 </template>

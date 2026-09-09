@@ -5,6 +5,7 @@ import { AuthorizationError } from '../src/application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
+import type { MemberOnboardingSecurity } from '../src/application/ports/member-onboarding-security.port';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001',
@@ -65,27 +66,32 @@ describe('edição de permissões de papel', () => {
 
 describe('cadastro administrativo de membro', () => {
   const passwords = { hash: vi.fn().mockResolvedValue('hashed') } as unknown as PasswordHasher;
+  const security = { generate: vi.fn().mockReturnValue({
+    temporaryPassword: 'Casa-Rio-Luz-Paz-1234', tokenHash: 'a'.repeat(64), encryptedPayload: Buffer.from('protected'),
+  }) } as unknown as MemberOnboardingSecurity;
 
   it('exige a permissão de perfil quando recebe dados complementares', async () => {
     const create = vi.fn();
-    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords);
+    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords, security);
     await expect(useCase.execute(principal(['users.create']), {
-      name: 'Pessoa', email: 'pessoa@example.test', password: 'uma-senha-segura', roleIds: ['role'],
-      profile: { birthDate: '1990-01-01' },
+      name: 'Pessoa', email: 'pessoa@example.test', roleIds: ['role'],
+      profile: { phone: '+5511999999999', birthDate: '1990-01-01' },
     })).rejects.toThrow(AuthorizationError);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('valida e encaminha o perfil para criação atômica', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'member' });
-    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords);
+    const useCase = new CreateUserUseCase({ create } as unknown as MemberOnboardingRepository, passwords, security);
     await useCase.execute(principal(['users.create', 'members.profile_manage']), {
-      name: ' Pessoa ', email: 'PESSOA@EXAMPLE.TEST', password: 'uma-senha-segura', roleIds: ['role', 'role'],
-      profile: { birthDate: '1990-01-01' },
+      name: ' Pessoa ', email: 'PESSOA@EXAMPLE.TEST', roleIds: ['role', 'role'],
+      profile: { phone: '+5511999999999', birthDate: '1990-01-01' },
     });
     expect(create).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
       name: 'Pessoa', email: 'pessoa@example.test', passwordHash: 'hashed', roleIds: ['role'],
       profile: expect.objectContaining({ props: expect.objectContaining({ birthDate: '1990-01-01' }) }),
+      delivery: expect.objectContaining({ phone: '+5511999999999', tokenHash: 'a'.repeat(64) }),
     }));
+    expect(passwords.hash).toHaveBeenCalledWith('Casa-Rio-Luz-Paz-1234');
   });
 });

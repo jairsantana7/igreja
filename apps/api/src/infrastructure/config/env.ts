@@ -45,6 +45,12 @@ export const env = Object.freeze({
   jwtIssuer: required('JWT_ISSUER', 'igreja-api'),
   jwtAudience: required('JWT_AUDIENCE', 'igreja-web'),
   sessionBindingSecret: required('SESSION_BINDING_SECRET', process.env.JWT_SECRET),
+  memberOnboardingSecret: required(
+    'MEMBER_ONBOARDING_SECRET',
+    (process.env.NODE_ENV ?? 'development') === 'production'
+      ? undefined
+      : required('SESSION_BINDING_SECRET', process.env.JWT_SECRET),
+  ),
   trustProxy: required('TRUST_PROXY', 'loopback,linklocal,uniquelocal'),
   mediaStoragePath: resolve(process.cwd(), process.env.MEDIA_STORAGE_PATH ?? '../../.data/media'),
   metaGraphApiVersion: process.env.META_GRAPH_API_VERSION?.trim() ?? '',
@@ -79,4 +85,10 @@ if (env.whatsappWebDriver !== 'disabled') {
   if (key.length !== 32 || key.toString('base64') !== env.conversationSessionEncryptionKey) {
     throw new Error('CONVERSATION_SESSION_ENCRYPTION_KEY deve conter exatamente 32 bytes em base64.');
   }
+}
+if (env.memberOnboardingSecret.length < 32) {
+  throw new Error('MEMBER_ONBOARDING_SECRET precisa ter ao menos 32 caracteres.');
+}
+if (env.nodeEnv === 'production' && (!process.env.MEMBER_ONBOARDING_SECRET || env.memberOnboardingSecret === env.sessionBindingSecret || env.memberOnboardingSecret === env.jwtSecret)) {
+  throw new Error('MEMBER_ONBOARDING_SECRET deve ser exclusivo em produção.');
 }

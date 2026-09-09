@@ -3,6 +3,7 @@ const auth = useAuth();
 const api = useApi();
 const route = useRoute();
 const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
+const canManageMemberDeliveries = computed(() => auth.session.value?.user.permissions.includes('members.credentials_manage'));
 const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
 const canReadAccess = computed(() => auth.session.value?.user.permissions.includes('roles.read'));
 const canReadAudit = computed(() => auth.session.value?.user.permissions.includes('audit.read'));
@@ -33,6 +34,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink v-if="canReadMembers" to="/members" class="nav-link" :class="{ active: route.path === '/members' }">
           <span aria-hidden="true">♙</span> Membros
+        </NuxtLink>
+        <NuxtLink v-if="canManageMemberDeliveries" to="/members/deliveries" class="nav-link" :class="{ active: route.path === '/members/deliveries' }">
+          <span aria-hidden="true">✉</span> Entregas de acesso
         </NuxtLink>
         <NuxtLink v-if="canReadConversations" to="/conversations" class="nav-link" :class="{ active: route.path === '/conversations' }">
           <span aria-hidden="true">◌</span> Conversas

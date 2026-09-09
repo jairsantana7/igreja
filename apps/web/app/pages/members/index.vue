@@ -23,6 +23,7 @@ const { data: members, pending, error, refresh } = await useAsyncData('members',
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('users.create')
   && auth.session.value?.user.permissions.includes('roles.read'));
 const canReadProfile = computed(() => auth.session.value?.user.permissions.includes('members.profile_read'));
+const canManageDeliveries = computed(() => auth.session.value?.user.permissions.includes('members.credentials_manage'));
 const roles = computed(() => {
   const byId = new Map<string, MemberRole>();
   for (const member of members.value ?? []) {
@@ -48,7 +49,7 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
   <div class="page">
     <header class="page-header">
       <div><p class="eyebrow">Comunidade</p><h1>Membros</h1><p class="muted">Pessoas com acesso e participação nos eventos da comunidade.</p></div>
-      <NuxtLink v-if="canCreate" to="/members/new" class="button button--primary">＋ Novo membro</NuxtLink>
+      <div class="page-header__actions"><NuxtLink v-if="canManageDeliveries" to="/members/deliveries" class="button">✉ Entregas de acesso</NuxtLink><NuxtLink v-if="canCreate" to="/members/new" class="button button--primary">＋ Novo membro</NuxtLink></div>
     </header>
 
     <section class="summary-grid summary-grid--compact" aria-label="Resumo dos membros">

@@ -6,6 +6,7 @@ import { AuthorizationError, ConflictError } from '../src/application/use-cases/
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
 import type { MediaStorage } from '../src/application/ports/media-storage.port';
+import type { MemberOnboardingSecurity } from '../src/application/ports/member-onboarding-security.port';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001',
@@ -222,9 +223,10 @@ describe('central de conversas', () => {
     const useCase = new CreateMemberFromConversationUseCase(
       { createFromConversation } as unknown as MemberOnboardingRepository,
       { hash } as unknown as PasswordHasher,
+      { generate: vi.fn() } as unknown as MemberOnboardingSecurity,
     );
     await expect(useCase.execute(principal(['conversations.read', 'users.create']), 'conversation', {
-      email: 'pessoa@example.test', password: 'uma-senha-segura',
+      email: 'pessoa@example.test',
     })).rejects.toThrow(AuthorizationError);
     expect(hash).not.toHaveBeenCalled();
     expect(createFromConversation).not.toHaveBeenCalled();
@@ -233,16 +235,21 @@ describe('central de conversas', () => {
   it('normaliza a identidade antes do cadastro pela conversa', async () => {
     const createFromConversation = vi.fn().mockResolvedValue({ id: 'member', name: 'Pessoa', email: 'pessoa@example.test' });
     const hash = vi.fn().mockResolvedValue('hashed');
+    const generate = vi.fn().mockReturnValue({
+      temporaryPassword: 'Casa-Rio-Luz-Paz-1234', tokenHash: 'b'.repeat(64), encryptedPayload: Buffer.from('protected'),
+    });
     const useCase = new CreateMemberFromConversationUseCase(
       { createFromConversation } as unknown as MemberOnboardingRepository,
       { hash } as unknown as PasswordHasher,
+      { generate } as unknown as MemberOnboardingSecurity,
     );
     await expect(useCase.execute(principal(['conversations.read', 'users.create', 'members.profile_manage']), 'conversation', {
-      email: ' PESSOA@EXAMPLE.TEST ', password: 'uma-senha-segura',
+      email: ' PESSOA@EXAMPLE.TEST ',
     })).resolves.toMatchObject({ id: 'member' });
-    expect(hash).toHaveBeenCalledWith('uma-senha-segura');
-    expect(createFromConversation).toHaveBeenCalledWith(expect.any(Object), {
+    expect(hash).toHaveBeenCalledWith('Casa-Rio-Luz-Paz-1234');
+    expect(createFromConversation).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
       conversationId: 'conversation', email: 'pessoa@example.test', passwordHash: 'hashed',
-    });
+      delivery: expect.objectContaining({ tokenHash: 'b'.repeat(64) }),
+    }));
   });
 });

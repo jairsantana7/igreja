@@ -31,7 +31,11 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
           users.tenant_id,
           users.name AS user_name,
           users.email AS user_email,
-          users.password_hash,
+          CASE
+            WHEN users.temporary_password_expires_at IS NOT NULL
+              AND users.temporary_password_expires_at <= now() THEN NULL
+            ELSE users.password_hash
+          END AS password_hash,
           COALESCE(array_agg(DISTINCT roles.key) FILTER (WHERE roles.key IS NOT NULL), ARRAY[]::text[]) AS role_keys,
           COALESCE(array_agg(DISTINCT role_permissions.permission_key) FILTER (WHERE role_permissions.permission_key IS NOT NULL), ARRAY[]::text[]) AS permission_keys
         FROM users
@@ -39,7 +43,7 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
         LEFT JOIN roles ON roles.id = user_roles.role_id AND roles.tenant_id = user_roles.tenant_id
         LEFT JOIN role_permissions ON role_permissions.role_id = roles.id AND role_permissions.tenant_id = roles.tenant_id
         WHERE users.email = $1
-        GROUP BY users.id
+        GROUP BY users.id, users.password_hash, users.temporary_password_expires_at
         LIMIT 1
       `, [email]);
       return result.rows[0] ? this.map(result.rows[0]) : null;

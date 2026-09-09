@@ -66,6 +66,10 @@ import { PostgresPastoralFollowupRepository } from './infrastructure/repositorie
 import { PastoralFollowupController } from './presentation/http/controllers/pastoral-followup.controller';
 import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from './application/use-cases/pastoral-followup.use-cases';
 import { AesGcmStateCipher } from './infrastructure/security/aes-gcm-state.cipher';
+import { NodeMemberOnboardingSecurity } from './infrastructure/security/node-member-onboarding.security';
+import type { MemberOnboardingSecurity } from './application/ports/member-onboarding-security.port';
+import { MemberOnboardingController, PublicMemberOnboardingController } from './presentation/http/controllers/member-onboarding.controller';
+import { CompletePublicMemberOnboardingUseCase, GetPublicMemberOnboardingUseCase, ListMemberOnboardingDeliveriesUseCase, MarkMemberOnboardingDeliveryUseCase, RevealMemberOnboardingDeliveryUseCase, RevokeMemberOnboardingDeliveryUseCase } from './application/use-cases/member-onboarding.use-cases';
 import { DisabledConversationProviderStateStore } from './infrastructure/repositories/disabled-conversation-provider-state.store';
 import { PostgresConversationProviderStateStore } from './infrastructure/repositories/postgres-conversation-provider-state.store';
 import { ConfiguredConversationProviderCatalog } from './infrastructure/integrations/configured-conversation-provider.catalog';
@@ -75,7 +79,7 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, PublicMemberOnboardingController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, MemberOnboardingController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -83,6 +87,10 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     ApplicationExceptionFilter,
     { provide: APP_GUARD, useClass: RealIpThrottlerGuard },
     { provide: TOKENS.passwordHasher, useClass: BcryptPasswordHasher },
+    {
+      provide: TOKENS.memberOnboardingSecurity,
+      useFactory: () => new NodeMemberOnboardingSecurity(env.memberOnboardingSecret),
+    },
     { provide: TOKENS.tokenService, useClass: JoseTokenService },
     { provide: TOKENS.sessionSecurity, useClass: HmacSessionSecurity },
     { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
@@ -538,13 +546,43 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     },
     {
       provide: TOKENS.createUserUseCase,
-      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(onboarding, passwords),
-      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher],
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher, security: MemberOnboardingSecurity) => new CreateUserUseCase(onboarding, passwords, security),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher, TOKENS.memberOnboardingSecurity],
     },
     {
       provide: TOKENS.createMemberFromConversationUseCase,
-      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher) => new CreateMemberFromConversationUseCase(onboarding, passwords),
-      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher],
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher, security: MemberOnboardingSecurity) => new CreateMemberFromConversationUseCase(onboarding, passwords, security),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher, TOKENS.memberOnboardingSecurity],
+    },
+    {
+      provide: TOKENS.listMemberDeliveriesUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository) => new ListMemberOnboardingDeliveriesUseCase(onboarding),
+      inject: [TOKENS.memberOnboardingRepository],
+    },
+    {
+      provide: TOKENS.revealMemberDeliveryUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, security: MemberOnboardingSecurity) => new RevealMemberOnboardingDeliveryUseCase(onboarding, security),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.memberOnboardingSecurity],
+    },
+    {
+      provide: TOKENS.markMemberDeliveryDeliveredUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository) => new MarkMemberOnboardingDeliveryUseCase(onboarding),
+      inject: [TOKENS.memberOnboardingRepository],
+    },
+    {
+      provide: TOKENS.revokeMemberDeliveryUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository) => new RevokeMemberOnboardingDeliveryUseCase(onboarding),
+      inject: [TOKENS.memberOnboardingRepository],
+    },
+    {
+      provide: TOKENS.getPublicMemberOnboardingUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, security: MemberOnboardingSecurity) => new GetPublicMemberOnboardingUseCase(onboarding, security),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.memberOnboardingSecurity],
+    },
+    {
+      provide: TOKENS.completePublicMemberOnboardingUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, security: MemberOnboardingSecurity, passwords: BcryptPasswordHasher) => new CompletePublicMemberOnboardingUseCase(onboarding, security, passwords),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.memberOnboardingSecurity, TOKENS.passwordHasher],
     },
     {
       provide: TOKENS.getConversationMediaUseCase,
