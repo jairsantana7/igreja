@@ -93,6 +93,16 @@ export interface ConversationRuntimeRepository {
     body: string;
     receivedAt: Date;
   }): Promise<void>;
+  receiveOutboundMirror(input: {
+    tenantId: string;
+    channelId: string;
+    providerMessageId: string;
+    contactName: string;
+    contactAddress: string;
+    contactAddressAliases?: string[];
+    body: string;
+    sentAt: Date;
+  }): Promise<void>;
   listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>>;
   resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void>;
   markOutboundSent(tenantId: string, conversationId: string, messageId: string, providerMessageId: string): Promise<void>;

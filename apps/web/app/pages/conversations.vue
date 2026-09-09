@@ -64,6 +64,10 @@ const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
+const messageStatusLabels: Record<Message['status'], string> = {
+  received: 'Recebida', pending: 'Pendente', queued: 'Na fila', sent: 'Enviada',
+  delivered: 'Entregue', read: 'Lida', failed: 'Falhou',
+};
 const channelStatusLabels: Record<ChannelConnectionStatus, string> = {
   configured: 'Pronto para conectar', connecting: 'Conectando', awaiting_qr: 'Aguardando leitura do QR',
   connected: 'Conectado', disconnecting: 'Desconectando', disconnected: 'Desconectado', failed: 'Falha na conexão',
@@ -171,12 +175,20 @@ function cancelChannelDeletion() {
 }
 
 let connectionPolling: ReturnType<typeof setInterval> | undefined;
+let conversationPolling: ReturnType<typeof setInterval> | undefined;
 let connectionPollingTick = 0;
 onMounted(() => {
   void refreshConnections();
   connectionPolling = setInterval(() => void refreshConnections(), 3_000);
+  conversationPolling = setInterval(() => {
+    void refresh();
+    if (selectedId.value) void refreshMessages();
+  }, 3_000);
 });
-onBeforeUnmount(() => { if (connectionPolling) clearInterval(connectionPolling); });
+onBeforeUnmount(() => {
+  if (connectionPolling) clearInterval(connectionPolling);
+  if (conversationPolling) clearInterval(conversationPolling);
+});
 watch(channels, () => void refreshConnections());
 
 async function startConversation() {
@@ -302,7 +314,7 @@ async function startFollowup() {
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>
           <div v-for="message in messages" :key="message.id" class="message-bubble" :class="message.direction === 'outbound' ? 'message-bubble--outbound' : 'message-bubble--inbound'">
-            <p>{{ message.body }}</p><small>{{ formatter.format(new Date(message.createdAt)) }} · {{ message.status === 'pending' ? 'Pendente' : message.status === 'queued' ? 'Na fila' : message.status }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
+            <p>{{ message.body }}</p><small>{{ formatter.format(new Date(message.createdAt)) }} · {{ messageStatusLabels[message.status] }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
           </div>
         </div>
         <form v-if="canReply" class="conversation-composer" @submit.prevent="reply"><textarea v-model="replyBody" rows="3" maxlength="10000" placeholder="Escreva uma resposta…" required></textarea><div><small>O envio passa pelo adapter e pela fila configurados na instalação.</small><button class="button button--primary" :disabled="busy || !replyBody.trim()">Enviar</button></div></form>

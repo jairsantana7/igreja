@@ -184,7 +184,7 @@ export class BaileysConversationProvider implements ConversationProvider {
   private async receive(channel: ConversationRuntimeChannel, message: WAMessage): Promise<void> {
     try {
       const remoteJid = message.key.remoteJid ?? '';
-      if (message.key.fromMe || !message.key.id || !directJid(remoteJid)) return;
+      if (!message.key.id || !directJid(remoteJid)) return;
       const body = textBody(message);
       if (!body) return;
       const session = this.sessions.get(channel.id);
@@ -194,6 +194,19 @@ export class BaileysConversationProvider implements ConversationProvider {
         (lid) => session.socket.signalRepository.lidMapping.getPNForLID(lid),
       );
       if (!contact) return;
+      if (message.key.fromMe) {
+        await this.conversations.receiveOutboundMirror({
+          tenantId: channel.tenantId,
+          channelId: channel.id,
+          providerMessageId: message.key.id,
+          contactName: `Contato ${contact.address.replace(/\D/g, '').slice(-4)}`,
+          contactAddress: contact.address,
+          contactAddressAliases: contact.aliases,
+          body,
+          sentAt: receivedAt(message),
+        });
+        return;
+      }
       const pushName = message.pushName?.trim().slice(0, 120);
       const contactName = pushName && pushName.length >= 2 ? pushName : `Contato ${remoteJid.replace(/@.*/, '').slice(-4)}`;
       await this.conversations.receiveInbound({

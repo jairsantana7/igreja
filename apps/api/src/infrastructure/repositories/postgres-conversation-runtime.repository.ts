@@ -114,6 +114,60 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
     });
   }
 
+  async receiveOutboundMirror(input: Parameters<ConversationRuntimeRepository['receiveOutboundMirror']>[0]): Promise<void> {
+    await this.database.withTenant(input.tenantId, async (client) => {
+      const channel = await client.query<{ owner_user_id: string }>(
+        'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
+        [input.channelId],
+      );
+      if (!channel.rows[0]) return;
+
+      const addresses = [...new Set([input.contactAddress, ...(input.contactAddressAliases ?? [])])];
+      let conversation = await client.query<{ id: string }>(`
+        SELECT id FROM conversations
+        WHERE channel_id = $1 AND contact_address = ANY($2::text[])
+        ORDER BY last_message_at DESC, id DESC
+        LIMIT 1
+      `, [input.channelId, addresses]);
+      if (!conversation.rows[0]) {
+        conversation = await client.query<{ id: string }>(`
+          INSERT INTO conversations (
+            tenant_id, channel_id, assigned_user_id, contact_name, contact_address
+          ) VALUES ($1, $2, $3, $4, $5)
+          RETURNING id
+        `, [input.tenantId, input.channelId, channel.rows[0].owner_user_id, input.contactName, input.contactAddress]);
+      }
+      const conversationId = conversation.rows[0]!.id;
+
+      const matched = await client.query(`
+        UPDATE conversation_messages SET status = 'sent', provider_message_id = $3
+        WHERE id = (
+          SELECT id FROM conversation_messages
+          WHERE conversation_id = $1 AND direction = 'outbound'
+            AND provider_message_id IS NULL AND status IN ('pending', 'queued') AND body = $2
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        )
+        RETURNING id
+      `, [conversationId, input.body, input.providerMessageId]);
+      if (!matched.rowCount) {
+        await client.query(`
+          INSERT INTO conversation_messages (
+            tenant_id, conversation_id, sent_by_user_id, direction, body, status, provider_message_id, created_at
+          ) VALUES ($1, $2, $3, 'outbound', $4, 'sent', $5, $6)
+          ON CONFLICT (tenant_id, conversation_id, provider_message_id)
+            WHERE provider_message_id IS NOT NULL DO NOTHING
+        `, [input.tenantId, conversationId, channel.rows[0].owner_user_id, input.body, input.providerMessageId, input.sentAt]);
+      }
+      await client.query(`
+        UPDATE conversations
+        SET contact_address = $2, status = 'waiting',
+          last_message_at = GREATEST(last_message_at, $3), updated_at = now()
+        WHERE id = $1
+      `, [conversationId, input.contactAddress, input.sentAt]);
+    });
+  }
+
   listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>> {
     return this.database.withTenant(tenantId, async (client) => {
       const result = await client.query<{ id: string; contact_address: string }>(`

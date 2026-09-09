@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { AesGcmStateCipher } from '../src/infrastructure/security/aes-gcm-state.cipher';
 import { RoutedJobQueue } from '../src/infrastructure/queue/routed-job.queue';
 import { createBaileysAuthState } from '../src/infrastructure/integrations/baileys/baileys-auth-state';
-import { resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
-import type { ConversationProviderStateStore } from '../src/application/ports/conversation.port';
+import { BaileysConversationProvider, resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
+import type { ConversationProviderStateStore, ConversationRuntimeRepository } from '../src/application/ports/conversation.port';
+import type { ApplicationLogger } from '../src/application/ports/application-logger.port';
 import type { WAMessage } from '@whiskeysockets/baileys';
 
 describe('adapters do conector de conversas', () => {
@@ -70,5 +71,35 @@ describe('adapters do conector de conversas', () => {
       address: '+5513987654321',
     });
     expect(getPhoneForLid).toHaveBeenCalledWith('247630768697558@lid');
+  });
+
+  it('sincroniza como saída a mensagem enviada diretamente pelo celular', async () => {
+    const receiveOutboundMirror = vi.fn();
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      { receiveOutboundMirror } as unknown as ConversationRuntimeRepository,
+      {} as ApplicationLogger,
+    );
+    (provider as any).sessions.set('channel', {
+      socket: { signalRepository: { lidMapping: { getPNForLID: vi.fn() } } },
+    });
+    const message = {
+      key: {
+        id: 'provider-message',
+        fromMe: true,
+        remoteJid: '247630768697558@lid',
+        remoteJidAlt: '5513987654321@s.whatsapp.net',
+      },
+      message: { conversation: 'Mensagem pelo celular' },
+      messageTimestamp: 1_789_000_000,
+    } as WAMessage;
+
+    await (provider as any).receive({ id: 'channel', tenantId: 'tenant' }, message);
+
+    expect(receiveOutboundMirror).toHaveBeenCalledWith(expect.objectContaining({
+      contactAddress: '+5513987654321',
+      body: 'Mensagem pelo celular',
+      providerMessageId: 'provider-message',
+    }));
   });
 });
