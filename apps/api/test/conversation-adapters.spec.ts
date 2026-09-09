@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { AesGcmStateCipher } from '../src/infrastructure/security/aes-gcm-state.cipher';
 import { RoutedJobQueue } from '../src/infrastructure/queue/routed-job.queue';
 import { createBaileysAuthState } from '../src/infrastructure/integrations/baileys/baileys-auth-state';
+import { resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
 import type { ConversationProviderStateStore } from '../src/application/ports/conversation.port';
+import type { WAMessage } from '@whiskeysockets/baileys';
 
 describe('adapters do conector de conversas', () => {
   it('criptografa estado sensível com nonce e detecta adulteração', () => {
@@ -37,5 +39,36 @@ describe('adapters do conector de conversas', () => {
     await auth.state.keys.set({ 'device-list': { contact: ['device-a'] } });
     expect(values.has('baileys:creds')).toBe(true);
     await expect(auth.state.keys.get('device-list', ['contact'])).resolves.toEqual({ contact: ['device-a'] });
+  });
+
+  it('troca o identificador LID pelo telefone legível do contato', async () => {
+    const message = {
+      key: {
+        remoteJid: '247630768697558@lid',
+        remoteJidAlt: '5513987654321@s.whatsapp.net',
+      },
+    } as WAMessage;
+    const getPhoneForLid = vi.fn();
+
+    await expect(resolveBaileysContactAddress(message, getPhoneForLid)).resolves.toEqual({
+      address: '+5513987654321',
+      aliases: [
+        '247630768697558@lid',
+        '5513987654321@s.whatsapp.net',
+        '5513987654321',
+        '+5513987654321',
+      ],
+    });
+    expect(getPhoneForLid).not.toHaveBeenCalled();
+  });
+
+  it('consulta o mapeamento persistido quando a mensagem não traz o telefone alternativo', async () => {
+    const message = { key: { remoteJid: '247630768697558@lid' } } as WAMessage;
+    const getPhoneForLid = vi.fn().mockResolvedValue('5513987654321@s.whatsapp.net');
+
+    await expect(resolveBaileysContactAddress(message, getPhoneForLid)).resolves.toMatchObject({
+      address: '+5513987654321',
+    });
+    expect(getPhoneForLid).toHaveBeenCalledWith('247630768697558@lid');
   });
 });

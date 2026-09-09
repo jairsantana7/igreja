@@ -81,12 +81,13 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       );
       if (!channel.rows[0]) return;
 
+      const addresses = [...new Set([input.contactAddress, ...(input.contactAddressAliases ?? [])])];
       let conversation = await client.query<{ id: string }>(`
         SELECT id FROM conversations
-        WHERE channel_id = $1 AND contact_address = $2
+        WHERE channel_id = $1 AND contact_address = ANY($2::text[])
         ORDER BY last_message_at DESC, id DESC
         LIMIT 1
-      `, [input.channelId, input.contactAddress]);
+      `, [input.channelId, addresses]);
       if (!conversation.rows[0]) {
         conversation = await client.query<{ id: string }>(`
           INSERT INTO conversations (
@@ -106,10 +107,31 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       if (inserted.rowCount) {
         await client.query(`
           UPDATE conversations
-          SET contact_name = $2, status = 'open', last_message_at = $3, updated_at = now()
+          SET contact_name = $2, contact_address = $3, status = 'open', last_message_at = $4, updated_at = now()
           WHERE id = $1
-        `, [conversation.rows[0]!.id, input.contactName, input.receivedAt]);
+        `, [conversation.rows[0]!.id, input.contactName, input.contactAddress, input.receivedAt]);
       }
+    });
+  }
+
+  listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>> {
+    return this.database.withTenant(tenantId, async (client) => {
+      const result = await client.query<{ id: string; contact_address: string }>(`
+        SELECT id, contact_address FROM conversations
+        WHERE channel_id = $1 AND contact_address LIKE '%@lid'
+        ORDER BY last_message_at DESC, id DESC
+      `, [channelId]);
+      return result.rows.map((row) => ({ conversationId: row.id, contactAddress: row.contact_address }));
+    });
+  }
+
+  async resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void> {
+    await this.database.withTenant(tenantId, async (client) => {
+      await client.query(`
+        UPDATE conversations
+        SET contact_address = $4, updated_at = now()
+        WHERE id = $1 AND channel_id = $2 AND tenant_id = $3 AND contact_address LIKE '%@lid'
+      `, [conversationId, channelId, tenantId, contactAddress]);
     });
   }
 

@@ -53,6 +53,31 @@ function directJid(address: string): string | null {
   return digits.length >= 10 && digits.length <= 15 ? `${digits}@s.whatsapp.net` : null;
 }
 
+function readablePhoneAddress(jid: string): string {
+  const digits = jid.replace(/@.*/, '').replace(/\D/g, '');
+  return digits ? `+${digits}` : jid;
+}
+
+export async function resolveBaileysContactAddress(
+  message: WAMessage,
+  getPhoneForLid: (lid: string) => Promise<string | null>,
+): Promise<{ address: string; aliases: string[] } | null> {
+  const remoteJid = message.key.remoteJid ?? '';
+  if (!directJid(remoteJid)) return null;
+  const alternateJid = message.key.remoteJidAlt ?? '';
+  const phoneJid = remoteJid.endsWith('@s.whatsapp.net')
+    ? remoteJid
+    : alternateJid.endsWith('@s.whatsapp.net')
+      ? alternateJid
+      : await getPhoneForLid(remoteJid);
+  if (!phoneJid) return { address: remoteJid, aliases: [remoteJid] };
+  const address = readablePhoneAddress(phoneJid);
+  return {
+    address,
+    aliases: [...new Set([remoteJid, alternateJid, phoneJid, phoneJid.replace(/@.*/, ''), address].filter(Boolean))],
+  };
+}
+
 function textBody(message: WAMessage): string | null {
   const content = normalizeMessageContent(message.message);
   const body = content?.conversation
@@ -162,6 +187,13 @@ export class BaileysConversationProvider implements ConversationProvider {
       if (message.key.fromMe || !message.key.id || !directJid(remoteJid)) return;
       const body = textBody(message);
       if (!body) return;
+      const session = this.sessions.get(channel.id);
+      if (!session) return;
+      const contact = await resolveBaileysContactAddress(
+        message,
+        (lid) => session.socket.signalRepository.lidMapping.getPNForLID(lid),
+      );
+      if (!contact) return;
       const pushName = message.pushName?.trim().slice(0, 120);
       const contactName = pushName && pushName.length >= 2 ? pushName : `Contato ${remoteJid.replace(/@.*/, '').slice(-4)}`;
       await this.conversations.receiveInbound({
@@ -169,7 +201,8 @@ export class BaileysConversationProvider implements ConversationProvider {
         channelId: channel.id,
         providerMessageId: message.key.id,
         contactName,
-        contactAddress: remoteJid,
+        contactAddress: contact.address,
+        contactAddressAliases: contact.aliases,
         body,
         receivedAt: receivedAt(message),
       });
@@ -205,6 +238,7 @@ export class BaileysConversationProvider implements ConversationProvider {
         await this.states.remove(channel.tenantId, channel.id, this.providerKey, 'pairing_qr');
         await this.conversations.updateConnection(channel.tenantId, channel.id, { status: 'connected' });
         session.resolveReady();
+        await this.resolveExistingLidContacts(channel, session.socket);
         this.logger.info('whatsapp_channel_connected', { channelId: channel.id, tenantId: channel.tenantId });
       }
       if (connection !== 'close') return;
@@ -222,6 +256,20 @@ export class BaileysConversationProvider implements ConversationProvider {
       }), 5_000);
     } catch (error) {
       this.logger.captureException(error, { event: 'whatsapp_connection_update_failed', channelId: channel.id });
+    }
+  }
+
+  private async resolveExistingLidContacts(channel: ConversationRuntimeChannel, socket: WASocket): Promise<void> {
+    const unresolved = await this.conversations.listUnresolvedContacts(channel.tenantId, channel.id);
+    for (const contact of unresolved) {
+      const phoneJid = await socket.signalRepository.lidMapping.getPNForLID(contact.contactAddress);
+      if (!phoneJid) continue;
+      await this.conversations.resolveContactAddress(
+        channel.tenantId,
+        channel.id,
+        contact.conversationId,
+        readablePhoneAddress(phoneJid),
+      );
     }
   }
 }

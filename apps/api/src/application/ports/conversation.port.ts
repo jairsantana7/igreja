@@ -89,9 +89,12 @@ export interface ConversationRuntimeRepository {
     providerMessageId: string;
     contactName: string;
     contactAddress: string;
+    contactAddressAliases?: string[];
     body: string;
     receivedAt: Date;
   }): Promise<void>;
+  listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>>;
+  resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void>;
   markOutboundSent(tenantId: string, conversationId: string, messageId: string, providerMessageId: string): Promise<void>;
   markOutboundFailed(tenantId: string, conversationId: string, messageId: string): Promise<void>;
   updateOutboundDelivery(tenantId: string, channelId: string, providerMessageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void>;
