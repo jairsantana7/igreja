@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccessControlRepository } from '../src/application/ports/access-control.port';
-import { CreateUserUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from '../src/application/use-cases/access-control.use-cases';
+import { CreateUserUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase, UpdateUserNameUseCase } from '../src/application/use-cases/access-control.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
@@ -61,6 +61,16 @@ describe('edição de permissões de papel', () => {
       '20000000-0000-4000-8000-000000000001',
       ['events.read'],
     );
+  });
+});
+
+describe('correção do nome do membro', () => {
+  it('exige users.update e persiste o nome normalizado', async () => {
+    const updateUserName = vi.fn().mockResolvedValue({ id: 'member', name: 'Paam', email: 'paam@example.test' });
+    const useCase = new UpdateUserNameUseCase({ updateUserName } as unknown as AccessControlRepository);
+    await expect(useCase.execute(principal([]), 'member', { name: 'Paam' })).rejects.toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['users.update']), 'member', { name: '  Pamela  ' })).resolves.toMatchObject({ id: 'member' });
+    expect(updateUserName).toHaveBeenCalledWith(expect.any(Object), 'member', 'Pamela');
   });
 });
 

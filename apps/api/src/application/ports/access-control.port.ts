@@ -20,6 +20,7 @@ export interface MemberView {
 export interface AccessControlRepository {
   list(principal: AuthenticatedPrincipal): Promise<{ permissions: { key: string; description: string }[]; roles: RoleView[] }>;
   listMembers(principal: AuthenticatedPrincipal): Promise<MemberView[]>;
+  updateUserName(principal: AuthenticatedPrincipal, userId: string, name: string): Promise<{ id: string; name: string; email: string } | null>;
   createRole(principal: AuthenticatedPrincipal, input: { key: string; name: string; permissions: string[] }): Promise<RoleView>;
   updateRolePermissions(principal: AuthenticatedPrincipal, roleId: string, permissions: string[]): Promise<RoleView>;
   refreshPrincipal(principal: AuthenticatedPrincipal): Promise<AuthenticatedPrincipal | null>;

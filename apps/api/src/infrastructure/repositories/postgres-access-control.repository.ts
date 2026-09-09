@@ -61,6 +61,17 @@ export class PostgresAccessControlRepository implements AccessControlRepository 
     });
   }
 
+  updateUserName(principal: AuthenticatedPrincipal, userId: string, name: string) {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query<{ id: string; name: string; email: string }>(`
+        UPDATE users SET name = $2, updated_at = now()
+        WHERE id = $1
+        RETURNING id, name, email
+      `, [userId, name]);
+      return result.rows[0] ?? null;
+    });
+  }
+
   createRole(principal: AuthenticatedPrincipal, input: { key: string; name: string; permissions: string[] }) {
     return this.database.withTenant(principal, async (client) => {
       const valid = await client.query<{ key: Permission }>('SELECT key FROM permissions WHERE key = ANY($1::text[])', [input.permissions]);

@@ -33,6 +33,10 @@ export class SendConversationMediaDto {
 }
 
 export class CreateMemberFromConversationDto {
+  @IsString()
+  @Length(2, 120)
+  name!: string;
+
   @IsEmail()
   email!: string;
 }

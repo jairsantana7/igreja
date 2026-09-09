@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from '../../../application/use-cases/access-control.use-cases';
+import type { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase, UpdateUserNameUseCase } from '../../../application/use-cases/access-control.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateRoleDto, CreateUserDto, UpdateRolePermissionsDto } from '../dto/access-control.dto';
+import { CreateRoleDto, CreateUserDto, UpdateRolePermissionsDto, UpdateUserNameDto } from '../dto/access-control.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 
@@ -17,6 +17,7 @@ export class AccessControlController {
     @Inject(TOKENS.createRoleUseCase) private readonly createRoleUseCase: CreateRoleUseCase,
     @Inject(TOKENS.updateRolePermissionsUseCase) private readonly updateRoleUseCase: UpdateRolePermissionsUseCase,
     @Inject(TOKENS.createUserUseCase) private readonly createUserUseCase: CreateUserUseCase,
+    @Inject(TOKENS.updateUserNameUseCase) private readonly updateUserNameUseCase: UpdateUserNameUseCase,
   ) {}
 
   @Get()
@@ -51,5 +52,15 @@ export class AccessControlController {
   @RequirePermissions(PERMISSIONS.usersCreate, PERMISSIONS.memberProfilesManage)
   createUser(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: CreateUserDto) {
     return this.createUserUseCase.execute(principal, dto);
+  }
+
+  @Put('users/:userId/name')
+  @RequirePermissions(PERMISSIONS.usersUpdate)
+  updateUserName(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body() dto: UpdateUserNameDto,
+  ) {
+    return this.updateUserNameUseCase.execute(principal, userId, dto);
   }
 }

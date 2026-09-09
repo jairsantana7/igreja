@@ -111,6 +111,7 @@ export const TOKENS = {
   createRoleUseCase: Symbol('CreateRoleUseCase'),
   updateRolePermissionsUseCase: Symbol('UpdateRolePermissionsUseCase'),
   createUserUseCase: Symbol('CreateUserUseCase'),
+  updateUserNameUseCase: Symbol('UpdateUserNameUseCase'),
   getCommunitySettingsUseCase: Symbol('GetCommunitySettingsUseCase'),
   updateCommunitySettingsUseCase: Symbol('UpdateCommunitySettingsUseCase'),
   listAuditEventsUseCase: Symbol('ListAuditEventsUseCase'),

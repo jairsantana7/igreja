@@ -76,7 +76,7 @@ const channelQrImages = reactive<Record<string, string>>({});
 const channelToDelete = ref<Channel | null>(null);
 const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
-const memberForm = reactive({ email: '' });
+const memberForm = reactive({ name: '', email: '' });
 const mediaUrls = reactive<Record<string, string>>({});
 const mediaErrors = reactive<Record<string, boolean>>({});
 const mediaLoading = reactive<Record<string, boolean>>({});
@@ -91,10 +91,14 @@ const channelStatusLabels: Record<ChannelConnectionStatus, string> = {
   connected: 'Conectado', disconnecting: 'Desconectando', disconnected: 'Desconectado', failed: 'Falha na conexão',
 };
 const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+const conversationDisplayName = (item: Conversation) => item.member?.name ?? item.contact.name;
 const filtered = computed(() => (conversations.value ?? []).filter((item) => {
   const term = query.value.trim().toLocaleLowerCase('pt-BR');
   const matchesFilter = filter.value === 'active' ? item.status !== 'resolved' : item.status === filter.value;
-  return matchesFilter && (!term || item.contact.name.toLocaleLowerCase('pt-BR').includes(term) || item.contact.address.toLocaleLowerCase('pt-BR').includes(term));
+  return matchesFilter && (!term
+    || conversationDisplayName(item).toLocaleLowerCase('pt-BR').includes(term)
+    || item.contact.name.toLocaleLowerCase('pt-BR').includes(term)
+    || item.contact.address.toLocaleLowerCase('pt-BR').includes(term));
 }));
 
 watch(conversations, (items) => {
@@ -109,7 +113,7 @@ watch(selectedId, async (id) => {
   replyingTo.value = null;
   openReactionId.value = null;
   showMemberForm.value = false;
-  Object.assign(memberForm, { email: '' });
+  Object.assign(memberForm, { name: '', email: '' });
   if (id) {
     await refreshMessages();
     void requestHistorySync(id);
@@ -459,7 +463,7 @@ async function createMemberFromConversation() {
     const member = await api<{ id: string; name: string }>(`/conversations/${selected.value.id}/member`, {
       method: 'POST', body: memberForm,
     });
-    Object.assign(memberForm, { email: '' });
+    Object.assign(memberForm, { name: '', email: '' });
     showMemberForm.value = false;
     feedback.value = `${member.name} foi adicionado. A senha temporária e o link estão na fila de entregas.`;
     await refresh();
@@ -467,6 +471,12 @@ async function createMemberFromConversation() {
     const message = requestError?.data?.message;
     feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível adicionar este contato como membro.';
   } finally { busy.value = false; }
+}
+
+function openMemberForm() {
+  if (!selected.value) return;
+  Object.assign(memberForm, { name: selected.value.contact.name, email: '' });
+  showMemberForm.value = true;
 }
 
 async function loadMedia(conversationId: string, mediaId: string) {
@@ -540,8 +550,9 @@ function clearMediaUrls() {
     </section>
 
     <section v-if="showMemberForm && selected && !selected.member" class="conversation-setup-card">
-      <div><p class="eyebrow">Cadastro de membro</p><h2>Adicionar {{ selected.contact.name }}</h2><p>O nome e o WhatsApp vêm desta conversa. O sistema criará uma senha temporária e um link para o membro completar o perfil.</p><p><strong>WhatsApp:</strong> {{ selected.contact.address }}</p></div>
+      <div><p class="eyebrow">Cadastro de membro</p><h2>Adicionar contato</h2><p>O nome do WhatsApp é apenas uma sugestão. Corrija apelidos, emojis ou nomes incompletos antes de cadastrar.</p><p><strong>WhatsApp:</strong> {{ selected.contact.address }}</p></div>
       <form class="conversation-setup-form" @submit.prevent="createMemberFromConversation">
+        <label class="field"><span>Nome do membro</span><input v-model="memberForm.name" autocomplete="name" minlength="2" maxlength="120" required><small>Você pode editar o nome recebido do WhatsApp.</small></label>
         <label class="field"><span>E-mail</span><input v-model="memberForm.email" type="email" autocomplete="off" maxlength="254" required></label>
         <div class="integration-warning"><strong>Entrega manual:</strong> depois do cadastro, abra Membros → Entregas de acesso para copiar a mensagem pronta.</div>
         <p class="member-consent-notice">A autorização para a comunidade iniciar novas conversas ficará desativada até o próprio membro consentir.</p>
@@ -557,13 +568,13 @@ function clearMediaUrls() {
         <div v-else-if="!filtered.length" class="conversation-empty"><span>◌</span><strong>Nenhuma conversa neste filtro</strong><small>Configure seu canal e inicie um atendimento.</small></div>
         <template v-else>
           <button v-for="item in filtered" :key="item.id" type="button" class="conversation-item" :class="{ active: selectedId === item.id }" @click="selectedId = item.id">
-            <span class="member-avatar">{{ item.contact.name.charAt(0).toUpperCase() }}</span><span class="conversation-item__body"><span><strong>{{ item.contact.name }}</strong><time>{{ formatter.format(new Date(item.lastMessageAt)) }}</time></span><small>{{ item.event?.title ?? item.contact.address }}</small><p>{{ item.lastMessage ?? 'Conversa iniciada' }}</p></span><span class="conversation-status-dot" :class="`conversation-status-dot--${item.status}`" :title="statusLabels[item.status]" />
+            <span class="member-avatar">{{ conversationDisplayName(item).charAt(0).toUpperCase() }}</span><span class="conversation-item__body"><span><strong>{{ conversationDisplayName(item) }}</strong><time>{{ formatter.format(new Date(item.lastMessageAt)) }}</time></span><small>{{ item.event?.title ?? item.contact.address }}</small><p>{{ item.lastMessage ?? 'Conversa iniciada' }}</p></span><span class="conversation-status-dot" :class="`conversation-status-dot--${item.status}`" :title="statusLabels[item.status]" />
           </button>
         </template>
       </aside>
 
       <article v-if="selected" class="conversation-thread">
-        <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template><template v-if="selected.member"> · Membro: {{ selected.member.name }}</template></small></div><div class="conversation-status-actions"><NuxtLink v-if="selected.member" class="button button--small" :to="`/members/${selected.member.id}`">Ver membro</NuxtLink><button v-else-if="canCreateMember" class="button button--small button--primary" type="button" :disabled="busy" @click="showMemberForm = true">＋ Adicionar como membro</button><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
+        <header><div><h2>{{ conversationDisplayName(selected) }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template><template v-if="selected.member"> · Membro cadastrado</template></small></div><div class="conversation-status-actions"><NuxtLink v-if="selected.member" class="button button--small" :to="`/members/${selected.member.id}`">Ver membro</NuxtLink><button v-else-if="canCreateMember" class="button button--small button--primary" type="button" :disabled="busy" @click="openMemberForm">＋ Adicionar como membro</button><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
         <div class="conversation-messages">
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
           <p v-else-if="historySyncingId === selected.id" class="conversation-day">Buscando mensagens anteriores no celular…</p>

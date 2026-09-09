@@ -117,7 +117,9 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
 - Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
-- Um contato externo pode virar membro pela conversa quando o operador possui `conversations.read`, `users.create` e `members.profile_manage`. Nome e WhatsApp são obtidos da conversa pelo servidor; o operador informa o e-mail e o novo usuário recebe somente o papel de sistema `member`.
+- Um contato externo pode virar membro pela conversa quando o operador possui `conversations.read`, `users.create` e `members.profile_manage`. O WhatsApp é obtido da conversa pelo servidor; o nome recebido do WhatsApp aparece apenas como sugestão editável, o operador confirma o nome e informa o e-mail. O novo usuário recebe somente o papel de sistema `member`.
+- O nome de um membro já cadastrado pode ser corrigido com `users.update`; essa permissão não concede acesso aos dados complementares protegidos por `members.profile_manage`.
+- Depois do vínculo, a central exibe o nome cadastral do membro, mas preserva internamente o nome recebido do provedor para rastreabilidade e busca.
 - Cadastros administrativos geram uma frase-senha temporária e um link de atualização cadastral com validade de sete dias. Os segredos permanecem criptografados em uma fila de entrega manual acessível somente com `members.credentials_manage`; nunca trafegam por jobs ou logs.
 - Cadastro, perfil, papel, vínculo da conversa e vínculo de eventual acompanhamento pastoral são persistidos atomicamente. E-mail já existente não é associado de forma implícita.
 - Converter o contato em membro não ativa sua autorização de WhatsApp. O membro ainda precisa concedê-la explicitamente para que a comunidade inicie contatos futuros.

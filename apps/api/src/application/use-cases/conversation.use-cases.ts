@@ -149,13 +149,16 @@ export class CreateMemberFromConversationUseCase {
     private readonly security: MemberOnboardingSecurity,
   ) {}
 
-  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { email: string }) {
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { name: string; email: string }) {
     requirePermission(principal, PERMISSIONS.conversationsRead);
     requirePermission(principal, PERMISSIONS.usersCreate);
     requirePermission(principal, PERMISSIONS.memberProfilesManage);
+    const name = input.name.trim();
+    if (name.length < 2 || name.length > 120) throw new DomainError('Informe o nome do membro com 2 a 120 caracteres.');
     const generated = this.security.generate();
     const member = await this.onboarding.createFromConversation(principal, {
       conversationId,
+      name,
       email: input.email.toLowerCase().trim(),
       passwordHash: await this.passwords.hash(generated.temporaryPassword),
       delivery: {

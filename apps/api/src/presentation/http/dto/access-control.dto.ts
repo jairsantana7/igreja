@@ -36,6 +36,12 @@ export class CreateUserDto {
   profile!: UpdateMemberProfileDto;
 }
 
+export class UpdateUserNameDto {
+  @IsString()
+  @Length(2, 120)
+  name!: string;
+}
+
 export class UpdateRolePermissionsDto {
   @IsArray()
   @ArrayMaxSize(100)

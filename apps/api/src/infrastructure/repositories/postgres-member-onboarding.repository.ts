@@ -57,11 +57,10 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
     return this.database.withTenant(principal, async (client) => {
       const conversationResult = await client.query<{
         id: string;
-        contact_name: string;
         contact_address: string;
         member_user_id: string | null;
       }>(`
-        SELECT conversations.id, conversations.contact_name, conversations.contact_address, conversations.member_user_id
+        SELECT conversations.id, conversations.contact_address, conversations.member_user_id
         FROM conversations
         JOIN conversation_channels AS channels
           ON channels.id = conversations.channel_id AND channels.tenant_id = conversations.tenant_id
@@ -92,7 +91,7 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
           INSERT INTO users (tenant_id, name, email, password_hash, temporary_password_expires_at)
           VALUES ($1, $2, $3, $4, $5)
           RETURNING id, name, email
-        `, [principal.tenantId, conversation.contact_name.trim(), input.email, input.passwordHash, input.delivery.expiresAt]);
+        `, [principal.tenantId, input.name, input.email, input.passwordHash, input.delivery.expiresAt]);
         const member = user.rows[0]!;
         await client.query(`
           INSERT INTO user_roles (tenant_id, user_id, role_id) VALUES ($1, $2, $3)

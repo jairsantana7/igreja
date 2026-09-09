@@ -226,7 +226,7 @@ describe('central de conversas', () => {
       { generate: vi.fn() } as unknown as MemberOnboardingSecurity,
     );
     await expect(useCase.execute(principal(['conversations.read', 'users.create']), 'conversation', {
-      email: 'pessoa@example.test',
+      name: 'Pessoa', email: 'pessoa@example.test',
     })).rejects.toThrow(AuthorizationError);
     expect(hash).not.toHaveBeenCalled();
     expect(createFromConversation).not.toHaveBeenCalled();
@@ -244,12 +244,27 @@ describe('central de conversas', () => {
       { generate } as unknown as MemberOnboardingSecurity,
     );
     await expect(useCase.execute(principal(['conversations.read', 'users.create', 'members.profile_manage']), 'conversation', {
-      email: ' PESSOA@EXAMPLE.TEST ',
+      name: ' Jair da Silva ', email: ' PESSOA@EXAMPLE.TEST ',
     })).resolves.toMatchObject({ id: 'member' });
     expect(hash).toHaveBeenCalledWith('Casa-Rio-Luz-Paz-1234');
     expect(createFromConversation).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
-      conversationId: 'conversation', email: 'pessoa@example.test', passwordHash: 'hashed',
+      conversationId: 'conversation', name: 'Jair da Silva', email: 'pessoa@example.test', passwordHash: 'hashed',
       delivery: expect.objectContaining({ tokenHash: 'b'.repeat(64) }),
     }));
+  });
+
+  it('não cria membro quando o nome sugerido não foi corrigido para um valor válido', async () => {
+    const createFromConversation = vi.fn();
+    const generate = vi.fn();
+    const useCase = new CreateMemberFromConversationUseCase(
+      { createFromConversation } as unknown as MemberOnboardingRepository,
+      { hash: vi.fn() } as unknown as PasswordHasher,
+      { generate } as unknown as MemberOnboardingSecurity,
+    );
+    await expect(useCase.execute(principal(['conversations.read', 'users.create', 'members.profile_manage']), 'conversation', {
+      name: ' ', email: 'pessoa@example.test',
+    })).rejects.toThrow('Informe o nome do membro');
+    expect(generate).not.toHaveBeenCalled();
+    expect(createFromConversation).not.toHaveBeenCalled();
   });
 });

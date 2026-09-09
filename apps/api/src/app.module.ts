@@ -6,7 +6,7 @@ import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCas
 import { CheckInParticipantUseCase, CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoParticipantCheckInUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { GetEventRegistrationContextUseCase, RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
-import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase } from './application/use-cases/access-control.use-cases';
+import { CreateRoleUseCase, CreateUserUseCase, GetAccessControlUseCase, ListMembersUseCase, UpdateRolePermissionsUseCase, UpdateUserNameUseCase } from './application/use-cases/access-control.use-cases';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { PostgresAuthenticationRepository } from './infrastructure/repositories/postgres-authentication.repository';
 import { PostgresEventRepository } from './infrastructure/repositories/postgres-event.repository';
@@ -450,6 +450,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     {
       provide: TOKENS.listMembersUseCase,
       useFactory: (access: PostgresAccessControlRepository) => new ListMembersUseCase(access),
+      inject: [TOKENS.accessControlRepository],
+    },
+    {
+      provide: TOKENS.updateUserNameUseCase,
+      useFactory: (access: PostgresAccessControlRepository) => new UpdateUserNameUseCase(access),
       inject: [TOKENS.accessControlRepository],
     },
     {

@@ -12,6 +12,7 @@ export interface MemberOnboardingRepository {
   }): Promise<MemberOnboardingCreation>;
   createFromConversation(principal: AuthenticatedPrincipal, input: {
     conversationId: string;
+    name: string;
     email: string;
     passwordHash: string;
     delivery: Omit<MemberOnboardingDeliveryDraft, 'phone'>;

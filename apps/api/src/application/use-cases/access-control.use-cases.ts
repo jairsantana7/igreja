@@ -4,7 +4,7 @@ import type { AccessControlRepository } from '../ports/access-control.port';
 import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
 import { MemberProfileDraft } from '../../domain/entities/member-profile';
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
-import { AuthorizationError } from './errors';
+import { AuthorizationError, NotFoundError } from './errors';
 import { DomainError } from '../../domain/entities/errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission) {
@@ -24,6 +24,18 @@ export class ListMembersUseCase {
   execute(principal: AuthenticatedPrincipal) {
     requirePermission(principal, PERMISSIONS.usersRead);
     return this.access.listMembers(principal);
+  }
+}
+
+export class UpdateUserNameUseCase {
+  constructor(private readonly access: AccessControlRepository) {}
+  async execute(principal: AuthenticatedPrincipal, userId: string, input: { name: string }) {
+    requirePermission(principal, PERMISSIONS.usersUpdate);
+    const name = input.name.trim();
+    if (name.length < 2 || name.length > 120) throw new DomainError('Informe o nome do membro com 2 a 120 caracteres.');
+    const member = await this.access.updateUserName(principal, userId, name);
+    if (!member) throw new NotFoundError('Membro não encontrado nesta comunidade.');
+    return member;
   }
 }
 

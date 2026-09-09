@@ -9,6 +9,7 @@ Ao cadastrar um membro, pedir que o pastor invente e compartilhe uma senha cria 
 ## Decisão
 
 - O cadastro administrativo completo exige nome, e-mail, WhatsApp, papéis e os dados complementares que o operador desejar informar. A senha inicial deixa de ser digitada pelo operador.
+- Ao criar um membro a partir de uma conversa, o nome de perfil do WhatsApp é somente uma sugestão editável. O operador deve poder corrigir apelidos, emojis e nomes incompletos antes de confirmar o cadastro; o número continua sendo resolvido no servidor a partir da conversa.
 - A aplicação gera uma frase-senha temporária legível, com palavras sem acento e números, e mantém o mínimo de dez caracteres aceito pela autenticação local.
 - Cada cadastro gera uma entrega de acesso com validade de sete dias e um link individual para o próprio membro revisar o perfil, informar os dados faltantes e escolher uma nova senha.
 - A fila de entrega mostra somente membro, WhatsApp, estado e validade. Senha e token ficam juntos em um payload AES-256-GCM criptografado com uma chave exclusiva de implantação.
@@ -26,4 +27,3 @@ Ao cadastrar um membro, pedir que o pastor invente e compartilhe uma senha cria 
 - A frase-senha é um caminho temporário e amigável, não uma redução das proteções de sessão ou rate limit.
 - Entregas expiradas deixam de ser reveladas e links expirados deixam de atualizar dados. Uma futura ação de reemissão deverá gerar novo segredo e invalidar o anterior.
 - O projeto precisa configurar `MEMBER_ONBOARDING_SECRET` em produção e protegê-lo como segredo de implantação.
-
