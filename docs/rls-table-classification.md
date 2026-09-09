@@ -20,6 +20,9 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_collaborators` | tenant-direct | colaboração relaciona evento e usuário da mesma comunidade | RLS direta + FKs compostas para evento e usuário |
 | `event_form_fields` | tenant-direct | campo pertence a evento e comunidade | RLS direta + FK composta para evento |
 | `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |
+| `event_galleries` | tenant-direct | álbum editorial pertence a um evento e à comunidade | RLS direta + FKs compostas para evento e criador; acesso de gestão também respeita o escopo do evento |
+| `gallery_photos` | tenant-direct | foto e seus metadados pertencem à galeria da comunidade | RLS direta + FK composta para galeria; conteúdo binário fica no adapter `MediaStorage` |
+| `gallery_public_directory` | global catalog | resolve UUID público opaco para tenant e galeria publicada | sem acesso direto do runtime; consultado somente por funções resolver estreitas |
 | `event_registrations` | tenant-direct | inscrição pertence a evento e comunidade | RLS direta + FKs compostas |
 | `registration_answers` | tenant-direct | resposta pertence à inscrição/campo/evento | RLS direta + FKs compostas para impedir cruzamento |
 | `event_form_versions` | tenant-direct | fotografia versionada do formulário pertence ao evento | RLS direta + FKs compostas para evento e autor |
@@ -55,6 +58,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 
 - `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.
 - `app.resolve_member_onboarding_tenant`: resolve somente o tenant de uma entrega ativa a partir de UUID público opaco e entra no contexto antes de consultar a tabela protegida.
+- `app.resolve_public_gallery` e `app.resolve_public_gallery_photo`: resolvem uma galeria pública por UUID opaco, entram no tenant correto e retornam somente metadados ou a chave da mídia publicada.
 - `app.list_restorable_conversation_channels`: percorre o catálogo de tenants e entra em cada contexto RLS; retorna ao worker apenas `tenant_id` e `channel_id` de sessões WhatsApp restauráveis.
 - O runtime não recebe `SELECT` direto nos catálogos globais. As funções usam `SECURITY DEFINER`, `search_path` fixo, owner sem `BYPASSRLS` e `EXECUTE` explícito.
 

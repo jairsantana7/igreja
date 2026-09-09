@@ -86,6 +86,7 @@ A trilha usa paginação keyset pela ordenação imutável `(created_at DESC, id
 - **Pagamentos:** permanece separado de inscrição. `PaymentGateway` evita dependência de fornecedor e nenhuma cobrança é criada sem regras de preço, conciliação e reembolso.
 - **Segurança administrativa:** sessões revogáveis e uma futura porta de MFA não alteram o domínio de eventos. Acesso emergencial será um fluxo privilegiado explícito, nunca um tenant vazio.
 - **Modelos de evento:** reutilizam conteúdo e formulário, mas não transformam recorrência em comportamento implícito.
+- **Galerias:** álbuns editoriais de eventos concluídos possuem publicação e privacidade próprias. O domínio depende de `MediaStorage`, `GalleryImageProcessor` e `JobQueue`; PostgreSQL, Sharp e o broker permanecem em adaptadores.
 
 Esses limites evitam que a plataforma cresça como um ERP genérico: o núcleo continua sendo operação de eventos da comunidade.
 

@@ -269,3 +269,16 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Upload exige `events.update`, valida tipo e assinatura JPEG, PNG ou WebP e limita cada arquivo a 5 MiB por segurança operacional.
 - Uma mídia só pode ser lida publicamente quando pertence a um evento publicado.
 - Ainda precisa ser definido pelo produto se haverá imagem destacada manual, reordenação e exclusão de mídias na primeira versão.
+
+## Galerias de eventos
+
+- Um evento concluído pode possuir uma única galeria. A galeria começa como rascunho e publicar exige ao menos uma foto.
+- Galerias podem ser públicas ou exclusivas para membros autenticados da mesma comunidade com `galleries.view`.
+- A gestão acompanha o escopo do evento: responsáveis e colaboradores usam `galleries.read_own`; `galleries.read_all` permite supervisão da comunidade.
+- Criar, editar fotos/metadados e publicar exigem `galleries.create`, `galleries.update` e `galleries.publish`, respectivamente.
+- Cada foto possui legenda opcional, texto alternativo obrigatório para publicação, posição e indicação de capa. Uma galeria aceita até 200 fotos.
+- Cada upload aceita até 20 arquivos JPEG, PNG ou WebP de até 10 MiB, com validação de MIME e assinatura.
+- O original fica disponível imediatamente. Otimização e miniatura podem ser processadas por fila; uma falha nesse processamento não impede a exibição do original.
+- Excluir uma foto remove somente a mídia da galeria. Evento, inscrições e demais fotos permanecem intactos.
+- Não há upload de participantes nem reconhecimento facial no MVP. A comunidade deve obter autorização de uso de imagem, especialmente para crianças, e atender pedidos de remoção.
+- Reutilizar uma foto em outro evento cria uma cópia independente no storage e em `event_media`.
