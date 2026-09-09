@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   followupsReadOwn: 'followups.read_own',
   followupsReadAll: 'followups.read_all',
   followupsManage: 'followups.manage',
+  followupsDelete: 'followups.delete',
   followupsNotesRead: 'followups.notes_read',
   followupsNotesManage: 'followups.notes_manage',
   followupsPipelineManage: 'followups.pipeline_manage',

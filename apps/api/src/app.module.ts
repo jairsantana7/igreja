@@ -64,7 +64,7 @@ import { CommunicationController } from './presentation/http/controllers/communi
 import { CreateCommunicationTemplateUseCase, CreateEventReminderUseCase, DeleteEventReminderUseCase, ListCommunicationTemplatesUseCase, ListCommunicationTemplateVersionsUseCase, ListEventRemindersUseCase, SetCommunicationTemplateStatusUseCase, UpdateCommunicationTemplateUseCase, UpdateEventReminderUseCase } from './application/use-cases/communication-template.use-cases';
 import { PostgresPastoralFollowupRepository } from './infrastructure/repositories/postgres-pastoral-followup.repository';
 import { PastoralFollowupController } from './presentation/http/controllers/pastoral-followup.controller';
-import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from './application/use-cases/pastoral-followup.use-cases';
+import { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, DeleteFollowupUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from './application/use-cases/pastoral-followup.use-cases';
 import { AesGcmStateCipher } from './infrastructure/security/aes-gcm-state.cipher';
 import { NodeMemberOnboardingSecurity } from './infrastructure/security/node-member-onboarding.security';
 import type { MemberOnboardingSecurity } from './application/ports/member-onboarding-security.port';
@@ -538,6 +538,7 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     { provide: TOKENS.createFollowupFromConversationUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new CreateFollowupFromConversationUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     { provide: TOKENS.moveFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new MoveFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     { provide: TOKENS.updateFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new UpdateFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
+    { provide: TOKENS.deleteFollowupUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new DeleteFollowupUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     { provide: TOKENS.listFollowupStagesUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new ListFollowupStagesUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     { provide: TOKENS.createFollowupStageUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new CreateFollowupStageUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },
     { provide: TOKENS.listFollowupTagsUseCase, useFactory: (repository: PostgresPastoralFollowupRepository) => new ListFollowupTagsUseCase(repository), inject: [TOKENS.pastoralFollowupRepository] },

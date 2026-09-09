@@ -11,6 +11,7 @@ const auth = useAuth();
 const route = useRoute();
 const permissions = computed(() => auth.session.value?.user.permissions ?? []);
 const canManage = computed(() => permissions.value.includes('followups.manage'));
+const canDelete = computed(() => permissions.value.includes('followups.delete'));
 const canManageNotes = computed(() => permissions.value.includes('followups.notes_manage'));
 const canManagePipeline = computed(() => permissions.value.includes('followups.pipeline_manage'));
 const { data: board, pending, error, refresh: refreshBoard } = await useAsyncData('followup-board', () => api<Card[]>('/followups'), { server: false });
@@ -21,6 +22,7 @@ const { data: detail, pending: detailPending, refresh: refreshDetail } = await u
 const draggingId = ref('');
 const busy = ref(false);
 const feedback = ref('');
+const followupToDelete = ref<Detail | null>(null);
 const query = ref('');
 const selectedTagIds = ref<string[]>([]);
 const nextActionLocal = ref('');
@@ -84,6 +86,23 @@ async function removeNote(noteId: string) {
   catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível remover a anotação.'; }
   finally { busy.value = false; }
 }
+function cancelDelete() {
+  if (!busy.value) followupToDelete.value = null;
+}
+async function deleteFollowup() {
+  const followup = followupToDelete.value;
+  if (!followup) return;
+  busy.value = true; feedback.value = '';
+  try {
+    await api(`/followups/${followup.id}`, { method: 'DELETE' });
+    followupToDelete.value = null;
+    selectedId.value = '';
+    detail.value = null;
+    feedback.value = 'Acompanhamento excluído. O membro e as conversas foram preservados.';
+    await refreshBoard();
+  } catch (requestError: any) { feedback.value = requestError?.data?.message ?? 'Não foi possível excluir o acompanhamento.'; }
+  finally { busy.value = false; }
+}
 async function createStage() {
   busy.value = true; feedback.value = '';
   try { await api('/followups/stages', { method: 'POST', body: stageForm }); Object.assign(stageForm, { name: '', color: '#378661' }); await refreshStages(); }
@@ -112,7 +131,8 @@ async function createTag() {
           <div class="followup-column__cards"><button v-for="card in byStage(stage.id)" :key="card.id" class="followup-card" :class="{ active: selectedId === card.id }" type="button" :draggable="canManage" @dragstart="draggingId = card.id" @click="selectedId = card.id"><div class="followup-card__identity"><span>{{ card.contactName.charAt(0).toUpperCase() }}</span><div><strong>{{ card.contactName }}</strong><small>{{ card.contactAddress }}</small></div></div><div v-if="card.tags.length" class="followup-tags"><i v-for="tag in card.tags" :key="tag.id" :style="{ '--tag-color': tag.color }">{{ tag.name }}</i></div><p><span>{{ card.owner.name }}</span><span v-if="card.noteCount">✎ {{ card.noteCount }}</span></p><time v-if="card.nextActionAt" :class="{ overdue: isOverdue(card.nextActionAt) }">{{ isOverdue(card.nextActionAt) ? 'Atrasado · ' : 'Próximo contato · ' }}{{ formatter.format(new Date(card.nextActionAt)) }}</time></button><div v-if="!byStage(stage.id).length" class="followup-column__empty">Solte um acompanhamento aqui</div></div>
         </section>
       </div>
-      <aside v-if="selectedId" class="followup-detail"><button class="icon-close" type="button" aria-label="Fechar detalhes" @click="selectedId = ''">×</button><p v-if="detailPending">Carregando…</p><template v-else-if="detail"><p class="eyebrow">Acompanhamento</p><h2>{{ detail.contactName }}</h2><p class="muted">{{ detail.contactAddress }} · responsável: {{ detail.owner.name }}</p><NuxtLink v-if="detail.conversationIds[0]" :to="{ path: '/conversations', query: { selected: detail.conversationIds[0] } }" class="button button--small">◌ Abrir conversa</NuxtLink><form v-if="canManage" class="followup-detail-form" @submit.prevent="saveDetails"><label class="field"><span>Etapa atual</span><select :value="detail.stageId" @change="move(detail.id, ($event.target as HTMLSelectElement).value)"><option v-for="stage in stages" :key="stage.id" :value="stage.id">{{ stage.name }}</option></select></label><label class="field"><span>Próxima ação</span><input v-model="nextActionLocal" type="datetime-local"></label><fieldset><legend>Etiquetas</legend><label v-for="tag in tags" :key="tag.id"><input v-model="selectedTagIds" type="checkbox" :value="tag.id"><span :style="{ '--tag-color': tag.color }">{{ tag.name }}</span></label><small v-if="!tags?.length">Nenhuma etiqueta cadastrada.</small></fieldset><button class="button button--primary" :disabled="busy">Salvar organização</button></form><section class="followup-notes"><header><div><p class="eyebrow">Memória interna</p><h3>Anotações</h3></div><small>Nunca são enviadas ao contato.</small></header><form v-if="canManageNotes" @submit.prevent="addNote"><textarea v-model="noteForm.body" rows="4" maxlength="5000" placeholder="Registre contexto e o próximo passo…" required></textarea><div><select v-model="noteForm.visibility"><option value="team">Compartilhar com a equipe</option><option value="private">Somente eu</option></select><button class="button button--primary" :disabled="busy">Adicionar</button></div></form><article v-for="note in detail.notes" :key="note.id"><header><strong>{{ note.author.name }}</strong><span>{{ note.visibility === 'private' ? 'Privada' : 'Equipe' }}</span></header><p>{{ note.body }}</p><footer><time>{{ formatter.format(new Date(note.createdAt)) }}</time><button v-if="note.own && canManageNotes" type="button" @click="removeNote(note.id)">Remover</button></footer></article><p v-if="!detail.notes.length" class="muted">Nenhuma anotação visível para você.</p></section><details class="followup-history"><summary>Histórico de etapas</summary><ol><li v-for="change in detail.history" :key="change.id"><span :style="{ background: stages?.find(stage => stage.name === change.toStage)?.color }"/><p><strong>{{ change.fromStage ? `${change.fromStage} → ${change.toStage}` : `Iniciado em ${change.toStage}` }}</strong><small>{{ change.changedBy }} · {{ formatter.format(new Date(change.changedAt)) }}</small></p></li></ol></details></template></aside>
+      <aside v-if="selectedId" class="followup-detail"><button class="icon-close" type="button" aria-label="Fechar detalhes" @click="selectedId = ''">×</button><p v-if="detailPending">Carregando…</p><template v-else-if="detail"><p class="eyebrow">Acompanhamento</p><h2>{{ detail.contactName }}</h2><p class="muted">{{ detail.contactAddress }} · responsável: {{ detail.owner.name }}</p><div class="followup-detail__actions"><NuxtLink v-if="detail.conversationIds[0]" :to="{ path: '/conversations', query: { selected: detail.conversationIds[0] } }" class="button button--small">◌ Abrir conversa</NuxtLink><button v-if="canDelete" class="button button--small button--danger" type="button" :disabled="busy" @click="followupToDelete = detail">Excluir card</button></div><form v-if="canManage" class="followup-detail-form" @submit.prevent="saveDetails"><label class="field"><span>Etapa atual</span><select :value="detail.stageId" @change="move(detail.id, ($event.target as HTMLSelectElement).value)"><option v-for="stage in stages" :key="stage.id" :value="stage.id">{{ stage.name }}</option></select></label><label class="field"><span>Próxima ação</span><input v-model="nextActionLocal" type="datetime-local"></label><fieldset><legend>Etiquetas</legend><label v-for="tag in tags" :key="tag.id"><input v-model="selectedTagIds" type="checkbox" :value="tag.id"><span :style="{ '--tag-color': tag.color }">{{ tag.name }}</span></label><small v-if="!tags?.length">Nenhuma etiqueta cadastrada.</small></fieldset><button class="button button--primary" :disabled="busy">Salvar organização</button></form><section class="followup-notes"><header><div><p class="eyebrow">Memória interna</p><h3>Anotações</h3></div><small>Nunca são enviadas ao contato.</small></header><form v-if="canManageNotes" @submit.prevent="addNote"><textarea v-model="noteForm.body" rows="4" maxlength="5000" placeholder="Registre contexto e o próximo passo…" required></textarea><div><select v-model="noteForm.visibility"><option value="team">Compartilhar com a equipe</option><option value="private">Somente eu</option></select><button class="button button--primary" :disabled="busy">Adicionar</button></div></form><article v-for="note in detail.notes" :key="note.id"><header><strong>{{ note.author.name }}</strong><span>{{ note.visibility === 'private' ? 'Privada' : 'Equipe' }}</span></header><p>{{ note.body }}</p><footer><time>{{ formatter.format(new Date(note.createdAt)) }}</time><button v-if="note.own && canManageNotes" type="button" @click="removeNote(note.id)">Remover</button></footer></article><p v-if="!detail.notes.length" class="muted">Nenhuma anotação visível para você.</p></section><details class="followup-history"><summary>Histórico de etapas</summary><ol><li v-for="change in detail.history" :key="change.id"><span :style="{ background: stages?.find(stage => stage.name === change.toStage)?.color }"/><p><strong>{{ change.fromStage ? `${change.fromStage} → ${change.toStage}` : `Iniciado em ${change.toStage}` }}</strong><small>{{ change.changedBy }} · {{ formatter.format(new Date(change.changedAt)) }}</small></p></li></ol></details></template></aside>
     </section>
+    <ConfirmDialog :open="Boolean(followupToDelete)" title="Excluir acompanhamento?" :description="`O card de ${followupToDelete?.contactName ?? 'esta pessoa'} e seus dados internos serão excluídos. O membro, as conversas e as mensagens serão preservados.`" confirm-label="Excluir acompanhamento" busy-label="Excluindo…" :busy="busy" @confirm="deleteFollowup" @cancel="cancelDelete" />
   </div>
 </template>

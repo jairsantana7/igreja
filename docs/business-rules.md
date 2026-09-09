@@ -152,6 +152,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O conteúdo de notas não é copiado para auditoria, logs, breadcrumbs ou mensagens de erro.
 - `followups.read_own` limita a leitura aos acompanhamentos sob responsabilidade do usuário; `followups.read_all` habilita supervisão da comunidade.
 - Alterações exigem `followups.manage` e acesso ao acompanhamento. Notas exigem adicionalmente `followups.notes_read` ou `followups.notes_manage`; administrar etapas e etiquetas exige `followups.pipeline_manage`.
+- Excluir um acompanhamento exige `followups.delete`, confirmação explícita e acesso ao cartão. A exclusão remove somente o agregado do kanban e seus dados internos; membro, conversas e mensagens são preservados.
 - A interface descreve essas capacidades em linguagem do negócio; as chaves técnicas aparecem somente na administração de acessos.
 
 ## Cadastro progressivo, família e participantes do evento

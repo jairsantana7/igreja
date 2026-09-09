@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PastoralFollowupRepository } from '../src/application/ports/pastoral-followup.port';
-import { AddFollowupNoteUseCase, CreateFollowupStageUseCase, ListFollowupBoardUseCase, MoveFollowupUseCase, UpdateFollowupUseCase } from '../src/application/use-cases/pastoral-followup.use-cases';
+import { AddFollowupNoteUseCase, CreateFollowupStageUseCase, DeleteFollowupUseCase, ListFollowupBoardUseCase, MoveFollowupUseCase, UpdateFollowupUseCase } from '../src/application/use-cases/pastoral-followup.use-cases';
 import { AuthorizationError, NotFoundError } from '../src/application/use-cases/errors';
 import { FollowupNoteContent, FollowupStageDefinition, FollowupTagDefinition } from '../src/domain/entities/pastoral-followup';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
@@ -47,5 +47,24 @@ describe('acompanhamento pastoral', () => {
     const addNote = vi.fn();
     const useCase = new AddFollowupNoteUseCase({ addNote } as unknown as PastoralFollowupRepository);
     await expect(useCase.execute(principal(['followups.manage']), 'followup', { body: 'Nota interna', visibility: 'team' })).rejects.toThrow(AuthorizationError);
+  });
+
+  it('protege a exclusão com permissão própria', async () => {
+    const remove = vi.fn();
+    const useCase = new DeleteFollowupUseCase({ remove } as unknown as PastoralFollowupRepository);
+    await expect(useCase.execute(principal(['followups.manage']), 'followup')).rejects.toThrow(AuthorizationError);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('exclui um acompanhamento acessível', async () => {
+    const remove = vi.fn().mockResolvedValue(true);
+    const useCase = new DeleteFollowupUseCase({ remove } as unknown as PastoralFollowupRepository);
+    await expect(useCase.execute(principal(['followups.delete']), 'followup')).resolves.toEqual({ removed: true });
+    expect(remove).toHaveBeenCalledWith(expect.any(Object), 'followup');
+  });
+
+  it('não revela um acompanhamento ausente ou fora do escopo ao excluir', async () => {
+    const useCase = new DeleteFollowupUseCase({ remove: vi.fn().mockResolvedValue(false) } as unknown as PastoralFollowupRepository);
+    await expect(useCase.execute(principal(['followups.delete']), 'followup')).rejects.toThrow(NotFoundError);
   });
 });

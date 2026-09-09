@@ -110,6 +110,16 @@ export class PostgresPastoralFollowupRepository implements PastoralFollowupRepos
     });
   }
 
+  remove(principal: AuthenticatedPrincipal, followupId: string): Promise<boolean> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(
+        'DELETE FROM pastoral_followups WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)',
+        [followupId, canReadAll(principal), principal.userId],
+      );
+      return Boolean(result.rowCount);
+    });
+  }
+
   addNote(principal: AuthenticatedPrincipal, followupId: string, note: FollowupNoteContent): Promise<FollowupNoteView | null> {
     return this.database.withTenant(principal, async (client) => {
       if (!(await canAccess(client, principal, followupId))) return null;

@@ -69,6 +69,7 @@ export const TOKENS = {
   createFollowupFromConversationUseCase: Symbol('CreateFollowupFromConversationUseCase'),
   moveFollowupUseCase: Symbol('MoveFollowupUseCase'),
   updateFollowupUseCase: Symbol('UpdateFollowupUseCase'),
+  deleteFollowupUseCase: Symbol('DeleteFollowupUseCase'),
   listFollowupStagesUseCase: Symbol('ListFollowupStagesUseCase'),
   createFollowupStageUseCase: Symbol('CreateFollowupStageUseCase'),
   listFollowupTagsUseCase: Symbol('ListFollowupTagsUseCase'),

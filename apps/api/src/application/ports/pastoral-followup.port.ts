@@ -22,6 +22,7 @@ export interface PastoralFollowupRepository {
   createFromConversation(principal: AuthenticatedPrincipal, conversationId: string): Promise<FollowupDetailView | null>;
   move(principal: AuthenticatedPrincipal, followupId: string, stageId: string): Promise<FollowupCardView | null>;
   update(principal: AuthenticatedPrincipal, followupId: string, input: { nextActionAt: string | null; tagIds: string[] }): Promise<FollowupCardView | null>;
+  remove(principal: AuthenticatedPrincipal, followupId: string): Promise<boolean>;
   addNote(principal: AuthenticatedPrincipal, followupId: string, note: FollowupNoteContent): Promise<FollowupNoteView | null>;
   removeNote(principal: AuthenticatedPrincipal, followupId: string, noteId: string): Promise<boolean | null>;
 }
