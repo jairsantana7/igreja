@@ -32,6 +32,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `conversation_provider_states` | tenant-direct | estado opaco e criptografado do dispositivo vinculado pertence a um canal da comunidade | RLS direta + FK composta incluindo `provider_key`; runtime acessa somente dentro da transação do tenant; não possui trigger de auditoria para não registrar rotação de chaves |
 | `conversations` | tenant-direct | atendimento pertence ao canal, contato e comunidade | RLS direta + FKs compostas para canal, evento, membro e responsável |
 | `conversation_messages` | tenant-direct | mensagem pertence a uma conversa da comunidade | RLS direta + FKs compostas para conversa e remetente interno |
+| `conversation_message_attachments` | tenant-direct | metadado de mídia privada pertence a uma mensagem e conversa da comunidade | RLS direta + FK composta para mensagem/conversa; binário fica no adapter `MediaStorage` e exige autorização da conversa |
 | `whatsapp_message_templates` | tenant-direct | projeção de template pertence ao canal da comunidade | RLS direta + FK composta para canal; Meta é a fonte oficial do conteúdo e status |
 | `external_accounts` | tenant-direct | identidade social pertence à conta da comunidade | RLS direta + FK composta para usuário |
 | `community_integrations` | tenant-direct | configuração de integração pertence à comunidade | RLS direta; segredos ficam fora da tabela |

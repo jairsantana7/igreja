@@ -4,6 +4,7 @@ import type { ConversationProviderCatalog, ConversationRepository } from '../por
 import type { JobQueue } from '../ports/job-queue.port';
 import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
 import type { PasswordHasher } from '../ports/authentication.port';
+import type { MediaStorage } from '../ports/media-storage.port';
 import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission) {
@@ -160,6 +161,21 @@ export class GetConversationMessagesUseCase {
     const messages = await this.conversations.messages(principal, conversationId);
     if (!messages) throw new NotFoundError('Conversa não encontrada ou sem acesso.');
     return messages;
+  }
+}
+
+export class GetConversationMediaUseCase {
+  constructor(private readonly conversations: ConversationRepository, private readonly storage: MediaStorage) {}
+
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, mediaId: string) {
+    requirePermission(principal, PERMISSIONS.conversationsRead);
+    const media = await this.conversations.resolveAttachment(principal, conversationId, mediaId);
+    if (!media) throw new NotFoundError('Mídia não encontrada ou sem acesso.');
+    try {
+      return { content: await this.storage.read(media.storageKey), mimeType: media.mimeType };
+    } catch {
+      throw new NotFoundError('O arquivo desta mídia não está disponível.');
+    }
   }
 }
 

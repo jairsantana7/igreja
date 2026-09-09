@@ -4,11 +4,15 @@ import { join } from 'node:path';
 import type { MediaStorage, StoredMedia } from '../../application/ports/media-storage.port';
 import { env } from '../config/env';
 
-const KEY_PATTERN = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
+const KEY_PATTERN = /^[0-9a-f-]{36}\.(jpg|png|webp|ogg|mp3|m4a|aac)$/;
 const EXTENSIONS: Record<StoredMedia['mimeType'], string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
 };
 
 export class LocalMediaStorage implements MediaStorage {

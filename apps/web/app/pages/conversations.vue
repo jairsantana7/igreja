@@ -22,8 +22,9 @@ interface Conversation {
 interface Message {
   id: string; direction: 'inbound' | 'outbound'; body: string;
   status: 'received' | 'pending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed';
-  sentBy: string | null; createdAt: string;
+  sentBy: string | null; createdAt: string; attachments: MessageAttachment[];
 }
+interface MessageAttachment { id: string; kind: 'image' | 'audio'; mimeType: string; byteSize: number; durationSeconds: number | null }
 interface EventOption { id: string; title: string; owner: { id: string; name: string } }
 useHead({ title: 'Conversas' });
 const api = useApi();
@@ -66,6 +67,9 @@ const channelToDelete = ref<Channel | null>(null);
 const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
 const memberForm = reactive({ email: '', password: '' });
+const mediaUrls = reactive<Record<string, string>>({});
+const mediaErrors = reactive<Record<string, boolean>>({});
+const mediaLoading = reactive<Record<string, boolean>>({});
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
 const messageStatusLabels: Record<Message['status'], string> = {
@@ -89,9 +93,18 @@ watch(() => route.query.selected, (id) => {
   if (typeof id === 'string') selectedId.value = id;
 });
 watch(selectedId, async (id) => {
+  clearMediaUrls();
   showMemberForm.value = false;
   Object.assign(memberForm, { email: '', password: '' });
   if (id) await refreshMessages();
+});
+watch(messages, (items) => {
+  if (!import.meta.client || !selectedId.value) return;
+  for (const message of items ?? []) {
+    for (const attachment of message.attachments ?? []) {
+      if (!mediaUrls[attachment.id] && !mediaErrors[attachment.id] && !mediaLoading[attachment.id]) void loadMedia(selectedId.value, attachment.id);
+    }
+  }
 });
 
 async function createChannel() {
@@ -194,6 +207,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (connectionPolling) clearInterval(connectionPolling);
   if (conversationPolling) clearInterval(conversationPolling);
+  clearMediaUrls();
 });
 watch(channels, () => void refreshConnections());
 
@@ -267,6 +281,27 @@ async function createMemberFromConversation() {
     const message = requestError?.data?.message;
     feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível adicionar este contato como membro.';
   } finally { busy.value = false; }
+}
+
+async function loadMedia(conversationId: string, mediaId: string) {
+  mediaLoading[mediaId] = true;
+  try {
+    const blob = await api<Blob>(`/conversations/${conversationId}/media/${mediaId}`, { responseType: 'blob' });
+    const url = URL.createObjectURL(blob);
+    if (selectedId.value !== conversationId) URL.revokeObjectURL(url);
+    else mediaUrls[mediaId] = url;
+  } catch {
+    mediaErrors[mediaId] = true;
+  } finally { delete mediaLoading[mediaId]; }
+}
+
+function clearMediaUrls() {
+  if (import.meta.client) {
+    for (const url of Object.values(mediaUrls)) URL.revokeObjectURL(url);
+  }
+  for (const key of Object.keys(mediaUrls)) delete mediaUrls[key];
+  for (const key of Object.keys(mediaErrors)) delete mediaErrors[key];
+  for (const key of Object.keys(mediaLoading)) delete mediaLoading[key];
 }
 </script>
 
@@ -347,6 +382,12 @@ async function createMemberFromConversation() {
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>
           <div v-for="message in messages" :key="message.id" class="message-bubble" :class="message.direction === 'outbound' ? 'message-bubble--outbound' : 'message-bubble--inbound'">
+            <div v-for="attachment in message.attachments" :key="attachment.id" class="message-attachment">
+              <a v-if="attachment.kind === 'image' && mediaUrls[attachment.id]" :href="mediaUrls[attachment.id]" target="_blank" rel="noopener noreferrer" aria-label="Abrir imagem em tamanho original"><img :src="mediaUrls[attachment.id]" :alt="message.body === 'Imagem' ? 'Imagem recebida na conversa' : message.body"></a>
+              <audio v-else-if="attachment.kind === 'audio' && mediaUrls[attachment.id]" :src="mediaUrls[attachment.id]" controls preload="metadata">Seu navegador não consegue reproduzir este áudio.</audio>
+              <span v-else-if="mediaErrors[attachment.id]" class="message-attachment__error">Mídia indisponível</span>
+              <span v-else class="message-attachment__loading">Carregando mídia…</span>
+            </div>
             <p>{{ message.body }}</p><small>{{ formatter.format(new Date(message.createdAt)) }} · {{ messageStatusLabels[message.status] }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
           </div>
         </div>

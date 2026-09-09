@@ -1,9 +1,11 @@
 import type {
+  ConversationIncomingAttachment,
   ConversationOutboundDelivery,
   ConversationRuntimeChannel,
   ConversationRuntimeRepository,
 } from '../../application/ports/conversation.port';
 import { PostgresDatabase } from '../database/postgres.database';
+import type { PoolClient } from 'pg';
 
 export class PostgresConversationRuntimeRepository implements ConversationRuntimeRepository {
   constructor(private readonly database: PostgresDatabase) {}
@@ -73,13 +75,13 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
     });
   }
 
-  async receiveInbound(input: Parameters<ConversationRuntimeRepository['receiveInbound']>[0]): Promise<void> {
-    await this.database.withTenant(input.tenantId, async (client) => {
+  async receiveInbound(input: Parameters<ConversationRuntimeRepository['receiveInbound']>[0]): Promise<boolean> {
+    return this.database.withTenant(input.tenantId, async (client) => {
       const channel = await client.query<{ owner_user_id: string }>(
         'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
         [input.channelId],
       );
-      if (!channel.rows[0]) return;
+      if (!channel.rows[0]) return false;
 
       const addresses = [...new Set([input.contactAddress, ...(input.contactAddressAliases ?? [])])];
       let conversation = await client.query<{ id: string }>(`
@@ -97,30 +99,35 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         `, [input.tenantId, input.channelId, channel.rows[0].owner_user_id, input.contactName, input.contactAddress]);
       }
 
-      const inserted = await client.query(`
+      const inserted = await client.query<{ id: string }>(`
         INSERT INTO conversation_messages (
           tenant_id, conversation_id, direction, body, status, provider_message_id, created_at
         ) VALUES ($1, $2, 'inbound', $3, 'received', $4, $5)
         ON CONFLICT (tenant_id, conversation_id, provider_message_id)
           WHERE provider_message_id IS NOT NULL DO NOTHING
+        RETURNING id
       `, [input.tenantId, conversation.rows[0]!.id, input.body, input.providerMessageId, input.receivedAt]);
       if (inserted.rowCount) {
+        if (input.attachment) {
+          await this.insertAttachment(client, input.tenantId, conversation.rows[0]!.id, inserted.rows[0]!.id, input.attachment);
+        }
         await client.query(`
           UPDATE conversations
           SET contact_name = $2, contact_address = $3, status = 'open', last_message_at = $4, updated_at = now()
           WHERE id = $1
         `, [conversation.rows[0]!.id, input.contactName, input.contactAddress, input.receivedAt]);
       }
+      return Boolean(inserted.rowCount);
     });
   }
 
-  async receiveOutboundMirror(input: Parameters<ConversationRuntimeRepository['receiveOutboundMirror']>[0]): Promise<void> {
-    await this.database.withTenant(input.tenantId, async (client) => {
+  async receiveOutboundMirror(input: Parameters<ConversationRuntimeRepository['receiveOutboundMirror']>[0]): Promise<boolean> {
+    return this.database.withTenant(input.tenantId, async (client) => {
       const channel = await client.query<{ owner_user_id: string }>(
         'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
         [input.channelId],
       );
-      if (!channel.rows[0]) return;
+      if (!channel.rows[0]) return false;
 
       const addresses = [...new Set([input.contactAddress, ...(input.contactAddressAliases ?? [])])];
       let conversation = await client.query<{ id: string }>(`
@@ -139,7 +146,7 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       }
       const conversationId = conversation.rows[0]!.id;
 
-      const matched = await client.query(`
+      const matched = input.attachment ? { rowCount: 0 } : await client.query(`
         UPDATE conversation_messages SET status = 'sent', provider_message_id = $3
         WHERE id = (
           SELECT id FROM conversation_messages
@@ -150,14 +157,20 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         )
         RETURNING id
       `, [conversationId, input.body, input.providerMessageId]);
+      let stored = Boolean(matched.rowCount);
       if (!matched.rowCount) {
-        await client.query(`
+        const inserted = await client.query<{ id: string }>(`
           INSERT INTO conversation_messages (
             tenant_id, conversation_id, sent_by_user_id, direction, body, status, provider_message_id, created_at
           ) VALUES ($1, $2, $3, 'outbound', $4, 'sent', $5, $6)
           ON CONFLICT (tenant_id, conversation_id, provider_message_id)
             WHERE provider_message_id IS NOT NULL DO NOTHING
+          RETURNING id
         `, [input.tenantId, conversationId, channel.rows[0].owner_user_id, input.body, input.providerMessageId, input.sentAt]);
+        stored = Boolean(inserted.rowCount);
+        if (inserted.rows[0] && input.attachment) {
+          await this.insertAttachment(client, input.tenantId, conversationId, inserted.rows[0].id, input.attachment);
+        }
       }
       await client.query(`
         UPDATE conversations
@@ -165,7 +178,26 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
           last_message_at = GREATEST(last_message_at, $3), updated_at = now()
         WHERE id = $1
       `, [conversationId, input.contactAddress, input.sentAt]);
+      return stored;
     });
+  }
+
+  private async insertAttachment(
+    client: PoolClient,
+    tenantId: string,
+    conversationId: string,
+    messageId: string,
+    attachment: ConversationIncomingAttachment,
+  ): Promise<void> {
+    await client.query(`
+      INSERT INTO conversation_message_attachments (
+        tenant_id, conversation_id, message_id, storage_key, media_kind,
+        mime_type, byte_size, duration_seconds
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      tenantId, conversationId, messageId, attachment.storageKey, attachment.mediaKind,
+      attachment.mimeType, attachment.byteSize, attachment.durationSeconds ?? null,
+    ]);
   }
 
   listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>> {

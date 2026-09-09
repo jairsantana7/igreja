@@ -1,5 +1,6 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import type { ChannelConnectionStatus, ConversationChannelConfiguration, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
+import type { StoredMedia } from './media-storage.port';
 
 export interface ConversationChannelView {
   id: string;
@@ -42,7 +43,18 @@ export interface ConversationMessageView {
   status: 'received' | 'pending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed';
   sentBy: string | null;
   createdAt: string;
+  attachments: ConversationMessageAttachmentView[];
 }
+
+export interface ConversationMessageAttachmentView {
+  id: string;
+  kind: 'image' | 'audio';
+  mimeType: StoredMedia['mimeType'];
+  byteSize: number;
+  durationSeconds: number | null;
+}
+
+export interface ConversationAttachmentSource extends StoredMedia {}
 
 export interface ConversationRepository {
   listChannels(principal: AuthenticatedPrincipal): Promise<ConversationChannelView[]>;
@@ -50,6 +62,7 @@ export interface ConversationRepository {
   list(principal: AuthenticatedPrincipal): Promise<ConversationSummaryView[]>;
   create(principal: AuthenticatedPrincipal, input: { channelId: string; eventId?: string; memberUserId?: string; contactName: string; contactAddress: string }): Promise<ConversationSummaryView | null>;
   messages(principal: AuthenticatedPrincipal, conversationId: string): Promise<ConversationMessageView[] | null>;
+  resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string): Promise<ConversationAttachmentSource | null>;
   addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null>;
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null>;
   updateStatus(principal: AuthenticatedPrincipal, conversationId: string, status: ConversationStatus): Promise<ConversationSummaryView | null>;
@@ -92,8 +105,9 @@ export interface ConversationRuntimeRepository {
     contactAddress: string;
     contactAddressAliases?: string[];
     body: string;
+    attachment?: ConversationIncomingAttachment;
     receivedAt: Date;
-  }): Promise<void>;
+  }): Promise<boolean>;
   receiveOutboundMirror(input: {
     tenantId: string;
     channelId: string;
@@ -102,13 +116,20 @@ export interface ConversationRuntimeRepository {
     contactAddress: string;
     contactAddressAliases?: string[];
     body: string;
+    attachment?: ConversationIncomingAttachment;
     sentAt: Date;
-  }): Promise<void>;
+  }): Promise<boolean>;
   listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>>;
   resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void>;
   markOutboundSent(tenantId: string, conversationId: string, messageId: string, providerMessageId: string): Promise<void>;
   markOutboundFailed(tenantId: string, conversationId: string, messageId: string): Promise<void>;
   updateOutboundDelivery(tenantId: string, channelId: string, providerMessageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void>;
+}
+
+export interface ConversationIncomingAttachment extends StoredMedia {
+  mediaKind: 'image' | 'audio';
+  byteSize: number;
+  durationSeconds?: number;
 }
 
 export interface ConversationProvider {

@@ -103,10 +103,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Cada canal `whatsapp_web` possui pareamento próprio por QR. Somente o proprietário ou quem possui `channels.manage_all` pode iniciar, consultar ou revogar a conexão.
 - Somente o proprietário ou quem possui `channels.manage_all` pode excluir um canal. A exclusão exige estado `configured` ou `disconnected` e ausência de conversas ou lembretes vinculados; histórico operacional nunca é apagado em cascata.
 - O QR é efêmero e as credenciais do dispositivo vinculado são criptografadas. Nenhum desses valores entra em logs, respostas de auditoria ou variáveis salvas pelo usuário.
-- O conector não oficial aceita somente conversas individuais. Grupos, status, newsletters, chamadas e anexos sem texto não entram no MVP.
-- O worker ainda não baixa nem persiste o binário de imagens, vídeos, áudios ou documentos; quando existir legenda, somente o texto entra no histórico. Exibir anexos dependerá de uma porta de armazenamento privado, validação de tipo e tamanho, autorização de leitura e política de retenção antes da implementação.
-- Ao receber a primeira mensagem textual de um contato, o sistema cria uma conversa atribuída ao proprietário do canal; mensagens repetidas do provedor são ignoradas de forma idempotente.
-- Mensagens textuais enviadas diretamente pelo celular conectado também entram no histórico como saída. Se a mesma mensagem foi criada pelo sistema, o identificador do provedor evita duplicação.
+- O conector não oficial aceita somente conversas individuais. Grupos, status, newsletters, chamadas, vídeos e documentos não entram no MVP.
+- Imagens JPEG, PNG e WebP de até 10 MiB e áudios OGG/Opus, MP3, M4A ou AAC de até 20 MiB são baixados pelo worker após validação de assinatura e armazenados pela porta `MediaStorage`. A regra vale para mídia recebida e enviada diretamente pelo celular conectado.
+- O banco guarda somente metadados do anexo sob RLS. O conteúdo é privado e sua leitura exige sessão válida, `conversations.read` e acesso à conversa; conteúdo e chave de armazenamento não entram na auditoria.
+- Envio de anexos pelo composer, transcrição, antivírus, retenção e exclusão programada continuam bloqueados até regras próprias.
+- Ao receber a primeira mensagem textual, imagem ou áudio de um contato, o sistema cria uma conversa atribuída ao proprietário do canal; mensagens repetidas do provedor são ignoradas de forma idempotente.
+- Mensagens suportadas enviadas diretamente pelo celular conectado também entram no histórico como saída. Se a mesma mensagem textual foi criada pelo sistema, o identificador do provedor evita duplicação.
 - Identificadores internos `@lid` nunca são apresentados como telefone: o adapter prioriza o número alternativo, consulta o mapeamento criptográfico do canal e repara conversas antigas quando a relação estiver disponível.
 - Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.

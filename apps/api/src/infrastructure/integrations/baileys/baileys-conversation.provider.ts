@@ -1,12 +1,15 @@
 import { Boom } from '@hapi/boom';
 import makeWASocket, {
+  downloadMediaMessage,
   DisconnectReason,
   normalizeMessageContent,
   type WASocket,
   type WAMessage,
 } from '@whiskeysockets/baileys';
 import type { ApplicationLogger } from '../../../application/ports/application-logger.port';
+import type { MediaStorage, StoredMedia } from '../../../application/ports/media-storage.port';
 import type {
+  ConversationIncomingAttachment,
   ConversationOutboundDelivery,
   ConversationProvider,
   ConversationProviderStateStore,
@@ -17,6 +20,16 @@ import { createBaileysAuthState } from './baileys-auth-state';
 
 const PROVIDER_KEY = 'whatsapp_web';
 const QR_TTL_MS = 45_000;
+export const MAX_CONVERSATION_IMAGE_SIZE = 10 * 1024 * 1024;
+export const MAX_CONVERSATION_AUDIO_SIZE = 20 * 1024 * 1024;
+type SupportedConversationMime = StoredMedia['mimeType'];
+interface ConversationMediaDescriptor {
+  mediaKind: 'image' | 'audio';
+  mimeType: SupportedConversationMime;
+  maxSize: number;
+  declaredSize: number | null;
+  durationSeconds: number | null;
+}
 interface BaileysLogger {
   level: string;
   child: (context: Record<string, unknown>) => BaileysLogger;
@@ -89,6 +102,56 @@ function textBody(message: WAMessage): string | null {
   return normalized ? normalized.slice(0, 4_000) : null;
 }
 
+function canonicalMimeType(value: string | null | undefined): SupportedConversationMime | null {
+  const mimeType = value?.split(';')[0]?.trim().toLowerCase();
+  if (mimeType === 'image/jpg') return 'image/jpeg';
+  return ['image/jpeg', 'image/png', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac'].includes(mimeType ?? '')
+    ? mimeType as SupportedConversationMime
+    : null;
+}
+
+function numericValue(value: number | { toString(): string } | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(typeof value === 'number' ? value : value.toString());
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+}
+
+function mediaDescriptor(message: WAMessage): ConversationMediaDescriptor | null {
+  const content = normalizeMessageContent(message.message);
+  const image = content?.imageMessage;
+  const audio = content?.audioMessage;
+  const source = image ?? audio;
+  if (!source) return null;
+  const mimeType = canonicalMimeType(source.mimetype);
+  if (!mimeType) return null;
+  const mediaKind = image ? 'image' : 'audio';
+  const duration = audio ? numericValue(audio.seconds) : null;
+  return {
+    mediaKind,
+    mimeType,
+    maxSize: mediaKind === 'image' ? MAX_CONVERSATION_IMAGE_SIZE : MAX_CONVERSATION_AUDIO_SIZE,
+    declaredSize: numericValue(source.fileLength),
+    durationSeconds: duration !== null && duration <= 86_400 ? duration : null,
+  };
+}
+
+function mediaFallbackBody(message: WAMessage): string | null {
+  const content = normalizeMessageContent(message.message);
+  if (content?.imageMessage) return 'Imagem';
+  if (content?.audioMessage) return 'Áudio';
+  return null;
+}
+
+export function matchesConversationMediaSignature(content: Buffer, mimeType: SupportedConversationMime): boolean {
+  if (mimeType === 'image/jpeg') return content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff;
+  if (mimeType === 'image/png') return content.length >= 8 && content.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimeType === 'image/webp') return content.length >= 12 && content.subarray(0, 4).toString('ascii') === 'RIFF' && content.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (mimeType === 'audio/ogg') return content.length >= 4 && content.subarray(0, 4).toString('ascii') === 'OggS';
+  if (mimeType === 'audio/mp4') return content.length >= 12 && content.subarray(4, 8).toString('ascii') === 'ftyp';
+  if (mimeType === 'audio/aac') return content.length >= 2 && content[0] === 0xff && (content[1]! & 0xf6) === 0xf0;
+  return content.length >= 3 && (content.subarray(0, 3).toString('ascii') === 'ID3' || (content[0] === 0xff && (content[1]! & 0xe0) === 0xe0));
+}
+
 function receivedAt(message: WAMessage): Date {
   const timestamp = message.messageTimestamp;
   const seconds = typeof timestamp === 'number'
@@ -105,6 +168,7 @@ export class BaileysConversationProvider implements ConversationProvider {
   constructor(
     private readonly states: ConversationProviderStateStore,
     private readonly conversations: ConversationRuntimeRepository,
+    private readonly storage: MediaStorage,
     private readonly logger: ApplicationLogger,
   ) {}
 
@@ -185,7 +249,7 @@ export class BaileysConversationProvider implements ConversationProvider {
     try {
       const remoteJid = message.key.remoteJid ?? '';
       if (!message.key.id || !directJid(remoteJid)) return;
-      const body = textBody(message);
+      const body = textBody(message) ?? mediaFallbackBody(message);
       if (!body) return;
       const session = this.sessions.get(channel.id);
       if (!session) return;
@@ -194,34 +258,86 @@ export class BaileysConversationProvider implements ConversationProvider {
         (lid) => session.socket.signalRepository.lidMapping.getPNForLID(lid),
       );
       if (!contact) return;
-      if (message.key.fromMe) {
-        await this.conversations.receiveOutboundMirror({
-          tenantId: channel.tenantId,
+      let attachment: ConversationIncomingAttachment | undefined;
+      try {
+        attachment = await this.downloadAttachment(message, session.socket);
+      } catch (error) {
+        this.logger.warn('whatsapp_media_download_failed', {
           channelId: channel.id,
-          providerMessageId: message.key.id,
-          contactName: `Contato ${contact.address.replace(/\D/g, '').slice(-4)}`,
-          contactAddress: contact.address,
-          contactAddressAliases: contact.aliases,
-          body,
-          sentAt: receivedAt(message),
+          tenantId: channel.tenantId,
+          errorType: error instanceof Error ? error.name : 'UnknownError',
         });
-        return;
       }
-      const pushName = message.pushName?.trim().slice(0, 120);
-      const contactName = pushName && pushName.length >= 2 ? pushName : `Contato ${remoteJid.replace(/@.*/, '').slice(-4)}`;
-      await this.conversations.receiveInbound({
-        tenantId: channel.tenantId,
-        channelId: channel.id,
-        providerMessageId: message.key.id,
-        contactName,
-        contactAddress: contact.address,
-        contactAddressAliases: contact.aliases,
-        body,
-        receivedAt: receivedAt(message),
-      });
+      try {
+        const stored = message.key.fromMe
+          ? await this.conversations.receiveOutboundMirror({
+              tenantId: channel.tenantId,
+              channelId: channel.id,
+              providerMessageId: message.key.id,
+              contactName: `Contato ${contact.address.replace(/\D/g, '').slice(-4)}`,
+              contactAddress: contact.address,
+              contactAddressAliases: contact.aliases,
+              body,
+              attachment,
+              sentAt: receivedAt(message),
+            })
+          : await this.conversations.receiveInbound({
+              tenantId: channel.tenantId,
+              channelId: channel.id,
+              providerMessageId: message.key.id,
+              contactName: this.contactName(message, remoteJid),
+              contactAddress: contact.address,
+              contactAddressAliases: contact.aliases,
+              body,
+              attachment,
+              receivedAt: receivedAt(message),
+            });
+        if (attachment && !stored) await this.storage.delete(attachment.storageKey);
+      } catch (error) {
+        if (attachment) await this.storage.delete(attachment.storageKey).catch(() => undefined);
+        throw error;
+      }
     } catch (error) {
       this.logger.captureException(error, { event: 'whatsapp_inbound_processing_failed', channelId: channel.id });
     }
+  }
+
+  private contactName(message: WAMessage, remoteJid: string): string {
+    const pushName = message.pushName?.trim().slice(0, 120);
+    return pushName && pushName.length >= 2 ? pushName : `Contato ${remoteJid.replace(/@.*/, '').slice(-4)}`;
+  }
+
+  private async downloadAttachment(message: WAMessage, socket: WASocket): Promise<ConversationIncomingAttachment | undefined> {
+    const descriptor = mediaDescriptor(message);
+    if (!descriptor) return undefined;
+    if (descriptor.declaredSize !== null && descriptor.declaredSize > descriptor.maxSize) {
+      throw new Error('MediaSizeLimitExceeded');
+    }
+    const stream = await downloadMediaMessage(message, 'stream', {}, {
+      logger: silentBaileysLogger,
+      reuploadRequest: (mediaMessage) => socket.updateMediaMessage(mediaMessage),
+    });
+    const chunks: Buffer[] = [];
+    let byteSize = 0;
+    for await (const chunk of stream) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      byteSize += buffer.length;
+      if (byteSize > descriptor.maxSize) {
+        stream.destroy();
+        throw new Error('MediaSizeLimitExceeded');
+      }
+      chunks.push(buffer);
+    }
+    if (byteSize === 0) throw new Error('EmptyMedia');
+    const content = Buffer.concat(chunks, byteSize);
+    if (!matchesConversationMediaSignature(content, descriptor.mimeType)) throw new Error('InvalidMediaSignature');
+    const stored = await this.storage.save({ content, mimeType: descriptor.mimeType });
+    return {
+      ...stored,
+      mediaKind: descriptor.mediaKind,
+      byteSize,
+      durationSeconds: descriptor.durationSeconds ?? undefined,
+    };
   }
 
   private async handleConnectionUpdate(

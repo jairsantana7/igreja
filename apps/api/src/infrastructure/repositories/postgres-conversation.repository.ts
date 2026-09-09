@@ -74,13 +74,43 @@ export class PostgresConversationRepository implements ConversationRepository {
     return this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       const result = await client.query(`
-        SELECT messages.*, users.name AS sender_name
+        SELECT messages.*, users.name AS sender_name,
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'id', attachments.id,
+              'kind', attachments.media_kind,
+              'mimeType', attachments.mime_type,
+              'byteSize', attachments.byte_size,
+              'durationSeconds', attachments.duration_seconds
+            ) ORDER BY attachments.id)
+            FROM conversation_message_attachments AS attachments
+            WHERE attachments.message_id = messages.id
+              AND attachments.conversation_id = messages.conversation_id
+              AND attachments.tenant_id = messages.tenant_id
+          ), '[]'::jsonb) AS attachments
         FROM conversation_messages AS messages
         LEFT JOIN users ON users.id = messages.sent_by_user_id AND users.tenant_id = messages.tenant_id
         WHERE messages.conversation_id = $1
         ORDER BY messages.created_at, messages.id
       `, [conversationId]);
       return result.rows.map(this.mapMessage);
+    });
+  }
+
+  resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string) {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        SELECT attachments.storage_key, attachments.mime_type
+        FROM conversation_message_attachments AS attachments
+        JOIN conversations ON conversations.id = attachments.conversation_id
+          AND conversations.tenant_id = attachments.tenant_id
+        JOIN conversation_channels AS channels ON channels.id = conversations.channel_id
+          AND channels.tenant_id = conversations.tenant_id
+        WHERE attachments.id = $1 AND attachments.conversation_id = $2
+          AND ($3::boolean OR conversations.assigned_user_id = $4 OR channels.owner_user_id = $4)
+      `, [attachmentId, conversationId, principal.permissions.includes('conversations.read_all'), principal.userId]);
+      const attachment = result.rows[0];
+      return attachment ? { storageKey: attachment.storage_key, mimeType: attachment.mime_type } : null;
     });
   }
 
@@ -236,6 +266,6 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   private mapMessage(row: any): ConversationMessageView {
-    return { id: row.id, direction: row.direction, body: row.body, status: row.status, sentBy: row.sender_name ?? null, createdAt: row.created_at.toISOString() };
+    return { id: row.id, direction: row.direction, body: row.body, status: row.status, sentBy: row.sender_name ?? null, createdAt: row.created_at.toISOString(), attachments: row.attachments ?? [] };
   }
 }

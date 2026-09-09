@@ -15,7 +15,7 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/**': { headers: {
-      'Content-Security-Policy': `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${apiOrigin}; connect-src 'self' ${apiOrigin}${developmentConnect}; font-src 'self' data:`,
+      'Content-Security-Policy': `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${apiOrigin}; media-src 'self' blob: ${apiOrigin}; connect-src 'self' ${apiOrigin}${developmentConnect}; font-src 'self' data:`,
       'Referrer-Policy': 'no-referrer',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       'X-Content-Type-Options': 'nosniff',

@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
+import type { MediaStorage } from '../src/application/ports/media-storage.port';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001',
@@ -55,6 +56,20 @@ describe('central de conversas', () => {
     await expect(useCase.execute(principal(['conversations.reply']), 'conversation', 'Lembrete')).resolves.toMatchObject({ status: 'queued' });
     expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ deduplicationKey: message.id }), { attempts: 5 });
     expect(conversations.markQueued).toHaveBeenCalledWith(expect.any(Object), 'conversation', message.id, 'job-1');
+  });
+
+  it('só lê mídia depois de validar permissão e acesso à conversa', async () => {
+    const resolveAttachment = vi.fn().mockResolvedValue({ storageKey: 'media.ogg', mimeType: 'audio/ogg' });
+    const read = vi.fn().mockResolvedValue(Buffer.from('OggS'));
+    const useCase = new GetConversationMediaUseCase(
+      { resolveAttachment } as unknown as ConversationRepository,
+      { read } as unknown as MediaStorage,
+    );
+    await expect(useCase.execute(principal([]), 'conversation', 'media')).rejects.toThrow(AuthorizationError);
+    expect(resolveAttachment).not.toHaveBeenCalled();
+    await expect(useCase.execute(principal(['conversations.read']), 'conversation', 'media')).resolves.toMatchObject({ mimeType: 'audio/ogg' });
+    expect(resolveAttachment).toHaveBeenCalledWith(expect.any(Object), 'conversation', 'media');
+    expect(read).toHaveBeenCalledWith('media.ogg');
   });
 
   it('valida permissão e adapter antes de enfileirar o pareamento', async () => {

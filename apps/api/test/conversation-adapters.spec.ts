@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { AesGcmStateCipher } from '../src/infrastructure/security/aes-gcm-state.cipher';
 import { RoutedJobQueue } from '../src/infrastructure/queue/routed-job.queue';
 import { createBaileysAuthState } from '../src/infrastructure/integrations/baileys/baileys-auth-state';
-import { BaileysConversationProvider, resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
+import { BaileysConversationProvider, matchesConversationMediaSignature, resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
 import type { ConversationProviderStateStore, ConversationRuntimeRepository } from '../src/application/ports/conversation.port';
 import type { ApplicationLogger } from '../src/application/ports/application-logger.port';
 import type { WAMessage } from '@whiskeysockets/baileys';
+import type { MediaStorage } from '../src/application/ports/media-storage.port';
 
 describe('adapters do conector de conversas', () => {
   it('criptografa estado sensível com nonce e detecta adulteração', () => {
@@ -78,6 +79,7 @@ describe('adapters do conector de conversas', () => {
     const provider = new BaileysConversationProvider(
       {} as ConversationProviderStateStore,
       { receiveOutboundMirror } as unknown as ConversationRuntimeRepository,
+      {} as MediaStorage,
       {} as ApplicationLogger,
     );
     (provider as any).sessions.set('channel', {
@@ -101,5 +103,12 @@ describe('adapters do conector de conversas', () => {
       body: 'Mensagem pelo celular',
       providerMessageId: 'provider-message',
     }));
+  });
+
+  it('valida a assinatura de imagens e áudios antes de armazenar', () => {
+    expect(matchesConversationMediaSignature(Buffer.from([0xff, 0xd8, 0xff, 0x00]), 'image/jpeg')).toBe(true);
+    expect(matchesConversationMediaSignature(Buffer.from('OggS\u0000conteudo'), 'audio/ogg')).toBe(true);
+    expect(matchesConversationMediaSignature(Buffer.from('arquivo inválido'), 'image/jpeg')).toBe(false);
+    expect(matchesConversationMediaSignature(Buffer.from('arquivo inválido'), 'audio/ogg')).toBe(false);
   });
 });

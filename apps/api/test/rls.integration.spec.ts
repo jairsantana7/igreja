@@ -38,6 +38,10 @@ const offeringA = 'a1300000-0000-4000-8000-000000000001';
 const offeringB = 'b1300000-0000-4000-8000-000000000002';
 const participantA = 'a1400000-0000-4000-8000-000000000001';
 const participantB = 'b1400000-0000-4000-8000-000000000002';
+const conversationMessageA = 'a1500000-0000-4000-8000-000000000001';
+const conversationMessageB = 'b1500000-0000-4000-8000-000000000002';
+const conversationMediaA = 'a1600000-0000-4000-8000-000000000001';
+const conversationMediaB = 'b1600000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -133,9 +137,15 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${conversationA}', '${tenantA}', '${channelA}', '${eventA}', '${userA}', 'Contato A', '+551199999001'),
         ('${conversationB}', '${tenantB}', '${channelB}', '${eventB}', '${userB}', 'Contato B', '+551199999002')
       ON CONFLICT DO NOTHING;
-      INSERT INTO conversation_messages (tenant_id, conversation_id, direction, body, status) VALUES
-        ('${tenantA}', '${conversationA}', 'inbound', 'Mensagem A', 'received'),
-        ('${tenantB}', '${conversationB}', 'inbound', 'Mensagem B', 'received')
+      INSERT INTO conversation_messages (id, tenant_id, conversation_id, direction, body, status) VALUES
+        ('${conversationMessageA}', '${tenantA}', '${conversationA}', 'inbound', 'Mensagem A', 'received'),
+        ('${conversationMessageB}', '${tenantB}', '${conversationB}', 'inbound', 'Mensagem B', 'received')
+      ON CONFLICT DO NOTHING;
+      INSERT INTO conversation_message_attachments (
+        id, tenant_id, conversation_id, message_id, storage_key, media_kind, mime_type, byte_size
+      ) VALUES
+        ('${conversationMediaA}', '${tenantA}', '${conversationA}', '${conversationMessageA}', '${conversationMediaA}.jpg', 'image', 'image/jpeg', 4),
+        ('${conversationMediaB}', '${tenantB}', '${conversationB}', '${conversationMessageB}', '${conversationMediaB}.ogg', 'audio', 'audio/ogg', 8)
       ON CONFLICT DO NOTHING;
       INSERT INTO followup_stages (id, tenant_id, name, color, position) VALUES
         ('${followupStageA}', '${tenantA}', 'Etapa A', '#378661', 0),
@@ -177,6 +187,7 @@ describeDatabase('PostgreSQL RLS', () => {
       DELETE FROM pastoral_followups WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM followup_tags WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM followup_stages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM conversation_message_attachments WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_messages WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM conversation_provider_states WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -239,6 +250,12 @@ describeDatabase('PostgreSQL RLS', () => {
     expect((await runtime.query('SELECT id FROM event_registration_participants')).rows).toEqual([]);
     expect((await runtime.query('SELECT offering_id FROM registration_offering_selections')).rows).toEqual([]);
     expect((await runtime.query('SELECT state_key FROM conversation_provider_states')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM conversation_message_attachments')).rows).toEqual([]);
+    await expect(runtime.query(`
+      INSERT INTO conversation_message_attachments (
+        tenant_id, conversation_id, message_id, storage_key, media_kind, mime_type, byte_size
+      ) VALUES ($1, $2, $3, 'a1800000-0000-4000-8000-000000000001.jpg', 'image', 'image/jpeg', 4)
+    `, [tenantA, conversationA, conversationMessageA])).rejects.toThrow();
     await expect(runtime.query(
       "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Sem contexto', 'sem-contexto@test.local')",
       [tenantA],
@@ -283,6 +300,13 @@ describeDatabase('PostgreSQL RLS', () => {
           INSERT INTO conversation_provider_states (tenant_id, channel_id, provider_key, state_key, encrypted_value)
           VALUES ($1, $2, 'whatsapp_cloud', 'cross-tenant', decode(repeat('cc', 30), 'hex'))
         `, [tenantA, channelB])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO conversation_message_attachments (
+            tenant_id, conversation_id, message_id, storage_key, media_kind, mime_type, byte_size
+          ) VALUES ($1, $2, $3, 'a1700000-0000-4000-8000-000000000001.jpg', 'image', 'image/jpeg', 4)
+        `, [tenantA, conversationA, conversationMessageB])).rejects.toThrow();
       });
       await inTenant(client, tenantA, async () => {
         await expect(client.query(`
@@ -357,8 +381,15 @@ describeDatabase('PostgreSQL RLS', () => {
         expect((await client.query('SELECT id FROM conversation_channels')).rows.map((row) => row.id)).toEqual([channelA]);
         expect((await client.query('SELECT id FROM conversations')).rows.map((row) => row.id)).toEqual([conversationA]);
         expect((await client.query('SELECT body FROM conversation_messages')).rows.map((row) => row.body)).toEqual(['Mensagem A']);
+        expect((await client.query('SELECT media_kind FROM conversation_message_attachments')).rows).toEqual([{ media_kind: 'image' }]);
         expect((await client.query('SELECT state_key FROM conversation_provider_states')).rows).toEqual([{ state_key: 'test-state' }]);
         expect((await client.query('SELECT name FROM whatsapp_message_templates')).rows).toEqual([{ name: 'lembrete_a' }]);
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(
+          'UPDATE conversation_message_attachments SET tenant_id = $1 WHERE id = $2',
+          [tenantB, conversationMediaA],
+        )).rejects.toThrow();
       });
       expect((await client.query('SELECT id FROM conversations')).rows).toEqual([]);
     } finally { client.release(); }
@@ -471,7 +502,7 @@ describeDatabase('PostgreSQL RLS', () => {
   });
 
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_message_attachments', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

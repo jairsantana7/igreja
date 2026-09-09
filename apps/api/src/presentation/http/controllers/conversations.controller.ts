@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -24,6 +24,7 @@ export class ConversationsController {
     @Inject(TOKENS.createConversationUseCase) private readonly createConversation: CreateConversationUseCase,
     @Inject(TOKENS.createMemberFromConversationUseCase) private readonly createMemberFromConversation: CreateMemberFromConversationUseCase,
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
+    @Inject(TOKENS.getConversationMediaUseCase) private readonly getMedia: GetConversationMediaUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
     @Inject(TOKENS.listWhatsAppTemplatesUseCase) private readonly listWhatsAppTemplates: ListWhatsAppTemplatesUseCase,
@@ -88,6 +89,20 @@ export class ConversationsController {
   @Get('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsRead)
   messages(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string) { return this.getMessages.execute(principal, id); }
+
+  @Get('conversations/:conversationId/media/:mediaId')
+  @Header('Cache-Control', 'private, no-store')
+  @RequirePermissions(PERMISSIONS.conversationsRead)
+  async media(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('conversationId', new ParseUUIDPipe()) conversationId: string,
+    @Param('mediaId', new ParseUUIDPipe()) mediaId: string,
+    @Res({ passthrough: true }) response: { contentType(type: string): void },
+  ) {
+    const media = await this.getMedia.execute(principal, conversationId, mediaId);
+    response.contentType(media.mimeType);
+    return new StreamableFile(media.content);
+  }
 
   @Post('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsReply)
