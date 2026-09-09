@@ -8,8 +8,24 @@ import type { ConversationProviderStateStore, ConversationRuntimeRepository } fr
 import type { ApplicationLogger } from '../src/application/ports/application-logger.port';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import type { MediaStorage } from '../src/application/ports/media-storage.port';
+import { InMemoryConversationRealtimeBus } from '../src/infrastructure/realtime/in-memory-conversation-realtime.bus';
 
 describe('adapters do conector de conversas', () => {
+  it('isola invalidações em tempo real pelo tenant sem transportar conteúdo', async () => {
+    const bus = new InMemoryConversationRealtimeBus();
+    const tenantA = vi.fn();
+    const tenantB = vi.fn();
+    const unsubscribe = bus.subscribe('tenant-a', tenantA);
+    bus.subscribe('tenant-b', tenantB);
+
+    await bus.publish('tenant-a', 'conversations');
+    expect(tenantA).toHaveBeenCalledWith('conversations');
+    expect(tenantB).not.toHaveBeenCalled();
+    unsubscribe();
+    await bus.publish('tenant-a', 'channels');
+    expect(tenantA).toHaveBeenCalledTimes(1);
+  });
+
   it('criptografa estado sensível com nonce e detecta adulteração', () => {
     const cipher = new AesGcmStateCipher(Buffer.alloc(32, 7).toString('base64'));
     const first = cipher.encrypt('credencial');

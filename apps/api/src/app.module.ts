@@ -36,6 +36,8 @@ import { DisabledJobQueue } from './infrastructure/queue/disabled-job.queue';
 import { BullMqJobQueue } from './infrastructure/queue/bullmq-job.queue';
 import type { JobQueue } from './application/ports/job-queue.port';
 import type { ConversationProviderCatalog, ConversationProviderStateStore } from './application/ports/conversation.port';
+import type { ConversationRealtimeBus } from './application/ports/conversation-realtime.port';
+import type { ApplicationLogger } from './application/ports/application-logger.port';
 import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
 import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
 import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
@@ -68,6 +70,8 @@ import { DisabledConversationProviderStateStore } from './infrastructure/reposit
 import { PostgresConversationProviderStateStore } from './infrastructure/repositories/postgres-conversation-provider-state.store';
 import { ConfiguredConversationProviderCatalog } from './infrastructure/integrations/configured-conversation-provider.catalog';
 import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
+import { InMemoryConversationRealtimeBus } from './infrastructure/realtime/in-memory-conversation-realtime.bus';
+import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-conversation-realtime.bus';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
@@ -83,6 +87,13 @@ import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
     { provide: TOKENS.sessionSecurity, useClass: HmacSessionSecurity },
     { provide: TOKENS.applicationLogger, useClass: NestApplicationLogger },
     { provide: TOKENS.cacheStore, useClass: NoopCacheStore },
+    {
+      provide: TOKENS.conversationRealtimeBus,
+      useFactory: (logger: ApplicationLogger): ConversationRealtimeBus => env.redisUrl
+        ? new RedisConversationRealtimeBus(env.redisUrl, logger)
+        : new InMemoryConversationRealtimeBus(),
+      inject: [TOKENS.applicationLogger],
+    },
     {
       provide: TOKENS.jobQueue,
       useFactory: (): JobQueue => {
@@ -163,8 +174,8 @@ import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
     },
     {
       provide: TOKENS.conversationRepository,
-      useFactory: (database: PostgresDatabase, states: ConversationProviderStateStore) => new PostgresConversationRepository(database, states),
-      inject: [PostgresDatabase, TOKENS.conversationProviderStateStore],
+      useFactory: (database: PostgresDatabase, states: ConversationProviderStateStore, realtime: ConversationRealtimeBus) => new PostgresConversationRepository(database, states, realtime),
+      inject: [PostgresDatabase, TOKENS.conversationProviderStateStore, TOKENS.conversationRealtimeBus],
     },
     {
       provide: TOKENS.memberProfileRepository,

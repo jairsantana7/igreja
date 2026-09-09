@@ -121,6 +121,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - `conversations.read` habilita a central; sem `conversations.read_all`, aparecem somente conversas de canais próprios ou atribuídas ao usuário.
 - Responder exige `conversations.reply`; atribuir ou resolver exige `conversations.assign` e acesso à conversa.
 - Mensagens de saída são persistidas como pendentes e somente mudam para enfileiradas após aceitação de `JobQueue`.
+- A Central recebe somente invalidações em tempo real, sem conteúdo ou contato no evento, e relê mensagens pelas rotas autorizadas. A conexão exige `conversations.read`, tenant autenticado e renovação periódica da validação de sessão.
 - O conector implementa `ConversationProvider`; casos de uso não conhecem Meta, WhatsApp Cloud API ou outro fornecedor.
 - Número completo, nomes, endereços de contato e conteúdo são dados pessoais. Não entram em logs nem na metadata de auditoria e seguem a política de retenção ainda a definir.
 - Client secrets e tokens ficam no secret manager. O banco guarda apenas uma referência e identificadores operacionais não secretos.

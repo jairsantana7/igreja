@@ -6,9 +6,10 @@ import type {
 } from '../../application/ports/conversation.port';
 import { PostgresDatabase } from '../database/postgres.database';
 import type { PoolClient } from 'pg';
+import type { ConversationRealtimeBus, ConversationRealtimeResource } from '../../application/ports/conversation-realtime.port';
 
 export class PostgresConversationRuntimeRepository implements ConversationRuntimeRepository {
-  constructor(private readonly database: PostgresDatabase) {}
+  constructor(private readonly database: PostgresDatabase, private readonly realtime: ConversationRealtimeBus) {}
 
   findChannel(tenantId: string, channelId: string): Promise<ConversationRuntimeChannel | null> {
     return this.database.withTenant(tenantId, async (client) => {
@@ -76,7 +77,7 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
   }
 
   async updateConnection(tenantId: string, channelId: string, update: Parameters<ConversationRuntimeRepository['updateConnection']>[2]): Promise<void> {
-    await this.database.withTenant(tenantId, async (client) => {
+    await this.withRealtime(tenantId, 'channels', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
         UPDATE conversation_channels
         SET status = $2,
@@ -87,11 +88,11 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
             updated_at = now()
         WHERE id = $1
       `, [channelId, update.status, update.failureCode ?? null, update.qrExpiresAt ?? null]);
-    });
+    }));
   }
 
   async receiveInbound(input: Parameters<ConversationRuntimeRepository['receiveInbound']>[0]): Promise<boolean> {
-    return this.database.withTenant(input.tenantId, async (client) => {
+    return this.withRealtime(input.tenantId, 'conversations', () => this.database.withTenant(input.tenantId, async (client) => {
       const channel = await client.query<{ owner_user_id: string }>(
         'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
         [input.channelId],
@@ -133,11 +134,11 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         `, [conversation.rows[0]!.id, input.contactName, input.contactAddress, input.receivedAt]);
       }
       return Boolean(inserted.rowCount);
-    });
+    }));
   }
 
   async receiveOutboundMirror(input: Parameters<ConversationRuntimeRepository['receiveOutboundMirror']>[0]): Promise<boolean> {
-    return this.database.withTenant(input.tenantId, async (client) => {
+    return this.withRealtime(input.tenantId, 'conversations', () => this.database.withTenant(input.tenantId, async (client) => {
       const channel = await client.query<{ owner_user_id: string }>(
         'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
         [input.channelId],
@@ -209,7 +210,7 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         WHERE id = $1
       `, [conversationId, input.contactAddress, input.sentAt]);
       return input.attachment ? attachmentRetained : Boolean(matched.rowCount);
-    });
+    }));
   }
 
   private async insertAttachment(
@@ -242,39 +243,39 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
   }
 
   async resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void> {
-    await this.database.withTenant(tenantId, async (client) => {
+    await this.withRealtime(tenantId, 'conversations', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
         UPDATE conversations
         SET contact_address = $4, updated_at = now()
         WHERE id = $1 AND channel_id = $2 AND tenant_id = $3 AND contact_address LIKE '%@lid'
       `, [conversationId, channelId, tenantId, contactAddress]);
-    });
+    }));
   }
 
   async markOutboundSent(tenantId: string, conversationId: string, messageId: string, providerMessageId: string): Promise<void> {
-    await this.database.withTenant(tenantId, async (client) => {
+    await this.withRealtime(tenantId, 'conversations', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
         UPDATE conversation_messages
         SET status = 'sent', provider_message_id = $3
         WHERE id = $1 AND conversation_id = $2
           AND direction = 'outbound' AND status IN ('pending', 'queued')
       `, [messageId, conversationId, providerMessageId]);
-    });
+    }));
   }
 
   async markOutboundFailed(tenantId: string, conversationId: string, messageId: string): Promise<void> {
-    await this.database.withTenant(tenantId, async (client) => {
+    await this.withRealtime(tenantId, 'conversations', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
         UPDATE conversation_messages
         SET status = 'failed'
         WHERE id = $1 AND conversation_id = $2
           AND direction = 'outbound' AND status IN ('pending', 'queued')
       `, [messageId, conversationId]);
-    });
+    }));
   }
 
   async updateOutboundDelivery(tenantId: string, channelId: string, providerMessageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
-    await this.database.withTenant(tenantId, async (client) => {
+    await this.withRealtime(tenantId, 'conversations', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
         UPDATE conversation_messages AS messages
         SET status = CASE
@@ -289,6 +290,12 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
           AND messages.provider_message_id = $2
           AND messages.direction = 'outbound'
       `, [channelId, providerMessageId, status]);
-    });
+    }));
+  }
+
+  private async withRealtime<T>(tenantId: string, resource: ConversationRealtimeResource, operation: () => Promise<T>): Promise<T> {
+    const result = await operation();
+    void this.realtime.publish(tenantId, resource);
+    return result;
   }
 }

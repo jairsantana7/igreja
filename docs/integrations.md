@@ -54,6 +54,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - API e worker precisam apontar para o mesmo backend de mídia. O `compose.yaml` local compartilha `.data/media`; em produção use object storage privado quando os processos não compartilham filesystem.
 - O download do binário é autenticado e também verifica o acesso do usuário à conversa. Não exponha o bucket nem transforme `storage_key` em URL pública.
 - O composer envia um arquivo por `multipart/form-data`. A aplicação valida o conteúdo, persiste mensagem e metadados antes do enqueue e entrega ao adapter por um contrato neutro de imagem ou áudio.
+- Invalidações em tempo real usam SSE entre API e navegador e a porta `ConversationRealtimeBus` entre processos. O adapter Redis publica apenas tenant e tipo do recurso; configure o proxy com buffering desabilitado para `/api/conversations/events`.
 
 ### WhatsApp Web não oficial
 

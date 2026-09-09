@@ -4,9 +4,14 @@ import type { ConversationChannelConfiguration, ConversationStatus, OutboundConv
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { ConflictError } from '../../application/use-cases/errors';
 import { PostgresDatabase } from '../database/postgres.database';
+import type { ConversationRealtimeBus, ConversationRealtimeResource } from '../../application/ports/conversation-realtime.port';
 
 export class PostgresConversationRepository implements ConversationRepository {
-  constructor(private readonly database: PostgresDatabase, private readonly providerState: ConversationProviderStateStore) {}
+  constructor(
+    private readonly database: PostgresDatabase,
+    private readonly providerState: ConversationProviderStateStore,
+    private readonly realtime: ConversationRealtimeBus,
+  ) {}
 
   listChannels(principal: AuthenticatedPrincipal): Promise<ConversationChannelView[]> {
     return this.database.withTenant(principal, async (client) => {
@@ -22,7 +27,7 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   createChannel(principal: AuthenticatedPrincipal, ownerUserId: string, config: ConversationChannelConfiguration): Promise<ConversationChannelView> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'channels', () => this.database.withTenant(principal, async (client) => {
       if (!(await client.query('SELECT 1 FROM users WHERE id = $1', [ownerUserId])).rowCount) throw new ConflictError('O responsável não pertence à comunidade.');
       try {
         const result = await client.query(`
@@ -38,7 +43,7 @@ export class PostgresConversationRepository implements ConversationRepository {
         if (error?.code === '23505') throw new ConflictError('Este número já está configurado para o provedor.');
         throw error;
       }
-    });
+    }));
   }
 
   list(principal: AuthenticatedPrincipal): Promise<ConversationSummaryView[]> {
@@ -52,7 +57,7 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   create(principal: AuthenticatedPrincipal, input: Parameters<ConversationRepository['create']>[1]): Promise<ConversationSummaryView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       const channel = await client.query(`
         SELECT 1 FROM conversation_channels
         WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
@@ -67,7 +72,7 @@ export class PostgresConversationRepository implements ConversationRepository {
         RETURNING id
       `, [principal.tenantId, input.channelId, input.eventId ?? null, input.memberUserId ?? null, principal.userId, input.contactName.trim(), input.contactAddress.trim()]);
       return this.findSummary(client, principal, created.rows[0]!.id);
-    });
+    }));
   }
 
   messages(principal: AuthenticatedPrincipal, conversationId: string): Promise<ConversationMessageView[] | null> {
@@ -115,7 +120,7 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       const result = await client.query(`
         INSERT INTO conversation_messages (tenant_id, conversation_id, sent_by_user_id, direction, body, status)
@@ -124,11 +129,11 @@ export class PostgresConversationRepository implements ConversationRepository {
       `, [principal.tenantId, conversationId, principal.userId, message.body]);
       await client.query('UPDATE conversations SET last_message_at = now(), updated_at = now(), status = $2 WHERE id = $1', [conversationId, 'waiting']);
       return this.mapMessage({ ...result.rows[0], sender_name: principal.name });
-    });
+    }));
   }
 
   addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: Parameters<ConversationRepository['addOutboundMedia']>[2]): Promise<ConversationMessageView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       const result = await client.query(`
         INSERT INTO conversation_messages (tenant_id, conversation_id, sent_by_user_id, direction, body, status)
@@ -150,11 +155,11 @@ export class PostgresConversationRepository implements ConversationRepository {
       ]);
       await client.query('UPDATE conversations SET last_message_at = now(), updated_at = now(), status = $2 WHERE id = $1', [conversationId, 'waiting']);
       return this.mapMessage({ ...message, sender_name: principal.name, attachments: attachment.rows });
-    });
+    }));
   }
 
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       const result = await client.query(`
         UPDATE conversation_messages SET status = 'queued', queue_job_id = $3
@@ -162,15 +167,15 @@ export class PostgresConversationRepository implements ConversationRepository {
         RETURNING *
       `, [messageId, conversationId, jobId]);
       return result.rows[0] ? this.mapMessage({ ...result.rows[0], sender_name: principal.name }) : null;
-    });
+    }));
   }
 
   updateStatus(principal: AuthenticatedPrincipal, conversationId: string, status: ConversationStatus): Promise<ConversationSummaryView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       await client.query('UPDATE conversations SET status = $2, updated_at = now() WHERE id = $1', [conversationId, status]);
       return this.findSummary(client, principal, conversationId);
-    });
+    }));
   }
 
   async connection(principal: AuthenticatedPrincipal, channelId: string): Promise<ConversationChannelConnectionView | null> {
@@ -188,39 +193,39 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   markConnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'channels', () => this.database.withTenant(principal, async (client) => {
       const result = await client.query(`
         UPDATE conversation_channels
         SET status = 'connecting', connection_error_code = NULL, pairing_expires_at = NULL, updated_at = now()
         WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
       `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
       return Boolean(result.rowCount);
-    });
+    }));
   }
 
   markDisconnectionRequested(principal: AuthenticatedPrincipal, channelId: string): Promise<boolean> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'channels', () => this.database.withTenant(principal, async (client) => {
       const result = await client.query(`
         UPDATE conversation_channels
         SET status = 'disconnecting', connection_error_code = NULL, pairing_expires_at = NULL, updated_at = now()
         WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
       `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId]);
       return Boolean(result.rowCount);
-    });
+    }));
   }
 
   async markConnectionCommandFailed(principal: AuthenticatedPrincipal, channelId: string, failureCode: string): Promise<void> {
-    await this.database.withTenant(principal, async (client) => {
+    await this.withRealtime(principal.tenantId, 'channels', () => this.database.withTenant(principal, async (client) => {
       await client.query(`
         UPDATE conversation_channels
         SET status = 'failed', connection_error_code = $4, pairing_expires_at = NULL, updated_at = now()
         WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
       `, [channelId, principal.permissions.includes('channels.manage_all'), principal.userId, failureCode]);
-    });
+    }));
   }
 
   deleteChannel(principal: AuthenticatedPrincipal, channelId: string): Promise<'deleted' | 'not_found' | 'connected' | 'has_conversations' | 'has_reminders'> {
-    return this.database.withTenant(principal, async (client) => {
+    return this.withRealtime(principal.tenantId, 'channels', () => this.database.withTenant(principal, async (client) => {
       const channel = await client.query<{ status: string }>(`
         SELECT status FROM conversation_channels
         WHERE id = $1 AND ($2::boolean OR owner_user_id = $3)
@@ -236,7 +241,13 @@ export class PostgresConversationRepository implements ConversationRepository {
       if (references.rows[0]?.has_reminders) return 'has_reminders';
       await client.query('DELETE FROM conversation_channels WHERE id = $1', [channelId]);
       return 'deleted';
-    });
+    }));
+  }
+
+  private async withRealtime<T>(tenantId: string, resource: ConversationRealtimeResource, operation: () => Promise<T>): Promise<T> {
+    const result = await operation();
+    void this.realtime.publish(tenantId, resource);
+    return result;
   }
 
   private async canAccess(client: PoolClient, principal: AuthenticatedPrincipal, conversationId: string) {

@@ -29,6 +29,7 @@ interface EventOption { id: string; title: string; owner: { id: string; name: st
 useHead({ title: 'Conversas' });
 const api = useApi();
 const auth = useAuth();
+const config = useRuntimeConfig();
 const route = useRoute();
 const permissions = computed(() => auth.session.value?.user.permissions ?? []);
 const canManageChannel = computed(() => permissions.value.includes('channels.manage_own') || permissions.value.includes('channels.manage_all'));
@@ -135,9 +136,9 @@ async function loadConnection(channel: Channel) {
   } catch { /* o feedback de ações explícitas é tratado separadamente */ }
 }
 
-async function refreshConnections() {
+async function refreshConnections(force = false) {
   connectionPollingTick += 1;
-  const refreshAll = connectionPollingTick === 1 || connectionPollingTick % 10 === 0;
+  const refreshAll = force || connectionPollingTick === 1 || connectionPollingTick % 10 === 0;
   const candidates = (channels.value ?? []).filter((channel) => {
     const status = channelConnections[channel.id]?.status ?? channel.status;
     return refreshAll || status === 'connecting' || status === 'awaiting_qr' || status === 'disconnecting';
@@ -196,23 +197,96 @@ function cancelChannelDeletion() {
   channelToDelete.value = null;
 }
 
-let connectionPolling: ReturnType<typeof setInterval> | undefined;
-let conversationPolling: ReturnType<typeof setInterval> | undefined;
+let recoveryPolling: ReturnType<typeof setInterval> | undefined;
+let realtimeReconnect: ReturnType<typeof setTimeout> | undefined;
+let realtimeRefresh: ReturnType<typeof setTimeout> | undefined;
+let realtimeAbort: AbortController | undefined;
+const pendingRealtimeResources = new Set<'conversations' | 'channels'>();
 let connectionPollingTick = 0;
 onMounted(() => {
-  void refreshConnections();
-  connectionPolling = setInterval(() => void refreshConnections(), 3_000);
-  conversationPolling = setInterval(() => {
-    void refresh();
-    if (selectedId.value) void refreshMessages();
-  }, 3_000);
+  void refreshConnections(true);
+  void connectRealtime();
+  recoveryPolling = setInterval(() => void recoverConversationState(), 60_000);
 });
 onBeforeUnmount(() => {
-  if (connectionPolling) clearInterval(connectionPolling);
-  if (conversationPolling) clearInterval(conversationPolling);
+  realtimeAbort?.abort();
+  if (recoveryPolling) clearInterval(recoveryPolling);
+  if (realtimeReconnect) clearTimeout(realtimeReconnect);
+  if (realtimeRefresh) clearTimeout(realtimeRefresh);
   clearMediaUrls();
 });
 watch(channels, () => void refreshConnections());
+
+async function recoverConversationState() {
+  await refresh();
+  if (selectedId.value) await refreshMessages();
+  await refreshChannels();
+  await refreshConnections(true);
+}
+
+function scheduleRealtimeRefresh(resource: 'conversations' | 'channels') {
+  pendingRealtimeResources.add(resource);
+  if (realtimeRefresh) clearTimeout(realtimeRefresh);
+  realtimeRefresh = setTimeout(() => {
+    void (async () => {
+      const resources = new Set(pendingRealtimeResources);
+      pendingRealtimeResources.clear();
+      realtimeRefresh = undefined;
+      if (resources.has('channels')) {
+        await refreshChannels();
+        await refreshConnections(true);
+      }
+      if (resources.has('conversations')) {
+        await refresh();
+        if (selectedId.value) await refreshMessages();
+      }
+    })();
+  }, 80);
+}
+
+async function connectRealtime() {
+  const controller = new AbortController();
+  realtimeAbort = controller;
+  try {
+    const headers = new Headers({ Accept: 'text/event-stream' });
+    if (auth.session.value?.sessionProof) headers.set('X-Session-Proof', auth.session.value.sessionProof);
+    const baseUrl = String(config.public.apiBaseUrl).replace(/\/$/, '');
+    const response = await fetch(`${baseUrl}/conversations/events`, {
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    if (response.status === 401) {
+      auth.logout();
+      await navigateTo('/login');
+      return;
+    }
+    if (!response.ok || !response.body) throw new Error('RealtimeUnavailable');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (!controller.signal.aborted) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n/g, '\n');
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const eventType = block.split('\n').find((line) => line.startsWith('event:'))?.slice(6).trim();
+        if (eventType === 'conversations.changed') scheduleRealtimeRefresh('conversations');
+        if (eventType === 'channels.changed') scheduleRealtimeRefresh('channels');
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+  } catch {
+    // O sincronismo de recuperação mantém a tela funcional enquanto o stream volta.
+  } finally {
+    if (!controller.signal.aborted && realtimeAbort === controller) {
+      realtimeReconnect = setTimeout(() => void connectRealtime(), 1_500);
+    }
+  }
+}
 
 async function startConversation() {
   busy.value = true; feedback.value = '';

@@ -6,6 +6,7 @@ export const TOKENS = {
   memberProfileRepository: Symbol('MemberProfileRepository'),
   memberOnboardingRepository: Symbol('MemberOnboardingRepository'),
   conversationRepository: Symbol('ConversationRepository'),
+  conversationRealtimeBus: Symbol('ConversationRealtimeBus'),
   conversationProviderStateStore: Symbol('ConversationProviderStateStore'),
   conversationProviderCatalog: Symbol('ConversationProviderCatalog'),
   whatsappTemplateRepository: Symbol('WhatsAppTemplateRepository'),

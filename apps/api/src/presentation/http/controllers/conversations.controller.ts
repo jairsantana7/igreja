@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, Inject, type MessageEvent, Param, ParseUUIDPipe, Post, Put, Res, Sse, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Observable } from 'rxjs';
 import { TOKENS } from '../../../application/ports/tokens';
 import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { MAX_CONVERSATION_MEDIA_SIZE } from '../../../application/services/conversation-media.policy';
@@ -11,6 +12,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import type { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from '../../../application/use-cases/whatsapp-template.use-cases';
 import { Throttle } from '@nestjs/throttler';
+import type { ConversationRealtimeBus } from '../../../application/ports/conversation-realtime.port';
 
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -32,6 +34,7 @@ export class ConversationsController {
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
     @Inject(TOKENS.listWhatsAppTemplatesUseCase) private readonly listWhatsAppTemplates: ListWhatsAppTemplatesUseCase,
     @Inject(TOKENS.syncWhatsAppTemplatesUseCase) private readonly syncWhatsAppTemplates: SyncWhatsAppTemplatesUseCase,
+    @Inject(TOKENS.conversationRealtimeBus) private readonly realtime: ConversationRealtimeBus,
   ) {}
 
   @Get('conversation-channels')
@@ -78,6 +81,26 @@ export class ConversationsController {
   @Get('conversations')
   @RequirePermissions(PERMISSIONS.conversationsRead)
   conversations(@CurrentPrincipal() principal: AuthenticatedPrincipal) { return this.listConversations.execute(principal); }
+
+  @Sse('conversations/events')
+  @Header('Cache-Control', 'private, no-cache, no-transform')
+  @Header('X-Accel-Buffering', 'no')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @RequirePermissions(PERMISSIONS.conversationsRead)
+  events(@CurrentPrincipal() principal: AuthenticatedPrincipal): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const unsubscribe = this.realtime.subscribe(principal.tenantId, (resource) => {
+        subscriber.next({ type: `${resource}.changed`, data: { resource } });
+      });
+      const heartbeat = setInterval(() => subscriber.next({ type: 'heartbeat', data: {} }), 20_000);
+      const revalidate = setTimeout(() => subscriber.complete(), 60_000);
+      return () => {
+        unsubscribe();
+        clearInterval(heartbeat);
+        clearTimeout(revalidate);
+      };
+    });
+  }
 
   @Post('conversations')
   @RequirePermissions(PERMISSIONS.conversationsReply)

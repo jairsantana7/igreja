@@ -16,6 +16,7 @@ import { PostgresConversationProviderStateStore } from './infrastructure/reposit
 import { PostgresConversationRuntimeRepository } from './infrastructure/repositories/postgres-conversation-runtime.repository';
 import { AesGcmStateCipher } from './infrastructure/security/aes-gcm-state.cipher';
 import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
+import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-conversation-realtime.bus';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const logger = new Logger('WhatsAppWorker');
@@ -32,9 +33,11 @@ async function bootstrap(): Promise<void> {
   }
 
   const database = new PostgresDatabase();
-  const runtime = new PostgresConversationRuntimeRepository(database);
+  const applicationLogger = new NestApplicationLogger();
+  const realtime = new RedisConversationRealtimeBus(env.redisUrl, applicationLogger);
+  const runtime = new PostgresConversationRuntimeRepository(database, realtime);
   const states = new PostgresConversationProviderStateStore(database, new AesGcmStateCipher(env.conversationSessionEncryptionKey));
-  const provider = new BaileysConversationProvider(states, runtime, new LocalMediaStorage(), new NestApplicationLogger());
+  const provider = new BaileysConversationProvider(states, runtime, new LocalMediaStorage(), applicationLogger);
   const providers = new StaticConversationProviderResolver([provider]);
   const connectChannel = new ConnectConversationChannelJobUseCase(runtime, providers);
   const disconnectChannel = new DisconnectConversationChannelJobUseCase(runtime, providers);
@@ -86,6 +89,7 @@ async function bootstrap(): Promise<void> {
     await worker.close();
     await provider.shutdown();
     await connection.quit().catch(() => connection.disconnect());
+    await realtime.close();
     await database.onModuleDestroy();
   };
   process.once('SIGTERM', () => void shutdown().finally(() => process.exit(0)));
