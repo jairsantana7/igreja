@@ -1,6 +1,9 @@
 import { hash } from 'bcryptjs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { Pool } from 'pg';
 import { env } from '../config/env';
+import { SharpGalleryImageProcessor } from '../media/sharp-gallery-image.processor';
 
 const ids = {
   tenant: '00000000-0000-4000-8000-000000000001',
@@ -17,10 +20,62 @@ const ids = {
   cancellationTemplateVersion: '61000000-0000-4000-8000-000000000002',
   conversationChannel: '62000000-0000-4000-8000-000000000001',
   eventReminder: '63000000-0000-4000-8000-000000000001',
+  pastEvent: '30000000-0000-4000-8000-000000000002',
+  pastEventPublic: '40000000-0000-4000-8000-000000000002',
+  gallery: '64000000-0000-4000-8000-000000000001',
+  galleryPublic: '65000000-0000-4000-8000-000000000001',
 };
+
+const galleryAssetsPath = resolve(__dirname, '../../../../../database/seed-assets/gallery-demo');
+const demoGalleryPhotos = [
+  {
+    id: '66000000-0000-4000-8000-000000000001',
+    displayId: '67000000-0000-4000-8000-000000000001',
+    thumbnailId: '68000000-0000-4000-8000-000000000001',
+    fileName: 'confraternizacao.png',
+    caption: 'Conversas que continuaram depois do encontro.',
+    altText: 'Pessoas conversando em pequenos grupos em um salão iluminado.',
+  },
+  {
+    id: '66000000-0000-4000-8000-000000000002',
+    displayId: '67000000-0000-4000-8000-000000000002',
+    thumbnailId: '68000000-0000-4000-8000-000000000002',
+    fileName: 'cafe-comunitario.png',
+    caption: 'O café preparado com carinho pelos voluntários.',
+    altText: 'Voluntários servindo café, pães e frutas em uma mesa comunitária.',
+  },
+  {
+    id: '66000000-0000-4000-8000-000000000003',
+    displayId: '67000000-0000-4000-8000-000000000003',
+    thumbnailId: '68000000-0000-4000-8000-000000000003',
+    fileName: 'momento-musical.png',
+    caption: 'Um momento de música vivido por toda a comunidade.',
+    altText: 'Comunidade vista de costas acompanhando uma apresentação musical acústica.',
+  },
+].map((photo) => ({
+  ...photo,
+  originalStorageKey: `${photo.id}.png`,
+  displayStorageKey: `${photo.displayId}.webp`,
+  thumbnailStorageKey: `${photo.thumbnailId}.webp`,
+}));
+
+async function prepareDemoGalleryMedia(): Promise<void> {
+  const processor = new SharpGalleryImageProcessor();
+  await mkdir(env.mediaStoragePath, { recursive: true });
+  for (const photo of demoGalleryPhotos) {
+    const source = await readFile(join(galleryAssetsPath, photo.fileName));
+    const processed = await processor.process(source);
+    await Promise.all([
+      writeFile(join(env.mediaStoragePath, photo.originalStorageKey), source),
+      writeFile(join(env.mediaStoragePath, photo.displayStorageKey), processed.display.content),
+      writeFile(join(env.mediaStoragePath, photo.thumbnailStorageKey), processed.thumbnail.content),
+    ]);
+  }
+}
 
 async function seed(): Promise<void> {
   if (!env.migrationUrl) throw new Error('DATABASE_MIGRATION_URL é obrigatória para o seed.');
+  await prepareDemoGalleryMedia();
   const pool = new Pool({ connectionString: env.migrationUrl, application_name: 'igreja-seed' });
   const client = await pool.connect();
   try {
@@ -99,6 +154,74 @@ async function seed(): Promise<void> {
       VALUES ($1, $2, $3)
       ON CONFLICT (public_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, event_id = EXCLUDED.event_id
     `, [ids.eventPublic, ids.tenant, ids.event]);
+    await client.query(`
+      INSERT INTO events (
+        id, tenant_id, created_by_user_id, public_id, slug, title, description,
+        location, starts_at, registration_deadline, capacity, status
+      ) VALUES (
+        $1, $2, $3, $4, 'domingo-em-comunidade', 'Domingo em comunidade',
+        'Uma manhã de música, conversa e café compartilhado que aproximou ainda mais a nossa comunidade.',
+        'Salão principal', now() - interval '30 days', now() - interval '32 days', 180, 'completed'
+      )
+      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+        location = EXCLUDED.location, starts_at = EXCLUDED.starts_at,
+        registration_deadline = EXCLUDED.registration_deadline, capacity = EXCLUDED.capacity,
+        status = EXCLUDED.status, updated_at = now()
+    `, [ids.pastEvent, ids.tenant, ids.admin, ids.pastEventPublic]);
+    await client.query(`
+      INSERT INTO event_public_directory (public_id, tenant_id, event_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (public_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, event_id = EXCLUDED.event_id
+    `, [ids.pastEventPublic, ids.tenant, ids.pastEvent]);
+    await client.query(`
+      INSERT INTO event_galleries (
+        id, tenant_id, event_id, public_id, created_by_user_id, title, description,
+        visibility, status, published_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, 'Um domingo para recordar',
+        'Reunimos algumas lembranças da manhã em que celebramos, conversamos e cuidamos uns dos outros.',
+        'public', 'published', now() - interval '29 days'
+      )
+      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+        visibility = EXCLUDED.visibility, status = EXCLUDED.status,
+        published_at = EXCLUDED.published_at, updated_at = now()
+    `, [ids.gallery, ids.tenant, ids.pastEvent, ids.galleryPublic, ids.admin]);
+    await client.query(`
+      INSERT INTO gallery_public_directory (public_id, tenant_id, gallery_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (public_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, gallery_id = EXCLUDED.gallery_id
+    `, [ids.galleryPublic, ids.tenant, ids.gallery]);
+    await client.query(`
+      UPDATE gallery_photos SET position = position + 1000, is_cover = false
+      WHERE gallery_id = $1 AND id = ANY($2::uuid[])
+    `, [ids.gallery, demoGalleryPhotos.map((photo) => photo.id)]);
+    for (const [position, photo] of demoGalleryPhotos.entries()) {
+      await client.query(`
+        INSERT INTO gallery_photos (
+          id, tenant_id, gallery_id, uploaded_by_user_id, original_storage_key,
+          display_storage_key, thumbnail_storage_key, mime_type, processing_status,
+          caption, alt_text, position, is_cover
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'image/png', 'ready', $8, $9, $10, $11)
+        ON CONFLICT (id) DO UPDATE SET original_storage_key = EXCLUDED.original_storage_key,
+          display_storage_key = EXCLUDED.display_storage_key,
+          thumbnail_storage_key = EXCLUDED.thumbnail_storage_key,
+          mime_type = EXCLUDED.mime_type, processing_status = EXCLUDED.processing_status,
+          caption = EXCLUDED.caption, alt_text = EXCLUDED.alt_text,
+          position = EXCLUDED.position, is_cover = EXCLUDED.is_cover, updated_at = now()
+      `, [
+        photo.id,
+        ids.tenant,
+        ids.gallery,
+        ids.admin,
+        photo.originalStorageKey,
+        photo.displayStorageKey,
+        photo.thumbnailStorageKey,
+        photo.caption,
+        photo.altText,
+        position,
+        position === 0,
+      ]);
+    }
     await client.query(`
       INSERT INTO event_form_fields (id, tenant_id, event_id, field_key, label, type, required, options, position)
       VALUES ($1, $2, $3, 'restricao_alimentar', 'Possui alguma restrição alimentar?', 'short_text', false, '[]', 0)

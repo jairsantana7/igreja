@@ -27,6 +27,9 @@ Abra `http://localhost:3100`. O seed local cria:
 - usuário inicial: `Admin Inicial`
 - e-mail: `admin@comunidade.local`
 - senha: `Comunidade#2026`
+- evento futuro: `Encontro de boas-vindas`
+- evento concluído: `Domingo em comunidade`
+- galeria pública com três fotos sintéticas: `http://localhost:3100/g/65000000-0000-4000-8000-000000000001`
 
 Essas credenciais são apenas para desenvolvimento. A API fica em `http://localhost:3101/api` e o PostgreSQL escuta somente em `127.0.0.1:5434`.
 
