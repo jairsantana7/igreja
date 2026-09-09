@@ -223,6 +223,10 @@ async function seed(): Promise<void> {
       ]);
     }
     await client.query(`
+      UPDATE events SET linked_gallery_id = $2, updated_at = now()
+      WHERE id = $1
+    `, [ids.event, ids.gallery]);
+    await client.query(`
       INSERT INTO event_form_fields (id, tenant_id, event_id, field_key, label, type, required, options, position)
       VALUES ($1, $2, $3, 'restricao_alimentar', 'Possui alguma restrição alimentar?', 'short_text', false, '[]', 0)
       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label

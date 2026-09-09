@@ -49,6 +49,7 @@ export interface EventDraftProps {
   registrationDeadline?: Date;
   capacity?: number;
   mediaDisplayMode: EventMediaDisplayMode;
+  linkedGalleryId?: string | null;
   familyRegistrationEnabled: boolean;
   publish: boolean;
   fields: EventFormField[];
@@ -70,6 +71,10 @@ export class EventDraft {
     }
     if (!EVENT_MEDIA_DISPLAY_MODES.includes(input.mediaDisplayMode)) {
       throw new DomainError('O modo de exibição das imagens é inválido.');
+    }
+    if (input.linkedGalleryId !== undefined && input.linkedGalleryId !== null
+      && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.linkedGalleryId)) {
+      throw new DomainError('A galeria vinculada é inválida.');
     }
 
     const keys = new Set<string>();

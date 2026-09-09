@@ -282,3 +282,6 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Excluir uma foto remove somente a mídia da galeria. Evento, inscrições e demais fotos permanecem intactos.
 - Não há upload de participantes nem reconhecimento facial no MVP. A comunidade deve obter autorização de uso de imagem, especialmente para crianças, e atender pedidos de remoção.
 - Reutilizar uma foto em outro evento cria uma cópia independente no storage e em `event_media`.
+- Um evento pode destacar uma galeria publicada e pública de qualquer outro evento da mesma comunidade, inclusive de anos anteriores. O vínculo referencia o álbum original e não duplica fotos.
+- Vincular ou retirar a galeria exige `galleries.link`, além da permissão necessária para criar ou editar o evento. Papéis apenas agrupam essas permissões.
+- Se a galeria vinculada for retirada do ar, arquivada, esvaziada ou mudar para acesso exclusivo de membros, ela deixa de aparecer na página pública do evento até voltar a estar disponível.

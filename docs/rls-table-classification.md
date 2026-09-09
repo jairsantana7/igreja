@@ -16,7 +16,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `roles` | tenant-direct | papel é configurado pela comunidade | RLS direta |
 | `role_permissions` | tenant-direct | associação pertence à comunidade | RLS direta + FK composta para papel |
 | `user_roles` | tenant-direct | atribuição pertence à comunidade | RLS direta + FKs compostas |
-| `events` | tenant-direct | evento pertence à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita |
+| `events` | tenant-direct | evento pertence à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita; galeria vinculada usa FK composta com `tenant_id` |
 | `event_collaborators` | tenant-direct | colaboração relaciona evento e usuário da mesma comunidade | RLS direta + FKs compostas para evento e usuário |
 | `event_form_fields` | tenant-direct | campo pertence a evento e comunidade | RLS direta + FK composta para evento |
 | `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |
@@ -59,6 +59,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 - `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.
 - `app.resolve_member_onboarding_tenant`: resolve somente o tenant de uma entrega ativa a partir de UUID público opaco e entra no contexto antes de consultar a tabela protegida.
 - `app.resolve_public_gallery` e `app.resolve_public_gallery_photo`: resolvem uma galeria pública por UUID opaco, entram no tenant correto e retornam somente metadados ou a chave da mídia publicada.
+- `app.resolve_public_event_linked_gallery`: resolve somente a galeria pública vinculada a um evento publicado, entrando no tenant pelo diretório opaco do evento.
 - `app.list_restorable_conversation_channels`: percorre o catálogo de tenants e entra em cada contexto RLS; retorna ao worker apenas `tenant_id` e `channel_id` de sessões WhatsApp restauráveis.
 - O runtime não recebe `SELECT` direto nos catálogos globais. As funções usam `SECURITY DEFINER`, `search_path` fixo, owner sem `BYPASSRLS` e `EXECUTE` explícito.
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
-import type { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
+import type { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, ListLinkableGalleriesUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from '../../../application/use-cases/event.use-cases';
 import { TOKENS } from '../../../application/ports/tokens';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
@@ -14,6 +14,7 @@ export class DashboardController {
   constructor(
     @Inject(TOKENS.dashboardUseCase) private readonly dashboard: GetDashboardUseCase,
     @Inject(TOKENS.listEventsUseCase) private readonly listEvents: ListEventsUseCase,
+    @Inject(TOKENS.listLinkableGalleriesUseCase) private readonly listLinkableGalleries: ListLinkableGalleriesUseCase,
     @Inject(TOKENS.createEventUseCase) private readonly createEvent: CreateEventUseCase,
     @Inject(TOKENS.getEventUseCase) private readonly getEvent: GetEventUseCase,
     @Inject(TOKENS.updateEventUseCase) private readonly updateEvent: UpdateEventUseCase,
@@ -34,6 +35,12 @@ export class DashboardController {
   @RequirePermissions(PERMISSIONS.eventsRead)
   list(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
     return this.listEvents.execute(principal);
+  }
+
+  @Get('events/linkable-galleries')
+  @RequirePermissions(PERMISSIONS.galleriesLink)
+  galleryOptions(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.listLinkableGalleries.execute(principal);
   }
 
   @Get('events/:eventId')

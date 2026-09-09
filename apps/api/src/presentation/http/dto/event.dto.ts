@@ -58,6 +58,10 @@ export class EventDetailsDto {
   @IsIn(EVENT_MEDIA_DISPLAY_MODES)
   mediaDisplayMode: EventMediaDisplayMode = 'hero';
 
+  @IsOptional()
+  @IsUUID('4')
+  linkedGalleryId?: string | null;
+
   @IsBoolean()
   familyRegistrationEnabled = false;
 

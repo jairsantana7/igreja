@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { canTransitionEvent, isRegistrationOpen } from '../src/domain/entities/event';
 import type { EventRepository } from '../src/application/ports/event.port';
-import { CancelEventUseCase, UpdateEventUseCase } from '../src/application/use-cases/event.use-cases';
+import { CancelEventUseCase, ListLinkableGalleriesUseCase, UpdateEventUseCase } from '../src/application/use-cases/event.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 
@@ -53,10 +53,10 @@ describe('abertura de inscrições', () => {
 });
 
 describe('gestão de evento existente', () => {
-  it('exige events.update antes de editar', () => {
+  it('exige events.update antes de editar', async () => {
     const update = vi.fn();
     const useCase = new UpdateEventUseCase({ update } as unknown as EventRepository);
-    expect(() => useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001', editableEvent)).toThrow(AuthorizationError);
+    await expect(useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001', editableEvent)).rejects.toThrow(AuthorizationError);
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -73,6 +73,40 @@ describe('gestão de evento existente', () => {
     const useCase = new CancelEventUseCase({ cancel } as unknown as EventRepository);
     await expect(useCase.execute(principal([]), '20000000-0000-4000-8000-000000000001')).rejects.toThrow(AuthorizationError);
     expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('exige galleries.link para vincular ou retirar uma galeria', async () => {
+    const repository = { update: vi.fn(), canLinkGallery: vi.fn() } as unknown as EventRepository;
+    const useCase = new UpdateEventUseCase(repository);
+    await expect(useCase.execute(principal(['events.update']), '20000000-0000-4000-8000-000000000001', {
+      ...editableEvent,
+      linkedGalleryId: '30000000-0000-4000-8000-000000000001',
+    })).rejects.toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['events.update']), '20000000-0000-4000-8000-000000000001', {
+      ...editableEvent,
+      linkedGalleryId: null,
+    })).rejects.toThrow(AuthorizationError);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('aceita somente uma galeria pública disponível na comunidade', async () => {
+    const repository = {
+      update: vi.fn(),
+      canLinkGallery: vi.fn().mockResolvedValue(false),
+    } as unknown as EventRepository;
+    const useCase = new UpdateEventUseCase(repository);
+    await expect(useCase.execute(principal(['events.update', 'galleries.link']), '20000000-0000-4000-8000-000000000001', {
+      ...editableEvent,
+      linkedGalleryId: '30000000-0000-4000-8000-000000000001',
+    })).rejects.toThrow('Galeria pública não encontrada');
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('protege a listagem de galerias vinculáveis com permissão granular', async () => {
+    const repository = { listLinkableGalleries: vi.fn().mockResolvedValue([]) } as unknown as EventRepository;
+    const useCase = new ListLinkableGalleriesUseCase(repository);
+    expect(() => useCase.execute(principal([]))).toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['galleries.link']))).resolves.toEqual([]);
   });
 });
 

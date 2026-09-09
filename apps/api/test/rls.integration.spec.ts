@@ -219,6 +219,7 @@ describeDatabase('PostgreSQL RLS', () => {
 
   afterAll(async () => {
     await admin.query(`
+      UPDATE events SET linked_gallery_id = NULL WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM gallery_public_directory WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM gallery_photos WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_galleries WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -320,6 +321,9 @@ describeDatabase('PostgreSQL RLS', () => {
           INSERT INTO gallery_photos (tenant_id, gallery_id, uploaded_by_user_id, original_storage_key, mime_type, position)
           VALUES ($1, $2, $3, 'a1c00000-0000-4000-8000-000000000001.jpg', 'image/jpeg', 1)
         `, [tenantA, galleryB, userA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query('UPDATE events SET linked_gallery_id = $1 WHERE id = $2', [galleryB, eventA])).rejects.toThrow();
       });
       await inTenant(client, tenantA, async () => {
         await expect(client.query(`
@@ -592,6 +596,29 @@ describeDatabase('PostgreSQL RLS', () => {
     const restricted = await runtime.query<{ gallery: { authenticationRequired?: boolean } | null }>('SELECT app.resolve_public_gallery($1) AS gallery', [galleryPublicB]);
     expect(restricted.rows[0]?.gallery).toEqual({ authenticationRequired: true });
     expect((await runtime.query('SELECT storage_key FROM app.resolve_public_gallery_photo($1, $2, $3)', [galleryPublicA, galleryPhotoB, 'display'])).rows).toEqual([]);
+  });
+
+  it('expõe no evento somente uma galeria pública vinculada do mesmo tenant', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        await client.query("UPDATE events SET status = 'published', linked_gallery_id = $1 WHERE id = $2", [galleryA, eventA]);
+      });
+      const result = await client.query<{ gallery: { publicId: string; coverPhotoId: string } | null }>(
+        'SELECT app.resolve_public_event_linked_gallery($1) AS gallery', [publicEventA],
+      );
+      expect(result.rows[0]?.gallery).toMatchObject({ publicId: galleryPublicA, coverPhotoId: galleryPhotoA });
+
+      await inTenant(client, tenantA, async () => {
+        await client.query("UPDATE event_galleries SET visibility = 'members_only' WHERE id = $1", [galleryA]);
+      });
+      expect((await client.query(
+        'SELECT app.resolve_public_event_linked_gallery($1) AS gallery', [publicEventA],
+      )).rows).toEqual([{ gallery: null }]);
+      await inTenant(client, tenantA, async () => {
+        await client.query("UPDATE event_galleries SET visibility = 'public' WHERE id = $1", [galleryA]);
+      });
+    } finally { client.release(); }
   });
 
   it('expõe ao worker somente referências mínimas de canais restauráveis', async () => {

@@ -18,6 +18,7 @@ Eventos concluídos geram registros visuais importantes para a memória e a comu
 - O binário fica em `MediaStorage`; o banco guarda somente chaves opacas e metadados. A versão original é utilizável imediatamente. Quando há fila, um job gera uma versão WebP otimizada e uma miniatura; falha de otimização não torna a original indisponível.
 - Pedidos de privacidade são atendidos removendo a foto individual. O sistema não usa reconhecimento facial nem tenta inferir consentimento. A comunidade continua responsável por obter autorização, especialmente para imagens de crianças.
 - A reutilização em outro evento é explícita e cria uma nova cópia no storage e um novo `event_media`, mantendo ciclos de vida independentes.
+- Um evento também pode destacar, por referência, uma galeria pública e publicada de qualquer evento da mesma comunidade. Esse vínculo usa `galleries.link`, não transfere propriedade e desaparece da página pública quando a galeria deixa de estar disponível.
 - Alterações de galeria e foto são auditadas. Conteúdo binário e chaves de storage não aparecem nos logs da aplicação.
 
 ## Alternativas consideradas
@@ -25,6 +26,7 @@ Eventos concluídos geram registros visuais importantes para a memória e a comu
 - Reutilizar `event_media` como galeria: rejeitada porque imagens da página de inscrição e um álbum editorial possuem ciclos de vida e regras de publicação diferentes.
 - Guardar arquivos no PostgreSQL: rejeitada por acoplar banco, backup e entrega de mídia.
 - Compartilhar a mesma chave de storage entre galeria e evento: rejeitada porque uma exclusão poderia quebrar o outro contexto.
+- Copiar todas as fotos para apresentar uma galeria anterior: rejeitada porque duplica arquivos, autoria e trabalho editorial sem necessidade.
 
 ## Consequências
 

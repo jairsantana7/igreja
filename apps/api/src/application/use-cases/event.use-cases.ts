@@ -24,11 +24,25 @@ export class ListEventsUseCase {
   }
 }
 
+export class ListLinkableGalleriesUseCase {
+  constructor(private readonly events: EventRepository) {}
+  execute(principal: AuthenticatedPrincipal) {
+    requirePermission(principal, PERMISSIONS.galleriesLink);
+    return this.events.listLinkableGalleries(principal);
+  }
+}
+
 export class CreateEventUseCase {
   constructor(private readonly events: EventRepository) {}
-  execute(principal: AuthenticatedPrincipal, input: Parameters<typeof EventDraft.create>[0]) {
+  async execute(principal: AuthenticatedPrincipal, input: Parameters<typeof EventDraft.create>[0]) {
     requirePermission(principal, PERMISSIONS.eventsCreate);
     if (input.publish) requirePermission(principal, PERMISSIONS.eventsPublish);
+    if (input.linkedGalleryId) {
+      requirePermission(principal, PERMISSIONS.galleriesLink);
+      if (!(await this.events.canLinkGallery(principal, input.linkedGalleryId))) {
+        throw new NotFoundError('Galeria pública não encontrada nesta comunidade.');
+      }
+    }
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
     const offerings = input.offerings.map((offering, index) => ({ ...offering, key: offering.key || `adicional_${index + 1}_${randomUUID().slice(0, 6)}` }));
     return this.events.create(principal, EventDraft.create({ ...input, fields, offerings }));
@@ -47,8 +61,14 @@ export class GetEventUseCase {
 
 export class UpdateEventUseCase {
   constructor(private readonly events: EventRepository) {}
-  execute(principal: AuthenticatedPrincipal, eventId: string, input: Omit<Parameters<typeof EventDraft.create>[0], 'publish'>) {
+  async execute(principal: AuthenticatedPrincipal, eventId: string, input: Omit<Parameters<typeof EventDraft.create>[0], 'publish'>) {
     requirePermission(principal, PERMISSIONS.eventsUpdate);
+    if (input.linkedGalleryId !== undefined) {
+      requirePermission(principal, PERMISSIONS.galleriesLink);
+      if (input.linkedGalleryId && !(await this.events.canLinkGallery(principal, input.linkedGalleryId))) {
+        throw new NotFoundError('Galeria pública não encontrada nesta comunidade.');
+      }
+    }
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
     const offerings = input.offerings.map((offering, index) => ({ ...offering, key: offering.key || `adicional_${index + 1}_${randomUUID().slice(0, 6)}` }));
     return this.events.update(principal, eventId, EventDraft.create({ ...input, publish: false, fields, offerings }));

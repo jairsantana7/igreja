@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { EventRepository, DashboardEvent, DashboardView, ManagedEventView, PublicEventView } from '../../application/ports/event.port';
+import type { EventRepository, DashboardEvent, DashboardView, LinkableGalleryView, ManagedEventView, PublicEventView } from '../../application/ports/event.port';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { isRegistrationOpen, slugify, type EventDraft, type EventMediaDisplayMode, type FormFieldType } from '../../domain/entities/event';
 import { ConflictError, NotFoundError } from '../../application/use-cases/errors';
@@ -26,6 +26,14 @@ interface ManagedEventRow extends EventRow {
   media_display_mode: EventMediaDisplayMode;
   current_form_version: number;
   family_registration_enabled: boolean;
+  linked_gallery_id: string | null;
+  linked_gallery_public_id: string | null;
+  linked_gallery_title: string | null;
+  linked_gallery_description: string | null;
+  linked_gallery_photo_count: string;
+  linked_gallery_cover_photo_id: string | null;
+  linked_gallery_event_title: string | null;
+  linked_gallery_event_starts_at: Date | null;
 }
 
 export class PostgresEventRepository implements EventRepository {
@@ -55,6 +63,48 @@ export class PostgresEventRepository implements EventRepository {
     return this.database.withTenant(principal, async (client) => {
       const events = await this.queryEvents(client, principal);
       return events.rows.map(this.mapEvent);
+    });
+  }
+
+  listLinkableGalleries(principal: AuthenticatedPrincipal): Promise<LinkableGalleryView[]> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query<{
+        id: string; public_id: string; title: string; photo_count: string;
+        cover_photo_id: string | null; event_title: string; event_starts_at: Date;
+      }>(`
+        SELECT galleries.id, galleries.public_id, galleries.title,
+          count(photos.id)::text AS photo_count,
+          max(photos.id::text) FILTER (WHERE photos.is_cover)::uuid AS cover_photo_id,
+          source_events.title AS event_title, source_events.starts_at AS event_starts_at
+        FROM event_galleries galleries
+        JOIN events source_events
+          ON source_events.id = galleries.event_id AND source_events.tenant_id = galleries.tenant_id
+        LEFT JOIN gallery_photos photos
+          ON photos.gallery_id = galleries.id AND photos.tenant_id = galleries.tenant_id
+        WHERE galleries.status = 'published' AND galleries.visibility = 'public'
+        GROUP BY galleries.id, source_events.id
+        HAVING count(photos.id) > 0
+        ORDER BY source_events.starts_at DESC, galleries.title, galleries.id
+      `);
+      return result.rows.map((gallery) => ({
+        id: gallery.id,
+        publicId: gallery.public_id,
+        title: gallery.title,
+        photoCount: Number(gallery.photo_count),
+        coverPhotoId: gallery.cover_photo_id,
+        event: { title: gallery.event_title, startsAt: gallery.event_starts_at.toISOString() },
+      }));
+    });
+  }
+
+  canLinkGallery(principal: AuthenticatedPrincipal, galleryId: string): Promise<boolean> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        SELECT 1 FROM event_galleries
+        WHERE id = $1 AND status = 'published' AND visibility = 'public'
+          AND EXISTS (SELECT 1 FROM gallery_photos WHERE gallery_id = event_galleries.id)
+      `, [galleryId]);
+      return Boolean(result.rowCount);
     });
   }
 
@@ -105,6 +155,18 @@ export class PostgresEventRepository implements EventRepository {
           description: offering.description, priceCents: offering.price_cents,
         })),
         collaborators: collaborators.rows,
+        linkedGallery: event.linked_gallery_id ? {
+          id: event.linked_gallery_id,
+          publicId: event.linked_gallery_public_id!,
+          title: event.linked_gallery_title!,
+          description: event.linked_gallery_description ?? '',
+          photoCount: Number(event.linked_gallery_photo_count),
+          coverPhotoId: event.linked_gallery_cover_photo_id,
+          event: {
+            title: event.linked_gallery_event_title!,
+            startsAt: event.linked_gallery_event_starts_at!.toISOString(),
+          },
+        } : null,
       };
     });
   }
@@ -117,8 +179,8 @@ export class PostgresEventRepository implements EventRepository {
         INSERT INTO events (
           tenant_id, created_by_user_id, slug, title, description, location,
           starts_at, registration_deadline, capacity, media_display_mode,
-          family_registration_enabled, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          linked_gallery_id, family_registration_enabled, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
           '0'::text AS registrations, '0'::text AS participants, '0'::text AS attendance,
           created_by_user_id, ''::text AS owner_name
@@ -133,6 +195,7 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.linkedGalleryId ?? null,
         draft.props.familyRegistrationEnabled,
         draft.props.publish ? 'published' : 'draft',
       ]);
@@ -158,7 +221,8 @@ export class PostgresEventRepository implements EventRepository {
           registration_deadline = $6,
           capacity = $7,
           media_display_mode = $8,
-          family_registration_enabled = $9,
+          linked_gallery_id = CASE WHEN $9::boolean THEN $10::uuid ELSE linked_gallery_id END,
+          family_registration_enabled = $11,
           updated_at = now()
         WHERE id = $1
         RETURNING id
@@ -171,6 +235,8 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.linkedGalleryId !== undefined,
+        draft.props.linkedGalleryId ?? null,
         draft.props.familyRegistrationEnabled,
       ]);
       if (!result.rows[0]) throw new NotFoundError('Evento não encontrado nesta comunidade.');
@@ -238,11 +304,16 @@ export class PostgresEventRepository implements EventRepository {
   }
 
   async findPublic(publicId: string): Promise<PublicEventView | null> {
-    const result = await this.database.queryPublic<{ event: PublicEventView | null }>(
-      'SELECT app.resolve_public_event($1::uuid) AS event',
+    const result = await this.database.queryPublic<{
+      event: Omit<PublicEventView, 'linkedGallery'> | null;
+      linked_gallery: PublicEventView['linkedGallery'];
+    }>(
+      `SELECT app.resolve_public_event($1::uuid) AS event,
+        app.resolve_public_event_linked_gallery($1::uuid) AS linked_gallery`,
       [publicId],
     );
-    return result.rows[0]?.event ?? null;
+    const row = result.rows[0];
+    return row?.event ? { ...row.event, linkedGallery: row.linked_gallery ?? null } : null;
   }
 
   private async insertFields(client: PoolClient, tenantId: string, eventId: string, draft: EventDraft) {
@@ -363,6 +434,14 @@ export class PostgresEventRepository implements EventRepository {
       SELECT events.id, events.public_id, events.title, events.description, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
         events.media_display_mode, events.current_form_version, events.family_registration_enabled,
+        events.linked_gallery_id,
+        linked_galleries.public_id AS linked_gallery_public_id,
+        linked_galleries.title AS linked_gallery_title,
+        linked_galleries.description AS linked_gallery_description,
+        linked_source_events.title AS linked_gallery_event_title,
+        linked_source_events.starts_at AS linked_gallery_event_starts_at,
+        (SELECT count(*)::text FROM gallery_photos WHERE gallery_id = linked_galleries.id) AS linked_gallery_photo_count,
+        (SELECT id FROM gallery_photos WHERE gallery_id = linked_galleries.id AND is_cover LIMIT 1) AS linked_gallery_cover_photo_id,
         (SELECT count(*)::text FROM event_registrations registrations
           WHERE registrations.event_id = events.id AND registrations.status = 'confirmed') AS registrations,
         (SELECT count(*)::text FROM event_registration_participants participants
@@ -377,6 +456,10 @@ export class PostgresEventRepository implements EventRepository {
         events.created_by_user_id, owners.name AS owner_name
       FROM events
       JOIN users AS owners ON owners.id = events.created_by_user_id AND owners.tenant_id = events.tenant_id
+      LEFT JOIN event_galleries AS linked_galleries
+        ON linked_galleries.id = events.linked_gallery_id AND linked_galleries.tenant_id = events.tenant_id
+      LEFT JOIN events AS linked_source_events
+        ON linked_source_events.id = linked_galleries.event_id AND linked_source_events.tenant_id = linked_galleries.tenant_id
       WHERE events.id = $1
         AND ($2::boolean OR events.created_by_user_id = $3 OR EXISTS (
           SELECT 1 FROM event_collaborators

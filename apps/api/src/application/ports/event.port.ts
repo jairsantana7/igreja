@@ -26,6 +26,19 @@ export interface DashboardView {
   events: DashboardEvent[];
 }
 
+export interface LinkableGalleryView {
+  id: string;
+  publicId: string;
+  title: string;
+  photoCount: number;
+  coverPhotoId: string | null;
+  event: { title: string; startsAt: string };
+}
+
+export interface LinkedGalleryView extends LinkableGalleryView {
+  description: string;
+}
+
 export interface ManagedEventView extends DashboardEvent {
   description: string;
   mediaDisplayMode: EventMediaDisplayMode;
@@ -34,6 +47,7 @@ export interface ManagedEventView extends DashboardEvent {
   offerings: Array<EventOffering & { id: string }>;
   currentFormVersion: number;
   collaborators: Array<{ id: string; name: string; email: string }>;
+  linkedGallery: LinkedGalleryView | null;
 }
 
 export interface PublicEventView {
@@ -53,6 +67,7 @@ export interface PublicEventView {
   familyRegistrationEnabled: boolean;
   offerings: Array<Required<Pick<EventOffering, 'id'>> & EventOffering>;
   pix: { keyType: string; key: string; recipientName: string; city: string } | null;
+  linkedGallery: LinkedGalleryView | null;
 }
 
 export interface RegistrationContextView {
@@ -69,6 +84,8 @@ export interface RegistrationContextView {
 export interface EventRepository {
   dashboard(principal: AuthenticatedPrincipal): Promise<DashboardView>;
   list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]>;
+  listLinkableGalleries(principal: AuthenticatedPrincipal): Promise<LinkableGalleryView[]>;
+  canLinkGallery(principal: AuthenticatedPrincipal, galleryId: string): Promise<boolean>;
   findById(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedEventView | null>;
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent>;
   update(principal: AuthenticatedPrincipal, eventId: string, draft: EventDraft): Promise<DashboardEvent>;

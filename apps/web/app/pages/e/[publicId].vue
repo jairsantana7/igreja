@@ -152,6 +152,15 @@ const dateLabel = computed(() => event.value
   : '');
 const mediaUrl = (mediaId: string) => `${String(config.public.apiBaseUrl).replace(/\/$/, '')}/public/events/${publicId}/media/${mediaId}`;
 const coverImage = computed(() => event.value?.images?.[0] ? mediaUrl(event.value.images[0].id) : '');
+const linkedGalleryCover = computed(() => {
+  const gallery = event.value?.linkedGallery;
+  return gallery?.coverPhotoId
+    ? `${String(config.public.apiBaseUrl).replace(/\/$/, '')}/public/galleries/${gallery.publicId}/photos/${gallery.coverPhotoId}/display`
+    : '';
+});
+const linkedGalleryDate = computed(() => event.value?.linkedGallery
+  ? new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(event.value.linkedGallery.event.startsAt))
+  : '');
 const priceLabel = (priceCents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(priceCents / 100);
 const selectedPeopleCount = computed(() => selectedParticipantKeys.value.length);
 const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
@@ -284,6 +293,20 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
 
       <section v-if="event.images.length > 1 && event.mediaDisplayMode === 'carousel'" class="event-gallery" aria-label="Outras imagens do evento">
         <figure v-for="image in event.images.slice(1)" :key="image.id"><img :src="mediaUrl(image.id)" :alt="image.altText || event.title"></figure>
+      </section>
+      <section v-if="event.linkedGallery" class="linked-gallery-showcase">
+        <div class="linked-gallery-showcase__copy">
+          <p class="eyebrow">Memórias da comunidade</p>
+          <h2>Veja como foi {{ event.linkedGallery.event.title }}</h2>
+          <p>{{ event.linkedGallery.description || 'Relembre alguns momentos que vivemos juntos.' }}</p>
+          <div><span>{{ linkedGalleryDate }}</span><span>{{ event.linkedGallery.photoCount }} {{ event.linkedGallery.photoCount === 1 ? 'foto' : 'fotos' }}</span></div>
+          <NuxtLink :to="`/g/${event.linkedGallery.publicId}`" class="button button--primary">Abrir galeria completa</NuxtLink>
+        </div>
+        <NuxtLink :to="`/g/${event.linkedGallery.publicId}`" class="linked-gallery-showcase__cover" :aria-label="`Abrir ${event.linkedGallery.title}`">
+          <img v-if="linkedGalleryCover" :src="linkedGalleryCover" :alt="event.linkedGallery.title">
+          <span v-else aria-hidden="true">▧</span>
+          <strong>{{ event.linkedGallery.title }}</strong>
+        </NuxtLink>
       </section>
     </template>
   </main>

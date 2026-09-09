@@ -48,6 +48,7 @@ export const PERMISSIONS = {
   galleriesUpdate: 'galleries.update',
   galleriesPublish: 'galleries.publish',
   galleriesReuse: 'galleries.reuse',
+  galleriesLink: 'galleries.link',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

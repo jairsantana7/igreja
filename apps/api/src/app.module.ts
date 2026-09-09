@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TOKENS } from './application/ports/tokens';
-import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
+import { CancelEventUseCase, CloseEventRegistrationsUseCase, CompleteEventUseCase, CreateEventUseCase, GetDashboardUseCase, GetEventUseCase, GetPublicEventUseCase, ListEventCollaboratorCandidatesUseCase, ListEventsUseCase, ListLinkableGalleriesUseCase, UpdateEventCollaboratorsUseCase, UpdateEventUseCase } from './application/use-cases/event.use-cases';
 import { CheckInParticipantUseCase, CheckInRegistrationUseCase, CreateEventCommunicationUseCase, CreateEventTemplateUseCase, ListEventCommunicationsUseCase, ListEventRegistrationsUseCase, ListEventTemplatesUseCase, QueueEventCommunicationUseCase, UndoParticipantCheckInUseCase, UndoRegistrationCheckInUseCase } from './application/use-cases/event-operations.use-cases';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { GetEventRegistrationContextUseCase, RegisterForEventUseCase, SignUpForEventUseCase } from './application/use-cases/registration.use-cases';
@@ -244,6 +244,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     {
       provide: TOKENS.listEventsUseCase,
       useFactory: (events: PostgresEventRepository) => new ListEventsUseCase(events),
+      inject: [TOKENS.eventRepository],
+    },
+    {
+      provide: TOKENS.listLinkableGalleriesUseCase,
+      useFactory: (events: PostgresEventRepository) => new ListLinkableGalleriesUseCase(events),
       inject: [TOKENS.eventRepository],
     },
     {
