@@ -1,8 +1,11 @@
 import { Boom } from '@hapi/boom';
 import makeWASocket, {
+  Browsers,
   downloadMediaMessage,
   DisconnectReason,
   normalizeMessageContent,
+  type Chat,
+  type Contact,
   type WASocket,
   type WAMessage,
 } from '@whiskeysockets/baileys';
@@ -10,6 +13,7 @@ import type { ApplicationLogger } from '../../../application/ports/application-l
 import type { MediaStorage } from '../../../application/ports/media-storage.port';
 import type {
   ConversationIncomingAttachment,
+  ConversationHistorySync,
   ConversationOutboundDelivery,
   ConversationProvider,
   ConversationProviderStateStore,
@@ -59,6 +63,13 @@ interface ActiveSession {
   resolveReady: () => void;
   rejectReady: (error: Error) => void;
   inbound: Promise<void>;
+  historyChats: Set<string>;
+  historyMessages: Map<string, number>;
+}
+
+export interface BaileysHistoryOptions {
+  chatLimit: number;
+  messageLimit: number;
 }
 
 function directJid(address: string): string | null {
@@ -145,6 +156,14 @@ function receivedAt(message: WAMessage): Date {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+function historyActivityAt(chat: Chat): Date {
+  const value = chat.lastMsgTimestamp ?? chat.conversationTimestamp;
+  const seconds = numericValue(value);
+  if (seconds === null) return new Date();
+  const date = new Date(seconds * 1_000);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
 export class BaileysConversationProvider implements ConversationProvider {
   readonly providerKey = PROVIDER_KEY;
   private readonly sessions = new Map<string, ActiveSession>();
@@ -154,6 +173,7 @@ export class BaileysConversationProvider implements ConversationProvider {
     private readonly conversations: ConversationRuntimeRepository,
     private readonly storage: MediaStorage,
     private readonly logger: ApplicationLogger,
+    private readonly history: BaileysHistoryOptions = { chatLimit: 50, messageLimit: 50 },
   ) {}
 
   async connect(channel: ConversationRuntimeChannel): Promise<void> {
@@ -173,11 +193,23 @@ export class BaileysConversationProvider implements ConversationProvider {
     const socket = makeWASocket({
       auth: auth.state,
       logger: silentBaileysLogger,
+      browser: Browsers.macOS('Chrome'),
       markOnlineOnConnect: false,
-      syncFullHistory: false,
+      syncFullHistory: true,
+      shouldSyncHistoryMessage: () => true,
+      shouldIgnoreJid: (jid) => !directJid(jid),
       generateHighQualityLinkPreview: false,
     });
-    const session: ActiveSession = { socket, manuallyClosing: false, ready, resolveReady, rejectReady, inbound: Promise.resolve() };
+    const session: ActiveSession = {
+      socket,
+      manuallyClosing: false,
+      ready,
+      resolveReady,
+      rejectReady,
+      inbound: Promise.resolve(),
+      historyChats: new Set(),
+      historyMessages: new Map(),
+    };
     this.sessions.set(channel.id, session);
     await this.conversations.updateConnection(channel.tenantId, channel.id, { status: 'connecting' });
 
@@ -187,6 +219,9 @@ export class BaileysConversationProvider implements ConversationProvider {
     socket.ev.on('messages.upsert', ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const message of messages) session.inbound = session.inbound.then(() => this.receive(channel, message));
+    });
+    socket.ev.on('messaging-history.set', (history) => {
+      session.inbound = session.inbound.then(() => this.receiveHistory(channel, session, history));
     });
     socket.ev.on('connection.update', (update) => {
       void this.handleConnectionUpdate(channel, session, auth.clear, update.connection, update.qr, update.lastDisconnect?.error);
@@ -237,6 +272,24 @@ export class BaileysConversationProvider implements ConversationProvider {
     return { providerMessageId };
   }
 
+  async syncHistory(input: ConversationHistorySync): Promise<void> {
+    await this.connect(input.channel);
+    const session = this.sessions.get(input.channel.id);
+    if (!session) throw new Error('A sessão do canal não pôde ser inicializada.');
+    await this.waitUntilReady(session);
+    const jid = directJid(input.recipient);
+    if (!jid) throw new Error('A conversa não possui um endereço individual válido.');
+    await session.socket.fetchMessageHistory(
+      this.history.messageLimit,
+      {
+        remoteJid: jid,
+        id: input.oldestMessage.providerMessageId,
+        fromMe: input.oldestMessage.direction === 'outbound',
+      },
+      input.oldestMessage.createdAt.getTime(),
+    );
+  }
+
   async shutdown(): Promise<void> {
     for (const session of this.sessions.values()) {
       session.manuallyClosing = true;
@@ -245,7 +298,7 @@ export class BaileysConversationProvider implements ConversationProvider {
     this.sessions.clear();
   }
 
-  private async receive(channel: ConversationRuntimeChannel, message: WAMessage): Promise<void> {
+  private async receive(channel: ConversationRuntimeChannel, message: WAMessage, preferredContactName?: string): Promise<void> {
     try {
       const remoteJid = message.key.remoteJid ?? '';
       if (!message.key.id || !directJid(remoteJid)) return;
@@ -274,7 +327,7 @@ export class BaileysConversationProvider implements ConversationProvider {
               tenantId: channel.tenantId,
               channelId: channel.id,
               providerMessageId: message.key.id,
-              contactName: `Contato ${contact.address.replace(/\D/g, '').slice(-4)}`,
+              contactName: preferredContactName ?? `Contato ${contact.address.replace(/\D/g, '').slice(-4)}`,
               contactAddress: contact.address,
               contactAddressAliases: contact.aliases,
               body,
@@ -285,7 +338,7 @@ export class BaileysConversationProvider implements ConversationProvider {
               tenantId: channel.tenantId,
               channelId: channel.id,
               providerMessageId: message.key.id,
-              contactName: this.contactName(message, remoteJid),
+              contactName: preferredContactName ?? this.contactName(message, remoteJid),
               contactAddress: contact.address,
               contactAddressAliases: contact.aliases,
               body,
@@ -300,6 +353,93 @@ export class BaileysConversationProvider implements ConversationProvider {
     } catch (error) {
       this.logger.captureException(error, { event: 'whatsapp_inbound_processing_failed', channelId: channel.id });
     }
+  }
+
+  private async receiveHistory(
+    channel: ConversationRuntimeChannel,
+    session: ActiveSession,
+    history: { chats: Chat[]; contacts: Contact[]; messages: WAMessage[]; peerDataRequestSessionId?: string | null },
+  ): Promise<void> {
+    const onDemand = Boolean(history.peerDataRequestSessionId);
+    const names = this.historyContactNames(history.contacts);
+    let importedChats = 0;
+    let importedMessages = 0;
+
+    for (const chat of history.chats) {
+      const remoteJid = chat.id ?? '';
+      if (!directJid(remoteJid)) continue;
+      const contact = await resolveBaileysContactAddress(
+        { key: { remoteJid, remoteJidAlt: chat.pnJid ?? undefined } } as WAMessage,
+        (lid) => session.socket.signalRepository.lidMapping.getPNForLID(lid),
+      );
+      if (!contact) continue;
+      if (!onDemand && !session.historyChats.has(contact.address) && session.historyChats.size >= this.history.chatLimit) continue;
+      session.historyChats.add(contact.address);
+      await this.conversations.ensureConversation({
+        tenantId: channel.tenantId,
+        channelId: channel.id,
+        contactName: this.historyContactName(names, contact.aliases, chat.name ?? chat.displayName, contact.address),
+        contactAddress: contact.address,
+        contactAddressAliases: contact.aliases,
+        lastActivityAt: historyActivityAt(chat),
+      });
+      importedChats += 1;
+    }
+
+    const demandCounts = new Map<string, number>();
+    for (const message of [...history.messages].reverse()) {
+      const remoteJid = message.key.remoteJid ?? '';
+      if (!message.key.id || !directJid(remoteJid)) continue;
+      const contact = await resolveBaileysContactAddress(
+        message,
+        (lid) => session.socket.signalRepository.lidMapping.getPNForLID(lid),
+      );
+      if (!contact) continue;
+      const counts = onDemand ? demandCounts : session.historyMessages;
+      const count = counts.get(contact.address) ?? 0;
+      if (count >= this.history.messageLimit) continue;
+      if (!onDemand && !session.historyChats.has(contact.address)) {
+        if (session.historyChats.size >= this.history.chatLimit) continue;
+        session.historyChats.add(contact.address);
+      }
+      counts.set(contact.address, count + 1);
+      const preferredName = this.historyContactName(names, contact.aliases, undefined, contact.address);
+      await this.receive(channel, message, preferredName);
+      importedMessages += 1;
+    }
+
+    this.logger.info('whatsapp_history_chunk_processed', {
+      tenantId: channel.tenantId,
+      channelId: channel.id,
+      onDemand,
+      chats: importedChats,
+      messages: importedMessages,
+    });
+  }
+
+  private historyContactNames(contacts: Contact[]): Map<string, string> {
+    const result = new Map<string, string>();
+    for (const contact of contacts) {
+      const name = [contact.name, contact.notify, contact.verifiedName]
+        .find((candidate) => candidate?.trim().length && candidate.trim().length >= 2)
+        ?.trim().slice(0, 120);
+      if (!name) continue;
+      for (const address of [contact.id, contact.lid, contact.phoneNumber].filter(Boolean) as string[]) result.set(address, name);
+    }
+    return result;
+  }
+
+  private historyContactName(names: Map<string, string>, aliases: string[], chatName: string | null | undefined, address: string): string {
+    const saved = aliases.map((alias) => names.get(alias)).find(Boolean);
+    const name = saved ?? chatName?.trim().slice(0, 120);
+    return name && name.length >= 2 ? name : `Contato ${address.replace(/\D/g, '').slice(-4)}`;
+  }
+
+  private async waitUntilReady(session: ActiveSession): Promise<void> {
+    await Promise.race([
+      session.ready,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('O canal ainda não está conectado.')), 30_000)),
+    ]);
   }
 
   private contactName(message: WAMessage, remoteJid: string): string {

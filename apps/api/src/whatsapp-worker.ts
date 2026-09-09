@@ -6,6 +6,7 @@ import {
   ConnectConversationChannelJobUseCase,
   DisconnectConversationChannelJobUseCase,
   DispatchConversationMessageJobUseCase,
+  SyncConversationHistoryJobUseCase,
 } from './application/use-cases/conversation-runtime.use-cases';
 import { env } from './infrastructure/config/env';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
@@ -37,11 +38,15 @@ async function bootstrap(): Promise<void> {
   const realtime = new RedisConversationRealtimeBus(env.redisUrl, applicationLogger);
   const runtime = new PostgresConversationRuntimeRepository(database, realtime);
   const states = new PostgresConversationProviderStateStore(database, new AesGcmStateCipher(env.conversationSessionEncryptionKey));
-  const provider = new BaileysConversationProvider(states, runtime, new LocalMediaStorage(), applicationLogger);
+  const provider = new BaileysConversationProvider(states, runtime, new LocalMediaStorage(), applicationLogger, {
+    chatLimit: env.whatsappHistoryChatLimit,
+    messageLimit: env.whatsappHistoryMessageLimit,
+  });
   const providers = new StaticConversationProviderResolver([provider]);
   const connectChannel = new ConnectConversationChannelJobUseCase(runtime, providers);
   const disconnectChannel = new DisconnectConversationChannelJobUseCase(runtime, providers);
   const dispatchMessage = new DispatchConversationMessageJobUseCase(runtime, providers);
+  const syncHistory = new SyncConversationHistoryJobUseCase(runtime, providers);
   const connection = new IORedis(env.redisUrl, { maxRetriesPerRequest: null });
   connection.on('error', () => undefined);
 
@@ -58,6 +63,10 @@ async function bootstrap(): Promise<void> {
     }
     if (job.name === 'conversations.message.dispatch') {
       await dispatchMessage.execute(tenantId, requiredUuid(payload, 'conversationId'), requiredUuid(payload, 'messageId'));
+      return;
+    }
+    if (job.name === 'conversations.history.sync') {
+      await syncHistory.execute(tenantId, requiredUuid(payload, 'conversationId'));
       return;
     }
     throw new UnrecoverableError(`Tipo de job não suportado: ${job.name}.`);

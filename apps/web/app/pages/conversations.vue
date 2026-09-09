@@ -52,6 +52,8 @@ const { data: messages, pending: messagesPending, refresh: refreshMessages } = a
   () => selectedId.value ? api<Message[]>(`/conversations/${selectedId.value}/messages`) : Promise.resolve([]),
   { server: false, immediate: false },
 );
+const historySyncingId = ref<string | null>(null);
+let historySyncFeedback: ReturnType<typeof setTimeout> | undefined;
 const filter = ref<'active' | ConversationStatus>('active');
 const query = ref('');
 const showChannelForm = ref(false);
@@ -100,7 +102,10 @@ watch(selectedId, async (id) => {
   clearSelectedMedia();
   showMemberForm.value = false;
   Object.assign(memberForm, { email: '', password: '' });
-  if (id) await refreshMessages();
+  if (id) {
+    await refreshMessages();
+    void requestHistorySync(id);
+  }
 });
 watch(messages, (items) => {
   if (!import.meta.client || !selectedId.value) return;
@@ -213,6 +218,7 @@ onBeforeUnmount(() => {
   if (recoveryPolling) clearInterval(recoveryPolling);
   if (realtimeReconnect) clearTimeout(realtimeReconnect);
   if (realtimeRefresh) clearTimeout(realtimeRefresh);
+  if (historySyncFeedback) clearTimeout(historySyncFeedback);
   clearMediaUrls();
 });
 watch(channels, () => void refreshConnections());
@@ -222,6 +228,20 @@ async function recoverConversationState() {
   if (selectedId.value) await refreshMessages();
   await refreshChannels();
   await refreshConnections(true);
+}
+
+async function requestHistorySync(conversationId: string) {
+  historySyncingId.value = conversationId;
+  if (historySyncFeedback) clearTimeout(historySyncFeedback);
+  try {
+    await api(`/conversations/${conversationId}/history-sync`, { method: 'POST' });
+  } catch {
+    // A leitura local continua disponível quando o provider não oferece histórico.
+  } finally {
+    historySyncFeedback = setTimeout(() => {
+      if (historySyncingId.value === conversationId) historySyncingId.value = null;
+    }, 4_000);
+  }
 }
 
 function scheduleRealtimeRefresh(resource: 'conversations' | 'channels') {
@@ -454,7 +474,7 @@ function clearMediaUrls() {
           <p v-if="channelConnections[channel.id]?.failureCode" class="channel-card__error">A conexão falhou ({{ channelConnections[channel.id]?.failureCode }}). Confirme se o worker está ativo e tente novamente.</p>
         </article>
       </div>
-      <p class="integration-warning"><strong>Integração via QR Code:</strong> este modo usa um adapter não oficial para conversas individuais. O WhatsApp pode interromper sessões; não use para disparos em massa.</p>
+      <p class="integration-warning"><strong>Integração via QR Code:</strong> este modo usa um adapter não oficial para conversas individuais. Canais pareados antes da sincronização de histórico precisam ser desconectados e conectados novamente uma vez, com um novo QR. O WhatsApp pode interromper sessões; não use para disparos em massa.</p>
       <NuxtLink v-if="canReadTemplates" to="/communication" class="communication-center-link"><span>✎</span><div><strong>Modelos e lembretes ficam na Central de comunicação</strong><small>Edite modelos locais, consulte o catálogo da Meta e habilite o uso nos eventos.</small></div><b>Ir para a central →</b></NuxtLink>
     </section>
 
@@ -496,6 +516,7 @@ function clearMediaUrls() {
         <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template><template v-if="selected.member"> · Membro: {{ selected.member.name }}</template></small></div><div class="conversation-status-actions"><NuxtLink v-if="selected.member" class="button button--small" :to="`/members/${selected.member.id}`">Ver membro</NuxtLink><button v-else-if="canCreateMember" class="button button--small button--primary" type="button" :disabled="busy" @click="showMemberForm = true">＋ Adicionar como membro</button><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
         <div class="conversation-messages">
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
+          <p v-else-if="historySyncingId === selected.id" class="conversation-day">Buscando mensagens anteriores no celular…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>
           <div v-for="message in messages" :key="message.id" class="message-bubble" :class="message.direction === 'outbound' ? 'message-bubble--outbound' : 'message-bubble--inbound'">
             <div v-for="attachment in message.attachments" :key="attachment.id" class="message-attachment">

@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, I
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable } from 'rxjs';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { MAX_CONVERSATION_MEDIA_SIZE } from '../../../application/services/conversation-media.policy';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
@@ -28,6 +28,7 @@ export class ConversationsController {
     @Inject(TOKENS.createConversationUseCase) private readonly createConversation: CreateConversationUseCase,
     @Inject(TOKENS.createMemberFromConversationUseCase) private readonly createMemberFromConversation: CreateMemberFromConversationUseCase,
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
+    @Inject(TOKENS.requestConversationHistorySyncUseCase) private readonly requestHistorySync: RequestConversationHistorySyncUseCase,
     @Inject(TOKENS.getConversationMediaUseCase) private readonly getMedia: GetConversationMediaUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
     @Inject(TOKENS.sendConversationMediaUseCase) private readonly sendMedia: SendConversationMediaUseCase,
@@ -115,6 +116,14 @@ export class ConversationsController {
   @Get('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsRead)
   messages(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string) { return this.getMessages.execute(principal, id); }
+
+  @Post('conversations/:conversationId/history-sync')
+  @HttpCode(202)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @RequirePermissions(PERMISSIONS.conversationsRead)
+  syncHistory(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string) {
+    return this.requestHistorySync.execute(principal, id);
+  }
 
   @Get('conversations/:conversationId/media/:mediaId')
   @Header('Cache-Control', 'private, no-store')

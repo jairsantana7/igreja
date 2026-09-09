@@ -171,6 +171,33 @@ export class GetConversationMessagesUseCase {
   }
 }
 
+export class RequestConversationHistorySyncUseCase {
+  constructor(
+    private readonly conversations: ConversationRepository,
+    private readonly queue: JobQueue,
+    private readonly providers: ConversationProviderCatalog,
+  ) {}
+
+  async execute(principal: AuthenticatedPrincipal, conversationId: string) {
+    requirePermission(principal, PERMISSIONS.conversationsRead);
+    const target = await this.conversations.historySyncTarget(principal, conversationId);
+    if (!target) throw new NotFoundError('Conversa não encontrada ou sem acesso.');
+    if (!this.providers.supportsConnection(target.providerKey)) {
+      throw new ConflictError('O canal desta conversa não oferece sincronização de histórico.');
+    }
+    try {
+      await this.queue.enqueue({
+        name: 'conversations.history.sync',
+        payload: { tenantId: principal.tenantId, conversationId },
+        deduplicationKey: `${conversationId}:history`,
+      }, { attempts: 3 });
+    } catch {
+      throw new ConflictError('O worker de WhatsApp não está disponível para sincronizar o histórico.');
+    }
+    return { status: 'queued' as const };
+  }
+}
+
 export class GetConversationMediaUseCase {
   constructor(private readonly conversations: ConversationRepository, private readonly storage: MediaStorage) {}
 

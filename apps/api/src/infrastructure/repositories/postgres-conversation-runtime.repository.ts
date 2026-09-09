@@ -83,6 +83,48 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
     });
   }
 
+  findHistorySync(tenantId: string, conversationId: string): ReturnType<ConversationRuntimeRepository['findHistorySync']> {
+    return this.database.withTenant(tenantId, async (client) => {
+      const result = await client.query(`
+        SELECT conversations.id AS conversation_id, conversations.contact_address,
+          channels.id AS channel_id, channels.tenant_id, channels.provider_key,
+          channels.phone_number, channels.owner_user_id,
+          oldest.provider_message_id, oldest.direction, oldest.created_at
+        FROM conversations
+        JOIN conversation_channels AS channels
+          ON channels.id = conversations.channel_id AND channels.tenant_id = conversations.tenant_id
+        JOIN LATERAL (
+          SELECT provider_message_id, direction, created_at
+          FROM conversation_messages
+          WHERE conversation_id = conversations.id
+            AND tenant_id = conversations.tenant_id
+            AND provider_message_id IS NOT NULL
+          ORDER BY created_at, id
+          LIMIT 1
+        ) AS oldest ON true
+        WHERE conversations.id = $1
+      `, [conversationId]);
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        channel: {
+          id: row.channel_id,
+          tenantId: row.tenant_id,
+          providerKey: row.provider_key,
+          phoneNumber: row.phone_number,
+          ownerUserId: row.owner_user_id,
+        },
+        conversationId: row.conversation_id,
+        recipient: row.contact_address,
+        oldestMessage: {
+          providerMessageId: row.provider_message_id,
+          direction: row.direction,
+          createdAt: row.created_at,
+        },
+      };
+    });
+  }
+
   async updateConnection(tenantId: string, channelId: string, update: Parameters<ConversationRuntimeRepository['updateConnection']>[2]): Promise<void> {
     await this.withRealtime(tenantId, 'channels', () => this.database.withTenant(tenantId, async (client) => {
       await client.query(`
@@ -217,6 +259,42 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         WHERE id = $1
       `, [conversationId, input.contactAddress, input.sentAt]);
       return input.attachment ? attachmentRetained : Boolean(matched.rowCount);
+    }));
+  }
+
+  async ensureConversation(input: Parameters<ConversationRuntimeRepository['ensureConversation']>[0]): Promise<void> {
+    await this.withRealtime(input.tenantId, 'conversations', () => this.database.withTenant(input.tenantId, async (client) => {
+      const channel = await client.query<{ owner_user_id: string }>(
+        'SELECT owner_user_id FROM conversation_channels WHERE id = $1',
+        [input.channelId],
+      );
+      if (!channel.rows[0]) return;
+      const addresses = [...new Set([input.contactAddress, ...(input.contactAddressAliases ?? [])])];
+      const existing = await client.query<{ id: string }>(`
+        SELECT id FROM conversations
+        WHERE channel_id = $1 AND contact_address = ANY($2::text[])
+        ORDER BY last_message_at DESC, id DESC
+        LIMIT 1
+      `, [input.channelId, addresses]);
+      if (existing.rows[0]) {
+        await client.query(`
+          UPDATE conversations
+          SET contact_name = CASE WHEN $2 NOT LIKE 'Contato %' THEN $2 ELSE contact_name END,
+            contact_address = $3,
+            last_message_at = GREATEST(last_message_at, $4),
+            updated_at = now()
+          WHERE id = $1
+        `, [existing.rows[0].id, input.contactName, input.contactAddress, input.lastActivityAt]);
+        return;
+      }
+      await client.query(`
+        INSERT INTO conversations (
+          tenant_id, channel_id, assigned_user_id, contact_name, contact_address, last_message_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
+        input.tenantId, input.channelId, channel.rows[0].owner_user_id,
+        input.contactName, input.contactAddress, input.lastActivityAt,
+      ]);
     }));
   }
 

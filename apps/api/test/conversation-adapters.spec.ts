@@ -157,4 +157,77 @@ describe('adapters do conector de conversas', () => {
       image: expect.any(Buffer), caption: 'Foto do encontro', mimetype: 'image/jpeg',
     }));
   });
+
+  it('solicita ao celular mensagens anteriores usando o cursor da conversa', async () => {
+    const fetchMessageHistory = vi.fn().mockResolvedValue('request-id');
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      {} as ConversationRuntimeRepository,
+      {} as MediaStorage,
+      {} as ApplicationLogger,
+      { chatLimit: 50, messageLimit: 25 },
+    );
+    (provider as any).sessions.set('channel', {
+      socket: { fetchMessageHistory },
+      ready: Promise.resolve(),
+    });
+
+    await provider.syncHistory({
+      channel: { id: 'channel', tenantId: 'tenant', providerKey: 'whatsapp_web', phoneNumber: '+5511999999999', ownerUserId: 'owner' },
+      conversationId: 'conversation',
+      recipient: '+55 11 98888-8888',
+      oldestMessage: {
+        providerMessageId: 'oldest-message',
+        direction: 'outbound',
+        createdAt: new Date('2026-09-09T01:00:00.000Z'),
+      },
+    });
+
+    expect(fetchMessageHistory).toHaveBeenCalledWith(25, {
+      remoteJid: '5511988888888@s.whatsapp.net',
+      id: 'oldest-message',
+      fromMe: true,
+    }, 1_788_915_600_000);
+  });
+
+  it('importa chats individuais e respeita o limite da carga inicial', async () => {
+    const ensureConversation = vi.fn();
+    const receiveInbound = vi.fn().mockResolvedValue(true);
+    const info = vi.fn();
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      { ensureConversation, receiveInbound } as unknown as ConversationRuntimeRepository,
+      {} as MediaStorage,
+      { info } as unknown as ApplicationLogger,
+      { chatLimit: 1, messageLimit: 50 },
+    );
+    const session = {
+      socket: { signalRepository: { lidMapping: { getPNForLID: vi.fn() } } },
+      historyChats: new Set<string>(),
+      historyMessages: new Map<string, number>(),
+    };
+    (provider as any).sessions.set('channel', session);
+    const channel = { id: 'channel', tenantId: 'tenant', providerKey: 'whatsapp_web', phoneNumber: '+5511999999999', ownerUserId: 'owner' };
+
+    await (provider as any).receiveHistory(channel, session, {
+      chats: [
+        { id: '5511988888888@s.whatsapp.net', name: 'Maria', conversationTimestamp: 1_788_915_600 },
+        { id: '120363000000000000@g.us', name: 'Grupo' },
+      ],
+      contacts: [{ id: '5511988888888@s.whatsapp.net', name: 'Maria da Silva' }],
+      messages: [
+        { key: { id: 'ignored', remoteJid: '5511977777777@s.whatsapp.net' }, message: { conversation: 'Fora do limite' }, messageTimestamp: 1_788_915_500 },
+        { key: { id: 'accepted', remoteJid: '5511988888888@s.whatsapp.net' }, message: { conversation: 'Mensagem antiga' }, messageTimestamp: 1_788_915_400 },
+      ],
+    });
+
+    expect(ensureConversation).toHaveBeenCalledOnce();
+    expect(ensureConversation).toHaveBeenCalledWith(expect.objectContaining({
+      contactName: 'Maria da Silva',
+      contactAddress: '+5511988888888',
+    }));
+    expect(receiveInbound).toHaveBeenCalledOnce();
+    expect(receiveInbound).toHaveBeenCalledWith(expect.objectContaining({ providerMessageId: 'accepted' }));
+    expect(info).toHaveBeenCalledWith('whatsapp_history_chunk_processed', expect.objectContaining({ chats: 1, messages: 1 }));
+  });
 });

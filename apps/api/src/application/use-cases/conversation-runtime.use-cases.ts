@@ -49,3 +49,18 @@ export class DispatchConversationMessageJobUseCase {
     await this.conversations.markOutboundSent(tenantId, conversationId, messageId, sent.providerMessageId);
   }
 }
+
+export class SyncConversationHistoryJobUseCase {
+  constructor(
+    private readonly conversations: ConversationRuntimeRepository,
+    private readonly providers: ConversationProviderResolver,
+  ) {}
+
+  async execute(tenantId: string, conversationId: string): Promise<void> {
+    const target = await this.conversations.findHistorySync(tenantId, conversationId);
+    if (!target) return;
+    const provider = this.providers.resolve(target.channel.providerKey);
+    if (!provider) throw new Error(`Nenhum adapter foi configurado para ${target.channel.providerKey}.`);
+    await provider.syncHistory(target);
+  }
+}

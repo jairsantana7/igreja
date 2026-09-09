@@ -40,6 +40,7 @@ export const TOKENS = {
   createConversationUseCase: Symbol('CreateConversationUseCase'),
   createMemberFromConversationUseCase: Symbol('CreateMemberFromConversationUseCase'),
   getConversationMessagesUseCase: Symbol('GetConversationMessagesUseCase'),
+  requestConversationHistorySyncUseCase: Symbol('RequestConversationHistorySyncUseCase'),
   getConversationMediaUseCase: Symbol('GetConversationMediaUseCase'),
   sendConversationMediaUseCase: Symbol('SendConversationMediaUseCase'),
   replyConversationUseCase: Symbol('ReplyConversationUseCase'),

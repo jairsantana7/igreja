@@ -49,7 +49,7 @@ import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUs
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
@@ -362,6 +362,12 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
       provide: TOKENS.getConversationMessagesUseCase,
       useFactory: (conversations: PostgresConversationRepository) => new GetConversationMessagesUseCase(conversations),
       inject: [TOKENS.conversationRepository],
+    },
+    {
+      provide: TOKENS.requestConversationHistorySyncUseCase,
+      useFactory: (conversations: PostgresConversationRepository, queue: JobQueue, providers: ConversationProviderCatalog) =>
+        new RequestConversationHistorySyncUseCase(conversations, queue, providers),
+      inject: [TOKENS.conversationRepository, TOKENS.jobQueue, TOKENS.conversationProviderCatalog],
     },
     {
       provide: TOKENS.replyConversationUseCase,

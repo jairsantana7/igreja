@@ -102,6 +102,20 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  historySyncTarget(principal: AuthenticatedPrincipal, conversationId: string): Promise<{ providerKey: string } | null> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query<{ provider_key: string }>(`
+        SELECT channels.provider_key
+        FROM conversations
+        JOIN conversation_channels AS channels
+          ON channels.id = conversations.channel_id AND channels.tenant_id = conversations.tenant_id
+        WHERE conversations.id = $1
+          AND ($2::boolean OR conversations.assigned_user_id = $3 OR channels.owner_user_id = $3)
+      `, [conversationId, principal.permissions.includes('conversations.read_all'), principal.userId]);
+      return result.rows[0] ? { providerKey: result.rows[0].provider_key } : null;
+    });
+  }
+
   resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string) {
     return this.database.withTenant(principal, async (client) => {
       const result = await client.query(`

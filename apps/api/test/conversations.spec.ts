@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
@@ -139,6 +139,27 @@ describe('central de conversas', () => {
     expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
       name: 'conversations.channel.connect',
       deduplicationKey: 'channel:connect',
+    }), { attempts: 3 });
+  });
+
+  it('valida acesso e enfileira a sincronização ao abrir uma conversa', async () => {
+    const conversations = {
+      historySyncTarget: vi.fn().mockResolvedValue({ providerKey: 'whatsapp_web' }),
+    };
+    const queue = { enqueue: vi.fn().mockResolvedValue({ jobId: 'history-1' }) };
+    const useCase = new RequestConversationHistorySyncUseCase(
+      conversations as unknown as ConversationRepository,
+      queue,
+      { supportsConnection: (providerKey) => providerKey === 'whatsapp_web' },
+    );
+
+    await expect(useCase.execute(principal([]), 'conversation')).rejects.toThrow(AuthorizationError);
+    expect(conversations.historySyncTarget).not.toHaveBeenCalled();
+    await expect(useCase.execute(principal(['conversations.read']), 'conversation')).resolves.toEqual({ status: 'queued' });
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'conversations.history.sync',
+      deduplicationKey: 'conversation:history',
+      payload: expect.objectContaining({ tenantId: principal([]).tenantId, conversationId: 'conversation' }),
     }), { attempts: 3 });
   });
 

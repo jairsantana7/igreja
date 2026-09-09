@@ -15,6 +15,12 @@ function integer(name: string, fallback: number): number {
   return value;
 }
 
+function boundedInteger(name: string, fallback: number, maximum: number): number {
+  const value = integer(name, fallback);
+  if (value > maximum) throw new Error(`A variável ${name} deve ser menor ou igual a ${maximum}.`);
+  return value;
+}
+
 function jobQueueDriver(): 'disabled' | 'bullmq' {
   const value = process.env.JOB_QUEUE_DRIVER?.trim().toLowerCase() || 'disabled';
   if (value !== 'disabled' && value !== 'bullmq') throw new Error('JOB_QUEUE_DRIVER deve ser disabled ou bullmq.');
@@ -47,6 +53,8 @@ export const env = Object.freeze({
   jobQueueName: required('JOB_QUEUE_NAME', 'igreja-jobs'),
   whatsappQueueName: required('WHATSAPP_QUEUE_NAME', 'igreja-whatsapp'),
   workerConcurrency: integer('WORKER_CONCURRENCY', 5),
+  whatsappHistoryChatLimit: boundedInteger('WHATSAPP_HISTORY_CHAT_LIMIT', 50, 500),
+  whatsappHistoryMessageLimit: boundedInteger('WHATSAPP_HISTORY_MESSAGE_LIMIT', 50, 50),
   whatsappWebDriver: whatsappWebDriver(),
   conversationSessionEncryptionKey: process.env.CONVERSATION_SESSION_ENCRYPTION_KEY?.trim() ?? '',
 });
