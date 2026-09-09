@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from '../../../application/use-cases/member-profile.use-cases';
+import type { GetMemberConversationUseCase, GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from '../../../application/use-cases/member-profile.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -14,6 +14,7 @@ export class MemberProfilesController {
   constructor(
     @Inject(TOKENS.getMemberProfileUseCase) private readonly getProfile: GetMemberProfileUseCase,
     @Inject(TOKENS.updateMemberProfileUseCase) private readonly updateProfile: UpdateMemberProfileUseCase,
+    @Inject(TOKENS.getMemberConversationUseCase) private readonly getConversation: GetMemberConversationUseCase,
     @Inject(TOKENS.startMemberConversationUseCase) private readonly startConversation: StartMemberConversationUseCase,
   ) {}
 
@@ -31,6 +32,15 @@ export class MemberProfilesController {
     @Body() dto: UpdateMemberProfileDto,
   ) {
     return this.updateProfile.execute(principal, memberId, dto);
+  }
+
+  @Get(':memberId/conversations/current')
+  @RequirePermissions(PERMISSIONS.conversationsRead)
+  currentConversation(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('memberId', new ParseUUIDPipe()) memberId: string,
+  ) {
+    return this.getConversation.execute(principal, memberId);
   }
 
   @Post(':memberId/conversations')

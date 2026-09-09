@@ -22,6 +22,7 @@ const memberId = String(route.params.id);
 const canManageProfile = computed(() => auth.session.value?.user.permissions.includes('members.profile_manage'));
 const canManageName = computed(() => auth.session.value?.user.permissions.includes('users.update'));
 const canEdit = computed(() => canManageProfile.value || canManageName.value);
+const canReadConversations = computed(() => auth.session.value?.user.permissions.includes('conversations.read'));
 const canStartConversation = computed(() => {
   const permissions = auth.session.value?.user.permissions ?? [];
   return permissions.includes('conversations.reply')
@@ -47,6 +48,12 @@ const selectedChannelId = ref('');
 const feedback = ref('');
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' });
 const today = new Date().toISOString().slice(0, 10);
+const conversationPrompt = computed(() => {
+  if (route.query.conversation !== 'new' || !profile.value) return '';
+  if (!profile.value.phone) return 'Informe o WhatsApp do membro antes de iniciar uma conversa.';
+  if (!profile.value.whatsappCommunication.allowed) return 'Este membro ainda não autorizou a comunidade a iniciar novas conversas pelo WhatsApp.';
+  return 'Ainda não existe uma conversa acessível. Escolha abaixo qual número da comunidade deve iniciar o contato.';
+});
 
 function loadForm() {
   if (!profile.value) return;
@@ -103,6 +110,22 @@ async function startConversation() {
     feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível iniciar a conversa.';
   } finally { conversationBusy.value = false; }
 }
+
+async function pullConversation() {
+  conversationBusy.value = true; feedback.value = '';
+  try {
+    const result = await api<{ conversation: Conversation | null }>(`/members/${memberId}/conversations/current`);
+    if (result.conversation) {
+      await navigateTo({ path: '/conversations', query: { selected: result.conversation.id } });
+      return;
+    }
+    feedback.value = profile.value?.whatsappCommunication.allowed
+      ? 'Ainda não existe uma conversa. Escolha um canal na seção Comunicação para iniciar.'
+      : 'Não existe conversa vinculada e o membro ainda não autorizou um novo contato.';
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível localizar uma conversa deste membro.';
+  } finally { conversationBusy.value = false; }
+}
 </script>
 
 <template>
@@ -110,8 +133,9 @@ async function startConversation() {
     <div v-if="pending" class="empty-card">Carregando perfil…</div>
     <div v-else-if="error || !profile" class="empty-card"><p>Não foi possível carregar este perfil.</p><NuxtLink to="/members" class="button">Voltar para membros</NuxtLink></div>
     <template v-else>
-      <header class="page-header"><div><NuxtLink to="/members" class="back-link">← Todos os membros</NuxtLink><p class="eyebrow">Perfil complementar</p><h1>{{ profile.member.name }}</h1><p class="muted">{{ profile.member.email }}</p></div><button v-if="canEdit && !editing" class="button button--primary" @click="editing = true; loadForm()">✎ Editar perfil</button></header>
+      <header class="page-header"><div><NuxtLink to="/members" class="back-link">← Todos os membros</NuxtLink><p class="eyebrow">Perfil complementar</p><h1>{{ profile.member.name }}</h1><p class="muted">{{ profile.member.email }}</p></div><div class="page-header__actions"><button v-if="canReadConversations && !editing" class="button" :disabled="conversationBusy" @click="pullConversation">◌ Conversar</button><button v-if="canEdit && !editing" class="button button--primary" @click="editing = true; loadForm()">✎ Editar perfil</button></div></header>
       <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
+      <p v-else-if="conversationPrompt" class="operation-feedback" role="status">{{ conversationPrompt }}</p>
       <p class="member-privacy-note"><strong>Dados pessoais:</strong> use estas informações somente para cuidado e relacionamento com a comunidade. Elas não aparecem na listagem geral nem na auditoria.</p>
 
       <form v-if="editing" class="member-profile-form" @submit.prevent="save">

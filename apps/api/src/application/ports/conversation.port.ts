@@ -62,6 +62,7 @@ export interface ConversationRepository {
   listChannels(principal: AuthenticatedPrincipal): Promise<ConversationChannelView[]>;
   createChannel(principal: AuthenticatedPrincipal, ownerUserId: string, config: ConversationChannelConfiguration): Promise<ConversationChannelView>;
   list(principal: AuthenticatedPrincipal): Promise<ConversationSummaryView[]>;
+  findForMember(principal: AuthenticatedPrincipal, memberUserId: string): Promise<ConversationSummaryView | null>;
   create(principal: AuthenticatedPrincipal, input: { channelId: string; eventId?: string; memberUserId?: string; contactName: string; contactAddress: string }): Promise<ConversationSummaryView | null>;
   messages(principal: AuthenticatedPrincipal, conversationId: string): Promise<ConversationMessageView[] | null>;
   historySyncTarget(principal: AuthenticatedPrincipal, conversationId: string): Promise<{ providerKey: string } | null>;

@@ -24,6 +24,16 @@ export class UpdateMemberProfileUseCase {
   }
 }
 
+export class GetMemberConversationUseCase {
+  constructor(private readonly conversations: ConversationRepository) {}
+  async execute(principal: AuthenticatedPrincipal, memberId: string) {
+    if (!principal.permissions.includes(PERMISSIONS.conversationsRead)) {
+      throw new AuthorizationError('Você não tem permissão para visualizar conversas.');
+    }
+    return { conversation: await this.conversations.findForMember(principal, memberId) };
+  }
+}
+
 export class StartMemberConversationUseCase {
   constructor(
     private readonly profiles: MemberProfileRepository,
@@ -34,6 +44,10 @@ export class StartMemberConversationUseCase {
     if (!principal.permissions.includes(PERMISSIONS.memberProfilesRead)
       || !principal.permissions.includes(PERMISSIONS.conversationsReply)) {
       throw new AuthorizationError('Você não tem permissão para iniciar conversas pelo perfil do membro.');
+    }
+    if (principal.permissions.includes(PERMISSIONS.conversationsRead)) {
+      const existing = await this.conversations.findForMember(principal, memberId);
+      if (existing) return existing;
     }
     const profile = await this.profiles.find(principal, memberId);
     if (!profile) throw new NotFoundError('Membro não encontrado nesta comunidade.');

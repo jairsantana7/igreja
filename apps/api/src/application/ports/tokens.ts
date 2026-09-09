@@ -107,6 +107,7 @@ export const TOKENS = {
   listMembersUseCase: Symbol('ListMembersUseCase'),
   getMemberProfileUseCase: Symbol('GetMemberProfileUseCase'),
   updateMemberProfileUseCase: Symbol('UpdateMemberProfileUseCase'),
+  getMemberConversationUseCase: Symbol('GetMemberConversationUseCase'),
   startMemberConversationUseCase: Symbol('StartMemberConversationUseCase'),
   createRoleUseCase: Symbol('CreateRoleUseCase'),
   updateRolePermissionsUseCase: Symbol('UpdateRolePermissionsUseCase'),

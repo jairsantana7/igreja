@@ -56,6 +56,22 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  findForMember(principal: AuthenticatedPrincipal, memberUserId: string): Promise<ConversationSummaryView | null> {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query<{ id: string }>(`
+        SELECT conversations.id
+        FROM conversations
+        JOIN conversation_channels AS channels
+          ON channels.id = conversations.channel_id AND channels.tenant_id = conversations.tenant_id
+        WHERE conversations.member_user_id = $1
+          AND ($2::boolean OR conversations.assigned_user_id = $3 OR channels.owner_user_id = $3)
+        ORDER BY conversations.last_message_at DESC, conversations.id DESC
+        LIMIT 1
+      `, [memberUserId, principal.permissions.includes('conversations.read_all'), principal.userId]);
+      return result.rows[0] ? this.findSummary(client, principal, result.rows[0].id) : null;
+    });
+  }
+
   create(principal: AuthenticatedPrincipal, input: Parameters<ConversationRepository['create']>[1]): Promise<ConversationSummaryView | null> {
     return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       const channel = await client.query(`

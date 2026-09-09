@@ -3,7 +3,7 @@ import { MemberProfileDraft } from '../src/domain/entities/member-profile';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 import type { MemberProfileRepository } from '../src/application/ports/member-profile.port';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
-import { GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from '../src/application/use-cases/member-profile.use-cases';
+import { GetMemberConversationUseCase, GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from '../src/application/use-cases/member-profile.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
@@ -61,13 +61,14 @@ describe('perfil complementar do membro', () => {
     };
     const find = vi.fn().mockResolvedValue(profile);
     const create = vi.fn().mockResolvedValue({ id: 'conversation' });
+    const findForMember = vi.fn().mockResolvedValue(null);
     const useCase = new StartMemberConversationUseCase(
       { find } as unknown as MemberProfileRepository,
-      { create } as unknown as ConversationRepository,
+      { create, findForMember } as unknown as ConversationRepository,
     );
     await expect(useCase.execute(principal(['members.profile_read']), profile.member.id, { channelId: 'channel' }))
       .rejects.toThrow(AuthorizationError);
-    await expect(useCase.execute(principal(['members.profile_read', 'conversations.reply']), profile.member.id, { channelId: 'channel' }))
+    await expect(useCase.execute(principal(['members.profile_read', 'conversations.read', 'conversations.reply']), profile.member.id, { channelId: 'channel' }))
       .resolves.toEqual({ id: 'conversation' });
     expect(create).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
       memberUserId: profile.member.id,
@@ -83,12 +84,37 @@ describe('perfil complementar do membro', () => {
       whatsappCommunication: { allowed: false, optedInAt: null, optedOutAt: null },
     });
     const create = vi.fn();
+    const findForMember = vi.fn().mockResolvedValue(null);
     const useCase = new StartMemberConversationUseCase(
       { find } as unknown as MemberProfileRepository,
-      { create } as unknown as ConversationRepository,
+      { create, findForMember } as unknown as ConversationRepository,
     );
-    await expect(useCase.execute(principal(['members.profile_read', 'conversations.reply']), 'member', { channelId: 'channel' }))
+    await expect(useCase.execute(principal(['members.profile_read', 'conversations.read', 'conversations.reply']), 'member', { channelId: 'channel' }))
       .rejects.toThrow(ConflictError);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('abre uma conversa vinculada sem criar atendimento duplicado', async () => {
+    const existing = { id: 'conversation-existing' };
+    const findForMember = vi.fn().mockResolvedValue(existing);
+    const find = vi.fn();
+    const create = vi.fn();
+    const useCase = new StartMemberConversationUseCase(
+      { find } as unknown as MemberProfileRepository,
+      { create, findForMember } as unknown as ConversationRepository,
+    );
+    await expect(useCase.execute(principal(['members.profile_read', 'conversations.read', 'conversations.reply']), 'member', { channelId: 'channel' }))
+      .resolves.toEqual(existing);
+    expect(find).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('exige conversations.read para localizar uma conversa pelo membro', async () => {
+    const findForMember = vi.fn().mockResolvedValue({ id: 'conversation' });
+    const useCase = new GetMemberConversationUseCase({ findForMember } as unknown as ConversationRepository);
+    await expect(useCase.execute(principal([]), 'member')).rejects.toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['conversations.read']), 'member')).resolves.toEqual({
+      conversation: { id: 'conversation' },
+    });
   });
 });

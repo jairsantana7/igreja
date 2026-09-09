@@ -24,6 +24,11 @@ const canCreate = computed(() => auth.session.value?.user.permissions.includes('
   && auth.session.value?.user.permissions.includes('roles.read'));
 const canReadProfile = computed(() => auth.session.value?.user.permissions.includes('members.profile_read'));
 const canManageDeliveries = computed(() => auth.session.value?.user.permissions.includes('members.credentials_manage'));
+const canReadConversations = computed(() => auth.session.value?.user.permissions.includes('conversations.read'));
+const canStartConversation = computed(() => canReadProfile.value
+  && auth.session.value?.user.permissions.includes('conversations.reply'));
+const conversationBusyId = ref<string | null>(null);
+const feedback = ref('');
 const roles = computed(() => {
   const byId = new Map<string, MemberRole>();
   for (const member of members.value ?? []) {
@@ -43,6 +48,27 @@ const filteredMembers = computed(() => {
 });
 const registrations = computed(() => (members.value ?? []).reduce((total, member) => total + member.confirmedRegistrations, 0));
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
+
+async function pullConversation(member: Member) {
+  conversationBusyId.value = member.id;
+  feedback.value = '';
+  try {
+    const result = await api<{ conversation: { id: string } | null }>(`/members/${member.id}/conversations/current`);
+    if (result.conversation) {
+      await navigateTo({ path: '/conversations', query: { selected: result.conversation.id } });
+      return;
+    }
+    if (canStartConversation.value) {
+      await navigateTo({ path: `/members/${member.id}`, query: { conversation: 'new' } });
+      return;
+    }
+    feedback.value = `Não há uma conversa de ${member.name} disponível no seu atendimento.`;
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível localizar a conversa deste membro.';
+  } finally {
+    conversationBusyId.value = null;
+  }
+}
 </script>
 
 <template>
@@ -59,6 +85,7 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
     </section>
 
     <section class="section-block">
+      <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
       <div class="member-filters">
         <label class="search-field"><span aria-hidden="true">⌕</span><input v-model="search" type="search" placeholder="Buscar por nome ou e-mail" aria-label="Buscar membros"></label>
         <label class="role-filter"><span>Filtrar por papel</span><select v-model="role"><option value="all">Todos os papéis</option><option v-for="item in roles" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
@@ -69,14 +96,14 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
       <div v-else-if="!filteredMembers.length" class="empty-card"><span class="empty-icon">♙</span><h3>Nenhum membro encontrado</h3><p>Altere os filtros para consultar outras pessoas.</p></div>
       <div v-else class="member-table-wrap">
         <table class="member-table">
-          <thead><tr><th>Membro</th><th>Papéis</th><th>Desde</th><th>Inscrições confirmadas</th><th v-if="canReadProfile">Perfil</th></tr></thead>
+          <thead><tr><th>Membro</th><th>Papéis</th><th>Desde</th><th>Inscrições confirmadas</th><th v-if="canReadProfile || canReadConversations">Ações</th></tr></thead>
           <tbody>
             <tr v-for="member in filteredMembers" :key="member.id">
               <td><div class="member-identity"><span class="member-avatar">{{ member.name.charAt(0).toUpperCase() }}</span><span><strong>{{ member.name }}</strong><small>{{ member.email }}</small></span></div></td>
               <td><div class="role-list"><span v-for="item in member.roles" :key="item.id" class="role-chip">{{ item.name }}</span><span v-if="!member.roles.length" class="muted">Sem papel</span></div></td>
               <td>{{ dateFormatter.format(new Date(member.createdAt)) }}</td>
               <td><strong class="registration-total">{{ member.confirmedRegistrations }}</strong></td>
-              <td v-if="canReadProfile"><NuxtLink :to="`/members/${member.id}`" class="button button--small">Ver perfil</NuxtLink></td>
+              <td v-if="canReadProfile || canReadConversations"><div class="member-row-actions"><NuxtLink v-if="canReadProfile" :to="`/members/${member.id}`" class="button button--small">Ver perfil</NuxtLink><button v-if="canReadConversations" class="button button--small button--primary" :disabled="conversationBusyId === member.id" @click="pullConversation(member)">{{ conversationBusyId === member.id ? 'Buscando…' : '◌ Conversar' }}</button></div></td>
             </tr>
           </tbody>
         </table>
