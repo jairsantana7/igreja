@@ -1,10 +1,12 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import { MAX_CONVERSATION_MEDIA_SIZE } from '../../../application/services/conversation-media.policy';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateConversationChannelDto, CreateConversationDto, CreateMemberFromConversationDto, ReplyConversationDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
+import { CreateConversationChannelDto, CreateConversationDto, CreateMemberFromConversationDto, ReplyConversationDto, SendConversationMediaDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import type { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from '../../../application/use-cases/whatsapp-template.use-cases';
@@ -26,6 +28,7 @@ export class ConversationsController {
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
     @Inject(TOKENS.getConversationMediaUseCase) private readonly getMedia: GetConversationMediaUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
+    @Inject(TOKENS.sendConversationMediaUseCase) private readonly sendMedia: SendConversationMediaUseCase,
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
     @Inject(TOKENS.listWhatsAppTemplatesUseCase) private readonly listWhatsAppTemplates: ListWhatsAppTemplatesUseCase,
     @Inject(TOKENS.syncWhatsAppTemplatesUseCase) private readonly syncWhatsAppTemplates: SyncWhatsAppTemplatesUseCase,
@@ -107,6 +110,24 @@ export class ConversationsController {
   @Post('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsReply)
   reply(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() dto: ReplyConversationDto) { return this.replyConversation.execute(principal, id, dto.body); }
+
+  @Post('conversations/:conversationId/media')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @RequirePermissions(PERMISSIONS.conversationsReply)
+  @UseInterceptors(FileInterceptor('media', { limits: { fileSize: MAX_CONVERSATION_MEDIA_SIZE } }))
+  sendAttachment(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('conversationId', new ParseUUIDPipe()) conversationId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() dto: SendConversationMediaDto,
+  ) {
+    if (!file) throw new BadRequestException('Selecione uma imagem ou um áudio para enviar.');
+    return this.sendMedia.execute(principal, conversationId, {
+      content: file.buffer,
+      mimeType: file.mimetype,
+      caption: dto.caption,
+    });
+  }
 
   @Put('conversations/:conversationId/status')
   @RequirePermissions(PERMISSIONS.conversationsAssign)

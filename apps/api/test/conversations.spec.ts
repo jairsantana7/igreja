@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase, SendConversationMediaUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
@@ -56,6 +56,56 @@ describe('central de conversas', () => {
     await expect(useCase.execute(principal(['conversations.reply']), 'conversation', 'Lembrete')).resolves.toMatchObject({ status: 'queued' });
     expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ deduplicationKey: message.id }), { attempts: 5 });
     expect(conversations.markQueued).toHaveBeenCalledWith(expect.any(Object), 'conversation', message.id, 'job-1');
+  });
+
+  it('valida e enfileira uma imagem privada enviada pela Central', async () => {
+    const message = { id: '90000000-0000-4000-8000-000000000001', status: 'pending' };
+    const conversations = {
+      addOutboundMedia: vi.fn().mockResolvedValue(message),
+      markQueued: vi.fn().mockResolvedValue({ ...message, status: 'queued' }),
+    };
+    const storage = {
+      save: vi.fn().mockResolvedValue({ storageKey: 'media.jpg', mimeType: 'image/jpeg' }),
+      delete: vi.fn(),
+    };
+    const queue = { enqueue: vi.fn().mockResolvedValue({ jobId: 'job-media' }) };
+    const useCase = new SendConversationMediaUseCase(
+      conversations as unknown as ConversationRepository,
+      storage as unknown as MediaStorage,
+      queue,
+    );
+
+    await expect(useCase.execute(principal(['conversations.reply']), 'conversation', {
+      content: Buffer.from([0xff, 0xd8, 0xff, 0x00]), mimeType: 'image/jpeg', caption: '  Foto do encontro  ',
+    })).resolves.toMatchObject({ status: 'queued' });
+    expect(conversations.addOutboundMedia).toHaveBeenCalledWith(expect.any(Object), 'conversation', expect.objectContaining({
+      body: 'Foto do encontro',
+      attachment: expect.objectContaining({ mediaKind: 'image', byteSize: 4 }),
+    }));
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ deduplicationKey: message.id }), { attempts: 5 });
+  });
+
+  it('rejeita conteúdo disfarçado e remove o arquivo se a conversa não estiver acessível', async () => {
+    const conversations = { addOutboundMedia: vi.fn().mockResolvedValue(null) };
+    const storage = {
+      save: vi.fn().mockResolvedValue({ storageKey: 'media.ogg', mimeType: 'audio/ogg' }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const useCase = new SendConversationMediaUseCase(
+      conversations as unknown as ConversationRepository,
+      storage as unknown as MediaStorage,
+      { enqueue: vi.fn() },
+    );
+
+    await expect(useCase.execute(principal(['conversations.reply']), 'conversation', {
+      content: Buffer.from('não é áudio'), mimeType: 'audio/ogg',
+    })).rejects.toThrow('não corresponde');
+    expect(storage.save).not.toHaveBeenCalled();
+
+    await expect(useCase.execute(principal(['conversations.reply']), 'conversation', {
+      content: Buffer.from('OggSconteúdo'), mimeType: 'audio/ogg',
+    })).rejects.toThrow('Conversa não encontrada');
+    expect(storage.delete).toHaveBeenCalledWith('media.ogg');
   });
 
   it('só lê mídia depois de validar permissão e acesso à conversa', async () => {

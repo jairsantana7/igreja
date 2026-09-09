@@ -64,6 +64,7 @@ export interface ConversationRepository {
   messages(principal: AuthenticatedPrincipal, conversationId: string): Promise<ConversationMessageView[] | null>;
   resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string): Promise<ConversationAttachmentSource | null>;
   addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null>;
+  addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: { body: string; attachment: ConversationIncomingAttachment }): Promise<ConversationMessageView | null>;
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null>;
   updateStatus(principal: AuthenticatedPrincipal, conversationId: string, status: ConversationStatus): Promise<ConversationSummaryView | null>;
   connection(principal: AuthenticatedPrincipal, channelId: string): Promise<ConversationChannelConnectionView | null>;
@@ -87,6 +88,7 @@ export interface ConversationOutboundDelivery {
   messageId: string;
   recipient: string;
   body: string;
+  attachment?: ConversationAttachmentSource & { mediaKind: 'image' | 'audio' };
 }
 
 export interface ConversationRuntimeRepository {

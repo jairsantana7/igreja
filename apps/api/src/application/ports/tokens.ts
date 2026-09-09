@@ -40,6 +40,7 @@ export const TOKENS = {
   createMemberFromConversationUseCase: Symbol('CreateMemberFromConversationUseCase'),
   getConversationMessagesUseCase: Symbol('GetConversationMessagesUseCase'),
   getConversationMediaUseCase: Symbol('GetConversationMediaUseCase'),
+  sendConversationMediaUseCase: Symbol('SendConversationMediaUseCase'),
   replyConversationUseCase: Symbol('ReplyConversationUseCase'),
   updateConversationStatusUseCase: Symbol('UpdateConversationStatusUseCase'),
   listWhatsAppTemplatesUseCase: Symbol('ListWhatsAppTemplatesUseCase'),

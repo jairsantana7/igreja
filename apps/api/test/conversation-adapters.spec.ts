@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { AesGcmStateCipher } from '../src/infrastructure/security/aes-gcm-state.cipher';
 import { RoutedJobQueue } from '../src/infrastructure/queue/routed-job.queue';
 import { createBaileysAuthState } from '../src/infrastructure/integrations/baileys/baileys-auth-state';
-import { BaileysConversationProvider, matchesConversationMediaSignature, resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
+import { BaileysConversationProvider, resolveBaileysContactAddress } from '../src/infrastructure/integrations/baileys/baileys-conversation.provider';
+import { matchesConversationMediaSignature } from '../src/application/services/conversation-media.policy';
 import type { ConversationProviderStateStore, ConversationRuntimeRepository } from '../src/application/ports/conversation.port';
 import type { ApplicationLogger } from '../src/application/ports/application-logger.port';
 import type { WAMessage } from '@whiskeysockets/baileys';
@@ -110,5 +111,34 @@ describe('adapters do conector de conversas', () => {
     expect(matchesConversationMediaSignature(Buffer.from('OggS\u0000conteudo'), 'audio/ogg')).toBe(true);
     expect(matchesConversationMediaSignature(Buffer.from('arquivo inválido'), 'image/jpeg')).toBe(false);
     expect(matchesConversationMediaSignature(Buffer.from('arquivo inválido'), 'audio/ogg')).toBe(false);
+  });
+
+  it('traduz mídia privada para o contrato do WhatsApp somente dentro do adapter', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ key: { id: 'provider-media' } });
+    const read = vi.fn().mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff, 0x00]));
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      {} as ConversationRuntimeRepository,
+      { read } as unknown as MediaStorage,
+      {} as ApplicationLogger,
+    );
+    (provider as any).sessions.set('channel', {
+      socket: { sendMessage },
+      ready: Promise.resolve(),
+    });
+
+    await expect(provider.send({
+      channel: { id: 'channel', tenantId: 'tenant', providerKey: 'whatsapp_web', phoneNumber: '+5511999999999', ownerUserId: 'owner' },
+      conversationId: 'conversation',
+      messageId: 'message',
+      recipient: '+5511988888888',
+      body: 'Foto do encontro',
+      attachment: { storageKey: 'media.jpg', mimeType: 'image/jpeg', mediaKind: 'image' },
+      idempotencyKey: 'message',
+    })).resolves.toEqual({ providerMessageId: 'provider-media' });
+    expect(read).toHaveBeenCalledWith('media.jpg');
+    expect(sendMessage).toHaveBeenCalledWith('5511988888888@s.whatsapp.net', expect.objectContaining({
+      image: expect.any(Buffer), caption: 'Foto do encontro', mimetype: 'image/jpeg',
+    }));
   });
 });

@@ -5,6 +5,13 @@ import type { JobQueue } from '../ports/job-queue.port';
 import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
 import type { PasswordHasher } from '../ports/authentication.port';
 import type { MediaStorage } from '../ports/media-storage.port';
+import { DomainError } from '../../domain/entities/errors';
+import {
+  canonicalConversationMimeType,
+  conversationMediaKind,
+  conversationMediaSizeLimit,
+  matchesConversationMediaSignature,
+} from '../services/conversation-media.policy';
 import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission) {
@@ -194,6 +201,56 @@ export class ReplyConversationUseCase {
       return await this.conversations.markQueued(principal, conversationId, message.id, job.jobId);
     } catch {
       throw new ConflictError('A fila de mensagens não está disponível. A resposta foi preservada como pendente.');
+    }
+  }
+}
+
+export class SendConversationMediaUseCase {
+  constructor(
+    private readonly conversations: ConversationRepository,
+    private readonly storage: MediaStorage,
+    private readonly queue: JobQueue,
+  ) {}
+
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { content: Buffer; mimeType: string; caption?: string }) {
+    requirePermission(principal, PERMISSIONS.conversationsReply);
+    const mimeType = canonicalConversationMimeType(input.mimeType);
+    if (!mimeType) throw new DomainError('O anexo deve ser uma imagem JPEG, PNG ou WebP, ou um áudio OGG, MP3, M4A ou AAC.');
+    const mediaKind = conversationMediaKind(mimeType);
+    if (input.content.length === 0) throw new DomainError('O arquivo enviado está vazio.');
+    if (input.content.length > conversationMediaSizeLimit(mediaKind)) {
+      throw new DomainError(mediaKind === 'image' ? 'A imagem deve ter no máximo 10 MiB.' : 'O áudio deve ter no máximo 20 MiB.');
+    }
+    if (!matchesConversationMediaSignature(input.content, mimeType)) {
+      throw new DomainError('O conteúdo do arquivo não corresponde ao formato informado.');
+    }
+
+    const caption = input.caption?.trim().slice(0, 4_000) ?? '';
+    const body = mediaKind === 'image' && caption ? caption : mediaKind === 'image' ? 'Imagem' : 'Áudio';
+    const stored = await this.storage.save({ content: input.content, mimeType });
+    let message;
+    try {
+      message = await this.conversations.addOutboundMedia(principal, conversationId, {
+        body,
+        attachment: { ...stored, mediaKind, byteSize: input.content.length },
+      });
+    } catch (error) {
+      await this.storage.delete(stored.storageKey).catch(() => undefined);
+      throw error;
+    }
+    if (!message) {
+      await this.storage.delete(stored.storageKey).catch(() => undefined);
+      throw new NotFoundError('Conversa não encontrada ou sem acesso.');
+    }
+    try {
+      const job = await this.queue.enqueue({
+        name: 'conversations.message.dispatch',
+        payload: { tenantId: principal.tenantId, conversationId, messageId: message.id },
+        deduplicationKey: message.id,
+      }, { attempts: 5 });
+      return await this.conversations.markQueued(principal, conversationId, message.id, job.jobId);
+    } catch {
+      throw new ConflictError('A fila de mensagens não está disponível. O anexo foi preservado como pendente.');
     }
   }
 }

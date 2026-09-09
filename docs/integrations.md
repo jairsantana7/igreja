@@ -53,6 +53,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Imagens e áudios recebidos passam por limite de bytes e validação de assinatura antes do `MediaStorage`. O PostgreSQL guarda apenas metadados protegidos por RLS.
 - API e worker precisam apontar para o mesmo backend de mídia. O `compose.yaml` local compartilha `.data/media`; em produção use object storage privado quando os processos não compartilham filesystem.
 - O download do binário é autenticado e também verifica o acesso do usuário à conversa. Não exponha o bucket nem transforme `storage_key` em URL pública.
+- O composer envia um arquivo por `multipart/form-data`. A aplicação valida o conteúdo, persiste mensagem e metadados antes do enqueue e entrega ao adapter por um contrato neutro de imagem ou áudio.
 
 ### WhatsApp Web não oficial
 
@@ -103,4 +104,4 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 
 ## Estado atual
 
-Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. O driver Baileys permite testar pareamento, conversas individuais e recebimento privado de imagens e áudios quando habilitado, mas permanece experimental e não atende campanhas nem lembretes automáticos. O composer ainda envia somente texto. Ainda não há scheduler, Embedded Signup, webhook oficial, identidade externa, MFA ou pagamento instalado. Por isso, a página pública ainda não anuncia botões sociais e nenhuma regra automática declara mensagem entregue até os adaptadores correspondentes existirem.
+Google, Microsoft, PIX manual, um slot genérico de gateway e canais individuais de conversa podem ser configurados. Sessões locais já são revogáveis. Modelos locais versionados e regras de lembrete por evento estão implementados, assim como a consulta oficial de templates da Meta. O driver Baileys permite testar pareamento, conversas individuais e envio e recebimento privado de imagens e áudios quando habilitado, mas permanece experimental e não atende campanhas nem lembretes automáticos. Ainda não há scheduler, Embedded Signup, webhook oficial, identidade externa, MFA ou pagamento instalado. Por isso, a página pública ainda não anuncia botões sociais e nenhuma regra automática declara mensagem entregue até os adapters correspondentes existirem.

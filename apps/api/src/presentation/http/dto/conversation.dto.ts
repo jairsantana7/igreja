@@ -22,6 +22,10 @@ export class ReplyConversationDto {
   @IsString() @Length(1, 10000) body!: string;
 }
 
+export class SendConversationMediaDto {
+  @IsOptional() @IsString() @Length(0, 4000) caption?: string;
+}
+
 export class CreateMemberFromConversationDto {
   @IsEmail()
   email!: string;

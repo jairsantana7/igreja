@@ -104,11 +104,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Somente o proprietário ou quem possui `channels.manage_all` pode excluir um canal. A exclusão exige estado `configured` ou `disconnected` e ausência de conversas ou lembretes vinculados; histórico operacional nunca é apagado em cascata.
 - O QR é efêmero e as credenciais do dispositivo vinculado são criptografadas. Nenhum desses valores entra em logs, respostas de auditoria ou variáveis salvas pelo usuário.
 - O conector não oficial aceita somente conversas individuais. Grupos, status, newsletters, chamadas, vídeos e documentos não entram no MVP.
-- Imagens JPEG, PNG e WebP de até 10 MiB e áudios OGG/Opus, MP3, M4A ou AAC de até 20 MiB são baixados pelo worker após validação de assinatura e armazenados pela porta `MediaStorage`. A regra vale para mídia recebida e enviada diretamente pelo celular conectado.
+- Imagens JPEG, PNG e WebP de até 10 MiB e áudios OGG/Opus, MP3, M4A ou AAC de até 20 MiB são validados por MIME, tamanho e assinatura e armazenados pela porta `MediaStorage`. A regra vale para mídia recebida, enviada diretamente pelo celular conectado ou anexada pela Central.
 - O banco guarda somente metadados do anexo sob RLS. O conteúdo é privado e sua leitura exige sessão válida, `conversations.read` e acesso à conversa; conteúdo e chave de armazenamento não entram na auditoria.
-- Envio de anexos pelo composer, transcrição, antivírus, retenção e exclusão programada continuam bloqueados até regras próprias.
+- Enviar anexo pela Central exige `conversations.reply` e acesso à conversa. Cada envio aceita um arquivo; imagem pode ter legenda de até 4.000 caracteres e áudio é enviado sem texto adicional.
+- Transcrição, antivírus, retenção, gravação de áudio no navegador, documentos, vídeos, múltiplos anexos e exclusão programada continuam bloqueados até regras próprias.
 - Ao receber a primeira mensagem textual, imagem ou áudio de um contato, o sistema cria uma conversa atribuída ao proprietário do canal; mensagens repetidas do provedor são ignoradas de forma idempotente.
-- Mensagens suportadas enviadas diretamente pelo celular conectado também entram no histórico como saída. Se a mesma mensagem textual foi criada pelo sistema, o identificador do provedor evita duplicação.
+- Mensagens suportadas enviadas diretamente pelo celular conectado também entram no histórico como saída. Se a mesma mensagem textual ou com mídia foi criada pelo sistema, o identificador do provedor evita duplicação.
 - Identificadores internos `@lid` nunca são apresentados como telefone: o adapter prioriza o número alternativo, consulta o mapeamento criptográfico do canal e repara conversas antigas quando a relação estiver disponível.
 - Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.

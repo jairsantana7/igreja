@@ -60,6 +60,8 @@ const busy = ref(false);
 const busyChannelId = ref<string | null>(null);
 const feedback = ref('');
 const replyBody = ref('');
+const selectedMedia = ref<File | null>(null);
+const mediaInput = ref<HTMLInputElement | null>(null);
 const channelForm = reactive({ providerKey: 'whatsapp_web', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
 const channelConnections = reactive<Record<string, ChannelConnection>>({});
 const channelQrImages = reactive<Record<string, string>>({});
@@ -94,6 +96,7 @@ watch(() => route.query.selected, (id) => {
 });
 watch(selectedId, async (id) => {
   clearMediaUrls();
+  clearSelectedMedia();
   showMemberForm.value = false;
   Object.assign(memberForm, { email: '', password: '' });
   if (id) await refreshMessages();
@@ -230,18 +233,57 @@ async function startConversation() {
 }
 
 async function reply() {
-  if (!selected.value || !replyBody.value.trim()) return;
+  if (!selected.value || (!selectedMedia.value && !replyBody.value.trim())) return;
   busy.value = true; feedback.value = '';
   try {
-    await api(`/conversations/${selected.value.id}/messages`, { method: 'POST', body: { body: replyBody.value } });
+    if (selectedMedia.value) {
+      const form = new FormData();
+      form.append('media', selectedMedia.value);
+      if (selectedMedia.value.type.startsWith('image/') && replyBody.value.trim()) form.append('caption', replyBody.value.trim());
+      await api(`/conversations/${selected.value.id}/media`, { method: 'POST', body: form });
+    } else {
+      await api(`/conversations/${selected.value.id}/messages`, { method: 'POST', body: { body: replyBody.value } });
+    }
     replyBody.value = '';
+    clearSelectedMedia();
   } catch (requestError: any) {
-    feedback.value = requestError?.data?.message ?? 'Não foi possível enfileirar a mensagem.';
-    replyBody.value = '';
+    const message = requestError?.data?.message;
+    feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível enfileirar a mensagem.';
   } finally {
     await Promise.all([refreshMessages(), refresh()]);
     busy.value = false;
   }
+}
+
+function selectMedia(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  if (!file) return;
+  const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const audioTypes = ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac'];
+  if (![...imageTypes, ...audioTypes].includes(file.type)) {
+    feedback.value = 'Escolha uma imagem JPEG, PNG ou WebP, ou um áudio OGG, MP3, M4A ou AAC.';
+    input.value = '';
+    return;
+  }
+  const limit = imageTypes.includes(file.type) ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
+  if (file.size > limit) {
+    feedback.value = imageTypes.includes(file.type) ? 'A imagem deve ter no máximo 10 MiB.' : 'O áudio deve ter no máximo 20 MiB.';
+    input.value = '';
+    return;
+  }
+  selectedMedia.value = file;
+  if (audioTypes.includes(file.type)) replyBody.value = '';
+  feedback.value = '';
+}
+
+function clearSelectedMedia() {
+  selectedMedia.value = null;
+  if (mediaInput.value) mediaInput.value.value = '';
+}
+
+function formatFileSize(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MiB` : `${Math.ceil(bytes / 1024)} KiB`;
 }
 
 async function updateStatus(status: ConversationStatus) {
@@ -391,7 +433,28 @@ function clearMediaUrls() {
             <p>{{ message.body }}</p><small>{{ formatter.format(new Date(message.createdAt)) }} · {{ messageStatusLabels[message.status] }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
           </div>
         </div>
-        <form v-if="canReply" class="conversation-composer" @submit.prevent="reply"><textarea v-model="replyBody" rows="3" maxlength="10000" placeholder="Escreva uma resposta…" required></textarea><div><small>O envio passa pelo adapter e pela fila configurados na instalação.</small><button class="button button--primary" :disabled="busy || !replyBody.trim()">Enviar</button></div></form>
+        <form v-if="canReply" class="conversation-composer" @submit.prevent="reply">
+          <div v-if="selectedMedia" class="composer-attachment">
+            <span class="composer-attachment__icon">{{ selectedMedia.type.startsWith('image/') ? '▧' : '♪' }}</span>
+            <span><strong>{{ selectedMedia.name }}</strong><small>{{ formatFileSize(selectedMedia.size) }} · {{ selectedMedia.type.startsWith('image/') ? 'Imagem' : 'Áudio' }}</small></span>
+            <button type="button" aria-label="Remover anexo" title="Remover anexo" @click="clearSelectedMedia">×</button>
+          </div>
+          <textarea
+            v-model="replyBody"
+            rows="3"
+            :maxlength="selectedMedia?.type.startsWith('image/') ? 4000 : 10000"
+            :disabled="Boolean(selectedMedia?.type.startsWith('audio/'))"
+            :placeholder="selectedMedia?.type.startsWith('image/') ? 'Adicione uma legenda (opcional)…' : selectedMedia?.type.startsWith('audio/') ? 'O áudio será enviado sem texto adicional.' : 'Escreva uma resposta…'"
+          />
+          <div class="composer-toolbar">
+            <div class="composer-toolbar__info">
+              <input ref="mediaInput" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/aac,.m4a" @change="selectMedia">
+              <button class="composer-attach-button" type="button" :disabled="busy" @click="mediaInput?.click()"><span>＋</span> Anexar imagem ou áudio</button>
+              <small>{{ selectedMedia?.type.startsWith('audio/') ? 'Áudio de até 20 MiB.' : selectedMedia?.type.startsWith('image/') ? 'Imagem de até 10 MiB; a legenda é opcional.' : 'JPEG, PNG, WebP, OGG, MP3, M4A ou AAC.' }}</small>
+            </div>
+            <button class="button button--primary" :disabled="busy || (!selectedMedia && !replyBody.trim())">{{ busy ? 'Enviando…' : 'Enviar' }}</button>
+          </div>
+        </form>
       </article>
       <article v-else class="conversation-thread conversation-thread--empty"><span>◌</span><h2>Selecione uma conversa</h2><p>Você acompanha aqui os atendimentos dos seus próprios números. Pessoas responsáveis pela supervisão também podem acompanhar as conversas da comunidade.</p></article>
     </section>

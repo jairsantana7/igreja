@@ -127,6 +127,32 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: Parameters<ConversationRepository['addOutboundMedia']>[2]): Promise<ConversationMessageView | null> {
+    return this.database.withTenant(principal, async (client) => {
+      if (!(await this.canAccess(client, principal, conversationId))) return null;
+      const result = await client.query(`
+        INSERT INTO conversation_messages (tenant_id, conversation_id, sent_by_user_id, direction, body, status)
+        VALUES ($1, $2, $3, 'outbound', $4, 'pending')
+        RETURNING *
+      `, [principal.tenantId, conversationId, principal.userId, input.body]);
+      const message = result.rows[0];
+      const attachment = await client.query(`
+        INSERT INTO conversation_message_attachments (
+          tenant_id, conversation_id, message_id, storage_key, media_kind,
+          mime_type, byte_size, duration_seconds
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, media_kind AS kind, mime_type AS "mimeType",
+          byte_size AS "byteSize", duration_seconds AS "durationSeconds"
+      `, [
+        principal.tenantId, conversationId, message.id, input.attachment.storageKey,
+        input.attachment.mediaKind, input.attachment.mimeType, input.attachment.byteSize,
+        input.attachment.durationSeconds ?? null,
+      ]);
+      await client.query('UPDATE conversations SET last_message_at = now(), updated_at = now(), status = $2 WHERE id = $1', [conversationId, 'waiting']);
+      return this.mapMessage({ ...message, sender_name: principal.name, attachments: attachment.rows });
+    });
+  }
+
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null> {
     return this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;

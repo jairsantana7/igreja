@@ -33,12 +33,22 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       const result = await client.query(`
         SELECT messages.id AS message_id, messages.body, conversations.id AS conversation_id,
           conversations.contact_address, channels.id AS channel_id, channels.tenant_id,
-          channels.provider_key, channels.phone_number, channels.owner_user_id
+          channels.provider_key, channels.phone_number, channels.owner_user_id,
+          attachments.storage_key, attachments.mime_type, attachments.media_kind
         FROM conversation_messages AS messages
         JOIN conversations ON conversations.id = messages.conversation_id
           AND conversations.tenant_id = messages.tenant_id
         JOIN conversation_channels AS channels ON channels.id = conversations.channel_id
           AND channels.tenant_id = conversations.tenant_id
+        LEFT JOIN LATERAL (
+          SELECT storage_key, mime_type, media_kind
+          FROM conversation_message_attachments
+          WHERE message_id = messages.id
+            AND conversation_id = messages.conversation_id
+            AND tenant_id = messages.tenant_id
+          ORDER BY id
+          LIMIT 1
+        ) AS attachments ON true
         WHERE messages.id = $1 AND conversations.id = $2
           AND messages.direction = 'outbound' AND messages.status IN ('pending', 'queued')
       `, [messageId, conversationId]);
@@ -56,6 +66,11 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         messageId: row.message_id,
         recipient: row.contact_address,
         body: row.body,
+        attachment: row.storage_key ? {
+          storageKey: row.storage_key,
+          mimeType: row.mime_type,
+          mediaKind: row.media_kind,
+        } : undefined,
       };
     });
   }
@@ -146,7 +161,22 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       }
       const conversationId = conversation.rows[0]!.id;
 
-      const matched = input.attachment ? { rowCount: 0 } : await client.query(`
+      const matched = input.attachment ? await client.query(`
+        UPDATE conversation_messages SET status = 'sent', provider_message_id = $5
+        WHERE id = (
+          SELECT messages.id FROM conversation_messages AS messages
+          JOIN conversation_message_attachments AS attachments
+            ON attachments.message_id = messages.id
+            AND attachments.conversation_id = messages.conversation_id
+            AND attachments.tenant_id = messages.tenant_id
+          WHERE messages.conversation_id = $1 AND messages.direction = 'outbound'
+            AND messages.provider_message_id IS NULL AND messages.status IN ('pending', 'queued')
+            AND messages.body = $2 AND attachments.media_kind = $3 AND attachments.mime_type = $4
+          ORDER BY messages.created_at DESC, messages.id DESC
+          LIMIT 1
+        )
+        RETURNING id
+      `, [conversationId, input.body, input.attachment.mediaKind, input.attachment.mimeType, input.providerMessageId]) : await client.query(`
         UPDATE conversation_messages SET status = 'sent', provider_message_id = $3
         WHERE id = (
           SELECT id FROM conversation_messages
@@ -157,7 +187,7 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         )
         RETURNING id
       `, [conversationId, input.body, input.providerMessageId]);
-      let stored = Boolean(matched.rowCount);
+      let attachmentRetained = false;
       if (!matched.rowCount) {
         const inserted = await client.query<{ id: string }>(`
           INSERT INTO conversation_messages (
@@ -167,9 +197,9 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
             WHERE provider_message_id IS NOT NULL DO NOTHING
           RETURNING id
         `, [input.tenantId, conversationId, channel.rows[0].owner_user_id, input.body, input.providerMessageId, input.sentAt]);
-        stored = Boolean(inserted.rowCount);
         if (inserted.rows[0] && input.attachment) {
           await this.insertAttachment(client, input.tenantId, conversationId, inserted.rows[0].id, input.attachment);
+          attachmentRetained = true;
         }
       }
       await client.query(`
@@ -178,7 +208,7 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
           last_message_at = GREATEST(last_message_at, $3), updated_at = now()
         WHERE id = $1
       `, [conversationId, input.contactAddress, input.sentAt]);
-      return stored;
+      return input.attachment ? attachmentRetained : Boolean(matched.rowCount);
     });
   }
 
