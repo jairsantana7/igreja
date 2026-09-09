@@ -57,6 +57,7 @@ pnpm db:down    # encerra containers
 - sincronização dos templates oficiais e seus status pela Meta WhatsApp Cloud API;
 - check-in manual, indicadores de comparecimento e exportação CSV;
 - ciclo de vida com fechamento de inscrições e conclusão;
+- galerias públicas ou exclusivas para membros, com capa, ordem, legendas, acessibilidade e reaproveitamento em novos eventos;
 - fotografias versionadas do formulário e modelos reutilizáveis de evento;
 - criação de evento, formulário dinâmico e imagens em hero, carrossel ou fundo fixo;
 - página pública para inscrição do membro;
@@ -71,6 +72,8 @@ pnpm db:down    # encerra containers
 - isolamento de todas as comunidades pelo PostgreSQL RLS.
 
 O adapter de mídia local é voltado ao desenvolvimento. Instalações de produção devem registrar um adapter de object storage e um backend compartilhado para cache/throttling quando houver múltiplas réplicas.
+
+As galerias são criadas a partir de eventos concluídos no menu **Galerias**. Com BullMQ habilitado, `pnpm worker` produz versões WebP para exibição e miniatura; sem worker, o original validado continua disponível. Em produção, API e worker devem compartilhar o mesmo `MediaStorage` privado.
 
 O adapter BullMQ/Redis está disponível de forma opt-in. Para usá-lo, configure `JOB_QUEUE_DRIVER=bullmq`, execute `pnpm infra:up` e mantenha `pnpm worker` em outro processo. A fila não equivale a entrega: campanhas e lembretes continuam sem envio enquanto não houver scheduler e adapter do canal.
 

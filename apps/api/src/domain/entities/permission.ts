@@ -41,6 +41,13 @@ export const PERMISSIONS = {
   followupsNotesRead: 'followups.notes_read',
   followupsNotesManage: 'followups.notes_manage',
   followupsPipelineManage: 'followups.pipeline_manage',
+  galleriesView: 'galleries.view',
+  galleriesReadOwn: 'galleries.read_own',
+  galleriesReadAll: 'galleries.read_all',
+  galleriesCreate: 'galleries.create',
+  galleriesUpdate: 'galleries.update',
+  galleriesPublish: 'galleries.publish',
+  galleriesReuse: 'galleries.reuse',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

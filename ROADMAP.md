@@ -23,6 +23,7 @@ Este roadmap indica direção, não compromisso de prazo. Issues aceitas são a 
 - adapter compartilhado BullMQ/Redis e worker separado, habilitados de forma explícita;
 - acompanhamento pastoral com Kanban, etapas, etiquetas, próximas ações e notas internas;
 - cadastro progressivo reutilizado na inscrição, seleção familiar de participantes e adicionais opcionais por evento;
+- galerias editoriais de eventos concluídos, com privacidade, processamento assíncrono, acessibilidade e página pública;
 
 ## Próximo
 

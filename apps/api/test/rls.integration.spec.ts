@@ -48,6 +48,12 @@ const conversationReactionA = 'a1700000-0000-4000-8000-000000000001';
 const conversationReactionB = 'b1700000-0000-4000-8000-000000000002';
 const onboardingDeliveryA = 'a1800000-0000-4000-8000-000000000001';
 const onboardingDeliveryB = 'b1800000-0000-4000-8000-000000000002';
+const galleryA = 'a1900000-0000-4000-8000-000000000001';
+const galleryB = 'b1900000-0000-4000-8000-000000000002';
+const galleryPublicA = 'a1a00000-0000-4000-8000-000000000001';
+const galleryPublicB = 'b1a00000-0000-4000-8000-000000000002';
+const galleryPhotoA = 'a1b00000-0000-4000-8000-000000000001';
+const galleryPhotoB = 'b1b00000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -94,6 +100,17 @@ describeDatabase('PostgreSQL RLS', () => {
       INSERT INTO event_media (id, tenant_id, event_id, storage_key, mime_type, position) VALUES
         ('${mediaA}', '${tenantA}', '${eventA}', '${mediaA}.jpg', 'image/jpeg', 0),
         ('${mediaB}', '${tenantB}', '${eventB}', '${mediaB}.jpg', 'image/jpeg', 0)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO event_galleries (id, tenant_id, event_id, public_id, created_by_user_id, title, visibility, status, published_at) VALUES
+        ('${galleryA}', '${tenantA}', '${eventA}', '${galleryPublicA}', '${userA}', 'Galeria A', 'public', 'published', now()),
+        ('${galleryB}', '${tenantB}', '${eventB}', '${galleryPublicB}', '${userB}', 'Galeria B', 'members_only', 'published', now())
+      ON CONFLICT DO NOTHING;
+      INSERT INTO gallery_photos (id, tenant_id, gallery_id, uploaded_by_user_id, original_storage_key, mime_type, processing_status, alt_text, position, is_cover) VALUES
+        ('${galleryPhotoA}', '${tenantA}', '${galleryA}', '${userA}', '${galleryPhotoA}.jpg', 'image/jpeg', 'ready', 'Foto A', 0, true),
+        ('${galleryPhotoB}', '${tenantB}', '${galleryB}', '${userB}', '${galleryPhotoB}.jpg', 'image/jpeg', 'ready', 'Foto B', 0, true)
+      ON CONFLICT DO NOTHING;
+      INSERT INTO gallery_public_directory (public_id, tenant_id, gallery_id) VALUES
+        ('${galleryPublicA}', '${tenantA}', '${galleryA}'), ('${galleryPublicB}', '${tenantB}', '${galleryB}')
       ON CONFLICT DO NOTHING;
       INSERT INTO community_integrations (tenant_id, category, provider_key, enabled) VALUES
         ('${tenantA}', 'identity', 'google', false),
@@ -202,6 +219,9 @@ describeDatabase('PostgreSQL RLS', () => {
 
   afterAll(async () => {
     await admin.query(`
+      DELETE FROM gallery_public_directory WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM gallery_photos WHERE tenant_id IN ('${tenantA}', '${tenantB}');
+      DELETE FROM event_galleries WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM community_integrations WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM event_reminder_rules WHERE tenant_id IN ('${tenantA}', '${tenantB}');
       DELETE FROM communication_template_versions WHERE tenant_id IN ('${tenantA}', '${tenantB}');
@@ -279,6 +299,8 @@ describeDatabase('PostgreSQL RLS', () => {
     expect((await runtime.query('SELECT offering_id FROM registration_offering_selections')).rows).toEqual([]);
     expect((await runtime.query('SELECT state_key FROM conversation_provider_states')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM conversation_message_attachments')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM event_galleries')).rows).toEqual([]);
+    expect((await runtime.query('SELECT id FROM gallery_photos')).rows).toEqual([]);
     await expect(runtime.query(`
       INSERT INTO conversation_message_attachments (
         tenant_id, conversation_id, message_id, storage_key, media_kind, mime_type, byte_size
@@ -293,6 +315,12 @@ describeDatabase('PostgreSQL RLS', () => {
   it('foreign key composta impede vínculo de filho com evento de outro tenant', async () => {
     const client = await runtime.connect();
     try {
+      await inTenant(client, tenantA, async () => {
+        await expect(client.query(`
+          INSERT INTO gallery_photos (tenant_id, gallery_id, uploaded_by_user_id, original_storage_key, mime_type, position)
+          VALUES ($1, $2, $3, 'a1c00000-0000-4000-8000-000000000001.jpg', 'image/jpeg', 1)
+        `, [tenantA, galleryB, userA])).rejects.toThrow();
+      });
       await inTenant(client, tenantA, async () => {
         await expect(client.query(`
           INSERT INTO event_form_fields (tenant_id, event_id, field_key, label, type, position)
@@ -374,6 +402,9 @@ describeDatabase('PostgreSQL RLS', () => {
         expect(integrations.rows.map((row) => row.tenant_id)).toEqual([tenantA]);
         const other = await client.query('SELECT id FROM users WHERE id = $1', [userB]);
         expect(other.rows).toEqual([]);
+        expect((await client.query('SELECT id FROM event_galleries')).rows).toEqual([{ id: galleryA }]);
+        expect((await client.query('SELECT id FROM gallery_photos')).rows).toEqual([{ id: galleryPhotoA }]);
+        expect((await client.query('DELETE FROM event_galleries WHERE id = $1', [galleryB])).rowCount).toBe(0);
         await expect(client.query(
           "INSERT INTO users (tenant_id, name, email) VALUES ($1, 'Intruso', 'intruso@b.test')",
           [tenantB],
@@ -554,6 +585,15 @@ describeDatabase('PostgreSQL RLS', () => {
     } finally { client.release(); }
   });
 
+  it('resolve somente galerias públicas e não permite cruzar fotos entre comunidades', async () => {
+    const visible = await runtime.query<{ gallery: { title: string; photos: Array<{ id: string }> } | null }>('SELECT app.resolve_public_gallery($1) AS gallery', [galleryPublicA]);
+    expect(visible.rows[0]?.gallery?.title).toBe('Galeria A');
+    expect(visible.rows[0]?.gallery?.photos.map((photo) => photo.id)).toEqual([galleryPhotoA]);
+    const restricted = await runtime.query<{ gallery: { authenticationRequired?: boolean } | null }>('SELECT app.resolve_public_gallery($1) AS gallery', [galleryPublicB]);
+    expect(restricted.rows[0]?.gallery).toEqual({ authenticationRequired: true });
+    expect((await runtime.query('SELECT storage_key FROM app.resolve_public_gallery_photo($1, $2, $3)', [galleryPublicA, galleryPhotoB, 'display'])).rows).toEqual([]);
+  });
+
   it('expõe ao worker somente referências mínimas de canais restauráveis', async () => {
     const result = await runtime.query<{ tenant_id: string; channel_id: string }>(
       'SELECT tenant_id, channel_id FROM app.list_restorable_conversation_channels()',
@@ -606,8 +646,15 @@ describeDatabase('PostgreSQL RLS', () => {
     expect(result.rows).toEqual([{ public_can_execute: false, runtime_can_execute: true }]);
   });
 
+  it('não expõe o diretório global de galerias para consulta direta', async () => {
+    const result = await admin.query<{ public_select: boolean; runtime_select: boolean }>(`SELECT
+      has_table_privilege('public', 'public.gallery_public_directory', 'SELECT') AS public_select,
+      has_table_privilege('igreja_runtime', 'public.gallery_public_directory', 'SELECT') AS runtime_select`);
+    expect(result.rows).toEqual([{ public_select: false, runtime_select: false }]);
+  });
+
   it('todas as tabelas tenant possuem RLS forçada e política', async () => {
-    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_message_attachments', 'conversation_message_reactions', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'member_children', 'member_onboarding_deliveries', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
+    const expected = ['audit_events', 'auth_sessions', 'communication_template_versions', 'communication_templates', 'community_integrations', 'conversation_channels', 'conversation_message_attachments', 'conversation_message_reactions', 'conversation_messages', 'conversation_provider_states', 'conversations', 'event_check_ins', 'event_collaborators', 'event_communications', 'event_form_fields', 'event_form_versions', 'event_galleries', 'event_media', 'event_offerings', 'event_registration_participants', 'event_registrations', 'event_reminder_rules', 'event_templates', 'events', 'external_accounts', 'followup_conversations', 'followup_notes', 'followup_stage_changes', 'followup_stages', 'followup_tag_assignments', 'followup_tags', 'gallery_photos', 'member_children', 'member_onboarding_deliveries', 'member_profiles', 'pastoral_followups', 'registration_answers', 'registration_offering_selections', 'role_permissions', 'roles', 'tenants', 'user_roles', 'users', 'whatsapp_message_templates'];
     const result = await admin.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean; policies: string }>(`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, count(p.policyname)::text AS policies
       FROM pg_class c

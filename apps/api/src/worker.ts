@@ -4,6 +4,10 @@ import { UnrecoverableError, Worker, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { env } from './infrastructure/config/env';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
+import { PostgresEventGalleryRepository } from './infrastructure/repositories/postgres-event-gallery.repository';
+import { LocalMediaStorage } from './infrastructure/storage/local-media.storage';
+import { SharpGalleryImageProcessor } from './infrastructure/media/sharp-gallery-image.processor';
+import { ProcessGalleryPhotoUseCase } from './application/use-cases/event-gallery.use-cases';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUPPORTED_DELIVERY_JOBS = new Set(['conversations.message.dispatch', 'events.communication.dispatch']);
@@ -38,10 +42,19 @@ async function bootstrap(): Promise<void> {
   if (env.jobQueueDriver !== 'bullmq') throw new Error('O worker exige JOB_QUEUE_DRIVER=bullmq.');
 
   const database = new PostgresDatabase();
+  const processGalleryPhoto = new ProcessGalleryPhotoUseCase(
+    new PostgresEventGalleryRepository(database),
+    new LocalMediaStorage(),
+    new SharpGalleryImageProcessor(),
+  );
   const connection = new IORedis(env.redisUrl, { maxRetriesPerRequest: null });
   connection.on('error', () => undefined);
   const worker = new Worker(env.jobQueueName, async (job) => {
     if (job.name === 'system.queue.probe') return { ready: true };
+    if (job.name === 'galleries.photo.optimize') {
+      const payload = job.data as Record<string, unknown>;
+      return processGalleryPhoto.execute(requiredUuid(payload, 'tenantId'), requiredUuid(payload, 'galleryId'), requiredUuid(payload, 'photoId'));
+    }
     if (SUPPORTED_DELIVERY_JOBS.has(job.name)) {
       throw new Error('Nenhum adaptador de entrega foi registrado para este job.');
     }

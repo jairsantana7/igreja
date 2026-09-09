@@ -5,6 +5,7 @@ useHead({ title: 'Entrar' });
 const config = useRuntimeConfig();
 const api = useApi();
 const auth = useAuth();
+const route = useRoute();
 const tenantSlug = ref(import.meta.dev ? 'comunidade-demo' : '');
 const email = ref(import.meta.dev ? 'admin@comunidade.local' : '');
 const password = ref(import.meta.dev ? 'Comunidade#2026' : '');
@@ -20,7 +21,8 @@ async function login() {
       method: 'POST', body: { tenantSlug: tenantSlug.value, email: email.value, password: password.value },
     });
     auth.setSession(response);
-    await navigateTo('/dashboard');
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/g/') ? route.query.redirect : '/dashboard';
+    await navigateTo(redirect);
   } catch (error: any) {
     errorMessage.value = error?.data?.message ?? 'Não foi possível entrar.';
   } finally {

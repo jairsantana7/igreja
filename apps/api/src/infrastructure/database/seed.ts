@@ -61,6 +61,10 @@ async function seed(): Promise<void> {
           AND key NOT IN ('events.read_all', 'events.manage_all')
         )
         OR key LIKE 'settings.%'
+        OR (
+          key LIKE 'galleries.%'
+          AND key <> 'galleries.read_all'
+        )
         OR key IN (
           'conversations.read', 'conversations.reply', 'conversations.assign',
           'channels.manage_own', 'members.profile_read', 'members.profile_manage',
@@ -72,7 +76,7 @@ async function seed(): Promise<void> {
     `, [ids.tenant, ids.pastorRole]);
     await client.query(`
       INSERT INTO role_permissions (tenant_id, role_id, permission_key)
-      VALUES ($1, $2, 'events.register'), ($1, $2, 'sessions.manage')
+      VALUES ($1, $2, 'events.register'), ($1, $2, 'sessions.manage'), ($1, $2, 'galleries.view')
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.memberRole]);
     await client.query(`

@@ -23,6 +23,7 @@ const filter = ref<'all' | 'open' | EventStatus>('all');
 const { data: events, pending, error, refresh } = await useAsyncData('events', () => api<EventListItem[]>('/events'), { server: false });
 const canCreate = computed(() => auth.session.value?.user.permissions.includes('events.create'));
 const canCancel = computed(() => auth.session.value?.user.permissions.includes('events.publish'));
+const canCreateGallery = computed(() => auth.session.value?.user.permissions.includes('galleries.create'));
 const cancellingId = ref<string | null>(null);
 const eventToCancel = ref<EventListItem | null>(null);
 const actionMessage = ref('');
@@ -100,6 +101,7 @@ async function cancelEvent() {
             <div class="event-card__actions" aria-label="Ações do evento">
               <NuxtLink :to="`/events/${event.id}`" class="event-action-button event-action-button--primary"><span aria-hidden="true">◎</span> Gerenciar</NuxtLink>
               <NuxtLink v-if="event.status === 'published'" :to="`/e/${event.publicId}`" target="_blank" rel="noopener noreferrer" class="event-action-button event-action-button--secondary"><span aria-hidden="true">↗</span> Abrir</NuxtLink>
+              <NuxtLink v-else-if="event.status === 'completed' && canCreateGallery" to="/galleries" class="event-action-button event-action-button--secondary"><span aria-hidden="true">▧</span> Galeria</NuxtLink>
               <span v-else class="event-action-placeholder" aria-hidden="true" />
               <button v-if="canCancel && ['draft', 'published', 'registration_closed'].includes(event.status)" type="button" class="event-action-button event-action-button--danger" :disabled="cancellingId === event.id" @click="eventToCancel = event"><span aria-hidden="true">⊘</span> {{ cancellingId === event.id ? 'Cancelando…' : 'Cancelar' }}</button>
               <span v-else class="event-action-placeholder" aria-hidden="true" />

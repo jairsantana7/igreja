@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-09-01',
   devtools: { enabled: true },
   srcDir: 'app/',
-  css: ['~/assets/css/main.css', '~/assets/css/message-actions.css', '~/assets/css/member-onboarding.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/message-actions.css', '~/assets/css/member-onboarding.css', '~/assets/css/galleries.css'],
   runtimeConfig: {
     public: {
       appName: process.env.APP_NAME ?? 'Minha Comunidade',
@@ -23,6 +23,8 @@ export default defineNuxtConfig({
     } },
     '/dashboard': { ssr: false },
     '/events/**': { ssr: false },
+    '/galleries/**': { ssr: false },
+    '/g/**': { ssr: false },
     '/members/**': { ssr: false },
     '/cadastro/**': { ssr: false },
     '/access': { ssr: false },

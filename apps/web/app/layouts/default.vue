@@ -10,6 +10,11 @@ const canReadAudit = computed(() => auth.session.value?.user.permissions.include
 const canReadConversations = computed(() => auth.session.value?.user.permissions.includes('conversations.read'));
 const canReadCommunication = computed(() => auth.session.value?.user.permissions.includes('communications.templates_read'));
 const canReadFollowups = computed(() => auth.session.value?.user.permissions.some((permission) => ['followups.read_own', 'followups.read_all'].includes(permission)));
+const canReadGalleries = computed(() => auth.session.value?.user.permissions.some((permission) => ['galleries.read_own', 'galleries.read_all'].includes(permission)));
+
+onMounted(async () => {
+  try { auth.updateUser(await api<any>('/sessions/current')); } catch { /* A sessão continua sendo tratada pelo cliente da API. */ }
+});
 
 async function leave() {
   try { await api('/sessions/current', { method: 'DELETE' }); } catch { /* O logout local continua se a API estiver indisponível. */ }
@@ -31,6 +36,9 @@ async function leave() {
         </NuxtLink>
         <NuxtLink to="/events/new" class="nav-link" :class="{ active: route.path === '/events/new' }">
           <span aria-hidden="true">＋</span> Novo evento
+        </NuxtLink>
+        <NuxtLink v-if="canReadGalleries" to="/galleries" class="nav-link" :class="{ active: route.path.startsWith('/galleries') }">
+          <span aria-hidden="true">▧</span> Galerias
         </NuxtLink>
         <NuxtLink v-if="canReadMembers" to="/members" class="nav-link" :class="{ active: route.path === '/members' }">
           <span aria-hidden="true">♙</span> Membros

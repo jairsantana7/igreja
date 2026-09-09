@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, HttpCode, HttpStatus, Inject, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from '../../../application/use-cases/session.use-cases';
+import type { GetCurrentPrincipalUseCase, ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from '../../../application/use-cases/session.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -16,7 +16,13 @@ export class SessionsController {
     @Inject(TOKENS.listSessionsUseCase) private readonly listSessions: ListSessionsUseCase,
     @Inject(TOKENS.revokeOtherSessionsUseCase) private readonly revokeOtherSessions: RevokeOtherSessionsUseCase,
     @Inject(TOKENS.revokeCurrentSessionUseCase) private readonly revokeCurrentSession: RevokeCurrentSessionUseCase,
+    @Inject(TOKENS.getCurrentPrincipalUseCase) private readonly getCurrentPrincipal: GetCurrentPrincipalUseCase,
   ) {}
+
+  @Get('current')
+  current(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.getCurrentPrincipal.execute(principal);
+  }
 
   @Get()
   @RequirePermissions(PERMISSIONS.sessionsManage)

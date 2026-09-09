@@ -42,10 +42,14 @@ import { LocalMediaStorage } from './infrastructure/storage/local-media.storage'
 import { PostgresEventMediaRepository } from './infrastructure/repositories/postgres-event-media.repository';
 import { EventMediaController, PublicEventMediaController } from './presentation/http/controllers/event-media.controller';
 import { GetPublicEventMediaUseCase, UploadEventMediaUseCase } from './application/use-cases/event-media.use-cases';
+import { CreateGalleryUseCase, DeleteGalleryPhotoUseCase, GetGalleryMediaUseCase, GetGalleryUseCase, GetPublicGalleryMediaUseCase, GetPublicGalleryUseCase, GetSharedGalleryMediaUseCase, GetSharedGalleryUseCase, ListGalleriesUseCase, ListGalleryEventsUseCase, ReorderGalleryPhotosUseCase, ReuseGalleryPhotoInEventUseCase, SetGalleryStatusUseCase, UpdateGalleryPhotoUseCase, UpdateGalleryUseCase, UploadGalleryPhotosUseCase } from './application/use-cases/event-gallery.use-cases';
+import { PostgresEventGalleryRepository } from './infrastructure/repositories/postgres-event-gallery.repository';
+import { SharpGalleryImageProcessor } from './infrastructure/media/sharp-gallery-image.processor';
+import { EventGalleryController, PublicEventGalleryController } from './presentation/http/controllers/event-gallery.controller';
 import { PostgresEventCommunicationRepository, PostgresEventOperationsRepository, PostgresEventTemplateRepository } from './infrastructure/repositories/postgres-event-operations.repository';
 import { EventOperationsController } from './presentation/http/controllers/event-operations.controller';
 import { PostgresSessionRepository } from './infrastructure/repositories/postgres-session.repository';
-import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from './application/use-cases/session.use-cases';
+import { GetCurrentPrincipalUseCase, ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUseCase } from './application/use-cases/session.use-cases';
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
@@ -79,7 +83,7 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, PublicMemberOnboardingController, EventMediaController, PublicEventMediaController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, MemberOnboardingController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, PublicMemberOnboardingController, EventMediaController, PublicEventMediaController, EventGalleryController, PublicEventGalleryController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, MemberOnboardingController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -124,6 +128,7 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
       useFactory: (): ConversationProviderCatalog => new ConfiguredConversationProviderCatalog(env.whatsappWebDriver),
     },
     { provide: TOKENS.mediaStorage, useClass: LocalMediaStorage },
+    { provide: TOKENS.galleryImageProcessor, useClass: SharpGalleryImageProcessor },
     { provide: TOKENS.secretResolver, useClass: EnvironmentSecretResolver },
     {
       provide: TOKENS.authRepository,
@@ -163,6 +168,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     {
       provide: TOKENS.eventMediaRepository,
       useFactory: (database: PostgresDatabase) => new PostgresEventMediaRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.eventGalleryRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresEventGalleryRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -443,6 +453,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
       inject: [TOKENS.sessionRepository],
     },
     {
+      provide: TOKENS.getCurrentPrincipalUseCase,
+      useFactory: (access: PostgresAccessControlRepository) => new GetCurrentPrincipalUseCase(access),
+      inject: [TOKENS.accessControlRepository],
+    },
+    {
       provide: TOKENS.getAccessControlUseCase,
       useFactory: (access: PostgresAccessControlRepository) => new GetAccessControlUseCase(access),
       inject: [TOKENS.accessControlRepository],
@@ -626,6 +641,22 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
       useFactory: (media: PostgresEventMediaRepository, storage: LocalMediaStorage) => new GetPublicEventMediaUseCase(media, storage),
       inject: [TOKENS.eventMediaRepository, TOKENS.mediaStorage],
     },
+    { provide: TOKENS.listGalleriesUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new ListGalleriesUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.listGalleryEventsUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new ListGalleryEventsUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.createGalleryUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new CreateGalleryUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.getGalleryUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new GetGalleryUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.updateGalleryUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new UpdateGalleryUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.setGalleryStatusUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new SetGalleryStatusUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.uploadGalleryPhotosUseCase, useFactory: (repository: PostgresEventGalleryRepository, storage: LocalMediaStorage, queue: JobQueue, logger: ApplicationLogger) => new UploadGalleryPhotosUseCase(repository, storage, queue, logger), inject: [TOKENS.eventGalleryRepository, TOKENS.mediaStorage, TOKENS.jobQueue, TOKENS.applicationLogger] },
+    { provide: TOKENS.updateGalleryPhotoUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new UpdateGalleryPhotoUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.reorderGalleryPhotosUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new ReorderGalleryPhotosUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.deleteGalleryPhotoUseCase, useFactory: (repository: PostgresEventGalleryRepository, storage: LocalMediaStorage) => new DeleteGalleryPhotoUseCase(repository, storage), inject: [TOKENS.eventGalleryRepository, TOKENS.mediaStorage] },
+    { provide: TOKENS.getGalleryMediaUseCase, useFactory: (repository: PostgresEventGalleryRepository, storage: LocalMediaStorage) => new GetGalleryMediaUseCase(repository, storage), inject: [TOKENS.eventGalleryRepository, TOKENS.mediaStorage] },
+    { provide: TOKENS.getSharedGalleryUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new GetSharedGalleryUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.getSharedGalleryMediaUseCase, useFactory: (repository: PostgresEventGalleryRepository, storage: LocalMediaStorage) => new GetSharedGalleryMediaUseCase(repository, storage), inject: [TOKENS.eventGalleryRepository, TOKENS.mediaStorage] },
+    { provide: TOKENS.getPublicGalleryUseCase, useFactory: (repository: PostgresEventGalleryRepository) => new GetPublicGalleryUseCase(repository), inject: [TOKENS.eventGalleryRepository] },
+    { provide: TOKENS.getPublicGalleryMediaUseCase, useFactory: (repository: PostgresEventGalleryRepository, storage: LocalMediaStorage) => new GetPublicGalleryMediaUseCase(repository, storage), inject: [TOKENS.eventGalleryRepository, TOKENS.mediaStorage] },
+    { provide: TOKENS.reuseGalleryPhotoUseCase, useFactory: (repository: PostgresEventGalleryRepository, eventMedia: PostgresEventMediaRepository, storage: LocalMediaStorage) => new ReuseGalleryPhotoInEventUseCase(repository, eventMedia, storage), inject: [TOKENS.eventGalleryRepository, TOKENS.eventMediaRepository, TOKENS.mediaStorage] },
   ],
 })
 export class AppModule {}

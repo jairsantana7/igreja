@@ -16,6 +16,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Segredos são resolvidos por `SecretResolver`; a implementação local lê somente a variável nomeada em `secret_reference`.
 - Logs e captura de exceções implementam `ApplicationLogger`; Sentry e OpenTelemetry entram como adaptadores de infraestrutura.
 - Arquivos implementam `MediaStorage`; disco local, S3 e Cloudflare R2 são adaptadores de infraestrutura.
+- Otimização de galerias implementa `GalleryImageProcessor`; Sharp é apenas o adaptador padrão e não faz parte do domínio.
 - A seleção ocorre por `providerKey`, nunca por condicionais de fornecedor no domínio.
 
 ## Adicionando um adaptador
@@ -38,6 +39,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Campanhas de evento são persistidas antes do enqueue e usam `events.communication.dispatch` com chave de deduplicação.
 - Regras de lembrete fixam uma versão do modelo e só podem ser consumidas quando modelo e regra estão ativos. O scheduler futuro deve consultar por tenant e produzir jobs idempotentes sem interpolar conteúdo em logs.
 - Respostas da central são persistidas antes do enqueue e usam `conversations.message.dispatch`; o identificador da mensagem é a chave de deduplicação.
+- Fotos de galeria usam `galleries.photo.optimize`; o job carrega apenas tenant, galeria e foto. O original já persistido é o fallback quando a fila ou o processamento falha.
 - O adapter BullMQ é ativado somente com `JOB_QUEUE_DRIVER=bullmq`. A API usa falha rápida no Redis e o comando `pnpm worker` mantém o consumidor separado e reconectável.
 - Redis deve usar `maxmemory-policy=noeviction`. No ambiente local, `pnpm infra:up` também habilita AOF para tornar reinícios menos frágeis.
 - Ter BullMQ ativo não habilita um fornecedor de entrega. Sem `ConversationProvider`, o job falha explicitamente e o registro persistido muda para `failed` após esgotar as tentativas.

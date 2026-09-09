@@ -42,5 +42,11 @@ export function useAuth() {
     }
   }
 
-  return { session, setSession, hydrate, logout };
+  function updateUser(user: SessionUser) {
+    if (!session.value) return;
+    session.value = { ...session.value, user };
+    if (import.meta.client) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session.value));
+  }
+
+  return { session, setSession, hydrate, logout, updateUser };
 }
