@@ -9,4 +9,9 @@ export interface MemberOnboardingRepository {
     roleIds: string[];
     profile?: MemberProfileDraft;
   }): Promise<{ id: string; name: string; email: string }>;
+  createFromConversation(principal: AuthenticatedPrincipal, input: {
+    conversationId: string;
+    email: string;
+    passwordHash: string;
+  }): Promise<{ id: string; name: string; email: string } | null>;
 }

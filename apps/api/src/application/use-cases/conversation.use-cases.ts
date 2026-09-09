@@ -2,6 +2,8 @@ import { ConversationChannelConfiguration, OutboundConversationMessage, type Con
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
 import type { ConversationProviderCatalog, ConversationRepository } from '../ports/conversation.port';
 import type { JobQueue } from '../ports/job-queue.port';
+import type { MemberOnboardingRepository } from '../ports/member-onboarding.port';
+import type { PasswordHasher } from '../ports/authentication.port';
 import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission) {
@@ -128,6 +130,26 @@ export class CreateConversationUseCase {
     const conversation = await this.conversations.create(principal, input);
     if (!conversation) throw new NotFoundError('Canal ou vínculo não encontrado para esta comunidade.');
     return conversation;
+  }
+}
+
+export class CreateMemberFromConversationUseCase {
+  constructor(
+    private readonly onboarding: MemberOnboardingRepository,
+    private readonly passwords: PasswordHasher,
+  ) {}
+
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { email: string; password: string }) {
+    requirePermission(principal, PERMISSIONS.conversationsRead);
+    requirePermission(principal, PERMISSIONS.usersCreate);
+    requirePermission(principal, PERMISSIONS.memberProfilesManage);
+    const member = await this.onboarding.createFromConversation(principal, {
+      conversationId,
+      email: input.email.toLowerCase().trim(),
+      passwordHash: await this.passwords.hash(input.password),
+    });
+    if (!member) throw new NotFoundError('Conversa não encontrada ou sem acesso.');
+    return member;
   }
 }
 

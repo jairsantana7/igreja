@@ -202,11 +202,12 @@ export class PostgresConversationRepository implements ConversationRepository {
   private summarySql(where: string) {
     return `
       SELECT conversations.*, channels.display_name AS channel_name, channels.phone_number,
-        assignee.name AS assignee_name, events.title AS event_title,
+        assignee.name AS assignee_name, events.title AS event_title, members.name AS member_name,
         (SELECT body FROM conversation_messages WHERE conversation_id = conversations.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message
       FROM conversations
       JOIN conversation_channels AS channels ON channels.id = conversations.channel_id AND channels.tenant_id = conversations.tenant_id
       JOIN users AS assignee ON assignee.id = conversations.assigned_user_id AND assignee.tenant_id = conversations.tenant_id
+      LEFT JOIN users AS members ON members.id = conversations.member_user_id AND members.tenant_id = conversations.tenant_id
       LEFT JOIN events ON events.id = conversations.event_id AND events.tenant_id = conversations.tenant_id
       ${where}
     `;
@@ -231,7 +232,7 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   private mapConversation(row: any): ConversationSummaryView {
-    return { id: row.id, channel: { id: row.channel_id, displayName: row.channel_name, phoneNumber: row.phone_number }, assignedTo: { id: row.assigned_user_id, name: row.assignee_name }, event: row.event_id ? { id: row.event_id, title: row.event_title } : null, contact: { name: row.contact_name, address: row.contact_address }, status: row.status, lastMessage: row.last_message, lastMessageAt: row.last_message_at.toISOString() };
+    return { id: row.id, channel: { id: row.channel_id, displayName: row.channel_name, phoneNumber: row.phone_number }, assignedTo: { id: row.assigned_user_id, name: row.assignee_name }, event: row.event_id ? { id: row.event_id, title: row.event_title } : null, member: row.member_user_id ? { id: row.member_user_id, name: row.member_name } : null, contact: { name: row.contact_name, address: row.contact_address }, status: row.status, lastMessage: row.last_message, lastMessageAt: row.last_message_at.toISOString() };
   }
 
   private mapMessage(row: any): ConversationMessageView {

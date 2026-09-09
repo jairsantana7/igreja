@@ -47,7 +47,7 @@ import { ListSessionsUseCase, RevokeCurrentSessionUseCase, RevokeOtherSessionsUs
 import { SessionsController } from './presentation/http/controllers/sessions.controller';
 import { PostgresConversationRepository } from './infrastructure/repositories/postgres-conversation.repository';
 import { ConversationsController } from './presentation/http/controllers/conversations.controller';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from './application/use-cases/conversation.use-cases';
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
@@ -511,6 +511,11 @@ import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
     {
       provide: TOKENS.createUserUseCase,
       useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher) => new CreateUserUseCase(onboarding, passwords),
+      inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher],
+    },
+    {
+      provide: TOKENS.createMemberFromConversationUseCase,
+      useFactory: (onboarding: PostgresMemberOnboardingRepository, passwords: BcryptPasswordHasher) => new CreateMemberFromConversationUseCase(onboarding, passwords),
       inject: [TOKENS.memberOnboardingRepository, TOKENS.passwordHasher],
     },
     {

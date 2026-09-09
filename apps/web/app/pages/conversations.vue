@@ -15,6 +15,7 @@ interface ChannelConnection {
 interface Conversation {
   id: string; channel: { id: string; displayName: string; phoneNumber: string };
   assignedTo: { id: string; name: string }; event: { id: string; title: string } | null;
+  member: { id: string; name: string } | null;
   contact: { name: string; address: string }; status: ConversationStatus;
   lastMessage: string | null; lastMessageAt: string;
 }
@@ -34,6 +35,7 @@ const canReply = computed(() => permissions.value.includes('conversations.reply'
 const canAssign = computed(() => permissions.value.includes('conversations.assign'));
 const canReadTemplates = computed(() => permissions.value.includes('communications.templates_read'));
 const canManageFollowups = computed(() => permissions.value.includes('followups.manage'));
+const canCreateMember = computed(() => permissions.value.includes('conversations.read') && permissions.value.includes('users.create') && permissions.value.includes('members.profile_manage'));
 const { data: conversations, pending, error, refresh } = await useAsyncData('conversations', () => api<Conversation[]>('/conversations'), { server: false });
 const { data: channels, refresh: refreshChannels } = await useAsyncData(
   'conversation-channels',
@@ -52,6 +54,7 @@ const filter = ref<'active' | ConversationStatus>('active');
 const query = ref('');
 const showChannelForm = ref(false);
 const showConversationForm = ref(false);
+const showMemberForm = ref(false);
 const busy = ref(false);
 const busyChannelId = ref<string | null>(null);
 const feedback = ref('');
@@ -62,6 +65,7 @@ const channelQrImages = reactive<Record<string, string>>({});
 const channelToDelete = ref<Channel | null>(null);
 const channelDeleteError = ref('');
 const conversationForm = reactive({ channelId: '', contactName: '', contactAddress: '', eventId: '' });
+const memberForm = reactive({ email: '', password: '' });
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const statusLabels: Record<ConversationStatus, string> = { open: 'Aberta', waiting: 'Aguardando', resolved: 'Resolvida' };
 const messageStatusLabels: Record<Message['status'], string> = {
@@ -85,6 +89,8 @@ watch(() => route.query.selected, (id) => {
   if (typeof id === 'string') selectedId.value = id;
 });
 watch(selectedId, async (id) => {
+  showMemberForm.value = false;
+  Object.assign(memberForm, { email: '', password: '' });
   if (id) await refreshMessages();
 });
 
@@ -245,6 +251,23 @@ async function startFollowup() {
     feedback.value = requestError?.data?.message ?? 'Não foi possível iniciar o acompanhamento.';
   } finally { busy.value = false; }
 }
+
+async function createMemberFromConversation() {
+  if (!selected.value) return;
+  busy.value = true; feedback.value = '';
+  try {
+    const member = await api<{ id: string; name: string }>(`/conversations/${selected.value.id}/member`, {
+      method: 'POST', body: memberForm,
+    });
+    Object.assign(memberForm, { email: '', password: '' });
+    showMemberForm.value = false;
+    feedback.value = `${member.name} foi adicionado aos membros. A autorização para novos contatos continua desativada.`;
+    await refresh();
+  } catch (requestError: any) {
+    const message = requestError?.data?.message;
+    feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível adicionar este contato como membro.';
+  } finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -295,6 +318,16 @@ async function startFollowup() {
       </form>
     </section>
 
+    <section v-if="showMemberForm && selected && !selected.member" class="conversation-setup-card">
+      <div><p class="eyebrow">Cadastro de membro</p><h2>Adicionar {{ selected.contact.name }}</h2><p>O nome e o WhatsApp vêm desta conversa. Informe as credenciais iniciais; o membro poderá completar o perfil depois.</p><p><strong>WhatsApp:</strong> {{ selected.contact.address }}</p></div>
+      <form class="conversation-setup-form" @submit.prevent="createMemberFromConversation">
+        <label class="field"><span>E-mail</span><input v-model="memberForm.email" type="email" autocomplete="off" maxlength="254" required></label>
+        <label class="field"><span>Senha inicial</span><input v-model="memberForm.password" type="password" autocomplete="new-password" minlength="10" required><small>Use ao menos 10 caracteres e compartilhe por um canal seguro.</small></label>
+        <p class="member-consent-notice">A autorização para a comunidade iniciar novas conversas ficará desativada até o próprio membro consentir.</p>
+        <div class="conversation-form-actions"><button class="button" type="button" @click="showMemberForm = false">Cancelar</button><button class="button button--primary" :disabled="busy">{{ busy ? 'Adicionando…' : 'Adicionar membro' }}</button></div>
+      </form>
+    </section>
+
     <section class="conversation-workspace">
       <aside class="conversation-inbox">
         <div class="conversation-inbox__tools"><label class="search-field"><span>⌕</span><input v-model="query" type="search" placeholder="Buscar pessoa ou número"></label><div class="filter-bar"><button v-for="option in [{ key: 'active', label: 'Ativas' }, { key: 'open', label: 'Abertas' }, { key: 'waiting', label: 'Aguardando' }, { key: 'resolved', label: 'Resolvidas' }]" :key="option.key" :class="{ active: filter === option.key }" @click="filter = option.key as typeof filter">{{ option.label }}</button></div></div>
@@ -309,7 +342,7 @@ async function startFollowup() {
       </aside>
 
       <article v-if="selected" class="conversation-thread">
-        <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template></small></div><div class="conversation-status-actions"><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
+        <header><div><h2>{{ selected.contact.name }}</h2><p>{{ selected.contact.address }} · {{ selected.channel.displayName }} ({{ selected.channel.phoneNumber }})</p><small>Responsável: {{ selected.assignedTo.name }}<template v-if="selected.event"> · Evento: {{ selected.event.title }}</template><template v-if="selected.member"> · Membro: {{ selected.member.name }}</template></small></div><div class="conversation-status-actions"><NuxtLink v-if="selected.member" class="button button--small" :to="`/members/${selected.member.id}`">Ver membro</NuxtLink><button v-else-if="canCreateMember" class="button button--small button--primary" type="button" :disabled="busy" @click="showMemberForm = true">＋ Adicionar como membro</button><button v-if="canManageFollowups" class="button button--small" :disabled="busy" @click="startFollowup">♡ Acompanhar</button><template v-if="canAssign"><button v-if="selected.status === 'resolved'" class="button button--small" :disabled="busy" @click="updateStatus('open')">Reabrir</button><button v-else class="button button--small" :disabled="busy" @click="updateStatus('resolved')">✓ Resolver</button></template></div></header>
         <div class="conversation-messages">
           <p v-if="messagesPending" class="conversation-day">Carregando mensagens…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>

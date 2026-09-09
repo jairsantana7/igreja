@@ -37,6 +37,7 @@ export const TOKENS = {
   deleteConversationChannelUseCase: Symbol('DeleteConversationChannelUseCase'),
   listConversationsUseCase: Symbol('ListConversationsUseCase'),
   createConversationUseCase: Symbol('CreateConversationUseCase'),
+  createMemberFromConversationUseCase: Symbol('CreateMemberFromConversationUseCase'),
   getConversationMessagesUseCase: Symbol('GetConversationMessagesUseCase'),
   replyConversationUseCase: Symbol('ReplyConversationUseCase'),
   updateConversationStatusUseCase: Symbol('UpdateConversationStatusUseCase'),

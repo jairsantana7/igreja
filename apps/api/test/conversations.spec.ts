@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, DeleteConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, ListConversationsUseCase, ReplyConversationUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
+import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
+import type { PasswordHasher } from '../src/application/ports/authentication.port';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001',
@@ -86,5 +88,35 @@ describe('central de conversas', () => {
     deleteChannel.mockResolvedValue('deleted');
     await expect(useCase.execute(principal(['channels.manage_own']), 'channel')).resolves.toBeUndefined();
     expect(deleteChannel).toHaveBeenCalledTimes(4);
+  });
+
+  it('exige todas as permissões para transformar um contato em membro', async () => {
+    const createFromConversation = vi.fn();
+    const hash = vi.fn();
+    const useCase = new CreateMemberFromConversationUseCase(
+      { createFromConversation } as unknown as MemberOnboardingRepository,
+      { hash } as unknown as PasswordHasher,
+    );
+    await expect(useCase.execute(principal(['conversations.read', 'users.create']), 'conversation', {
+      email: 'pessoa@example.test', password: 'uma-senha-segura',
+    })).rejects.toThrow(AuthorizationError);
+    expect(hash).not.toHaveBeenCalled();
+    expect(createFromConversation).not.toHaveBeenCalled();
+  });
+
+  it('normaliza a identidade antes do cadastro pela conversa', async () => {
+    const createFromConversation = vi.fn().mockResolvedValue({ id: 'member', name: 'Pessoa', email: 'pessoa@example.test' });
+    const hash = vi.fn().mockResolvedValue('hashed');
+    const useCase = new CreateMemberFromConversationUseCase(
+      { createFromConversation } as unknown as MemberOnboardingRepository,
+      { hash } as unknown as PasswordHasher,
+    );
+    await expect(useCase.execute(principal(['conversations.read', 'users.create', 'members.profile_manage']), 'conversation', {
+      email: ' PESSOA@EXAMPLE.TEST ', password: 'uma-senha-segura',
+    })).resolves.toMatchObject({ id: 'member' });
+    expect(hash).toHaveBeenCalledWith('uma-senha-segura');
+    expect(createFromConversation).toHaveBeenCalledWith(expect.any(Object), {
+      conversationId: 'conversation', email: 'pessoa@example.test', passwordHash: 'hashed',
+    });
   });
 });

@@ -1,10 +1,10 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateConversationChannelDto, CreateConversationDto, ReplyConversationDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
+import { CreateConversationChannelDto, CreateConversationDto, CreateMemberFromConversationDto, ReplyConversationDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import type { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from '../../../application/use-cases/whatsapp-template.use-cases';
@@ -22,6 +22,7 @@ export class ConversationsController {
     @Inject(TOKENS.deleteConversationChannelUseCase) private readonly deleteChannel: DeleteConversationChannelUseCase,
     @Inject(TOKENS.listConversationsUseCase) private readonly listConversations: ListConversationsUseCase,
     @Inject(TOKENS.createConversationUseCase) private readonly createConversation: CreateConversationUseCase,
+    @Inject(TOKENS.createMemberFromConversationUseCase) private readonly createMemberFromConversation: CreateMemberFromConversationUseCase,
     @Inject(TOKENS.getConversationMessagesUseCase) private readonly getMessages: GetConversationMessagesUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
@@ -77,6 +78,12 @@ export class ConversationsController {
   @Post('conversations')
   @RequirePermissions(PERMISSIONS.conversationsReply)
   start(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: CreateConversationDto) { return this.createConversation.execute(principal, dto); }
+
+  @Post('conversations/:conversationId/member')
+  @RequirePermissions(PERMISSIONS.conversationsRead, PERMISSIONS.usersCreate, PERMISSIONS.memberProfilesManage)
+  addMember(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() dto: CreateMemberFromConversationDto) {
+    return this.createMemberFromConversation.execute(principal, id, dto);
+  }
 
   @Get('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsRead)

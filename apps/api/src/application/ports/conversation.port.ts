@@ -28,6 +28,7 @@ export interface ConversationSummaryView {
   channel: Pick<ConversationChannelView, 'id' | 'displayName' | 'phoneNumber'>;
   assignedTo: { id: string; name: string };
   event: { id: string; title: string } | null;
+  member: { id: string; name: string } | null;
   contact: { name: string; address: string };
   status: ConversationStatus;
   lastMessage: string | null;

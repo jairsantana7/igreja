@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, IsUUID, Length } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, MinLength } from 'class-validator';
 import type { ConversationStatus } from '../../../domain/entities/conversation';
 
 export class CreateConversationChannelDto {
@@ -20,6 +20,15 @@ export class CreateConversationDto {
 
 export class ReplyConversationDto {
   @IsString() @Length(1, 10000) body!: string;
+}
+
+export class CreateMemberFromConversationDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(10)
+  password!: string;
 }
 
 export class UpdateConversationStatusDto {
