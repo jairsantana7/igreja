@@ -34,7 +34,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         userId,
         memberRole.rows[0].id,
       ]);
-      if (input.profile) await this.saveProfile(client, input.event.tenantId, userId, input.profile);
+      if (input.profile) await this.saveProfile(client, input.event.tenantId, userId, input.profile, input.event.familyRegistrationEnabled);
       const registrationId = await this.persistRegistration(
         client, input.event, userId, input.answers, input.participants, input.offeringIds,
       );
@@ -47,7 +47,9 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
 
   register(input: Parameters<EventRegistrationRepository['register']>[0]) {
     return this.database.withTenant(input.principal, async (client) => {
-      if (input.profile) await this.saveProfile(client, input.principal.tenantId, input.principal.userId, input.profile);
+      if (input.profile) await this.saveProfile(
+        client, input.principal.tenantId, input.principal.userId, input.profile, input.event.familyRegistrationEnabled,
+      );
       return this.persistRegistration(
         client, input.event, input.principal.userId, input.answers, input.participants, input.offeringIds,
       );
@@ -58,12 +60,13 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
     return this.database.withTenant(principal, async (client): Promise<RegistrationContextView> => {
       const profileResult = await client.query<{
         phone: string | null;
+        whatsapp_communication_opt_in: boolean;
         birth_date: string | null;
         spouse_name: string | null;
         marriage_date: string | null;
         children: Array<{ name: string; birthDate: string | null }>;
       }>(`
-        SELECT profiles.phone,
+        SELECT profiles.phone, profiles.whatsapp_communication_opt_in,
           to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
           profiles.spouse_name,
           to_char(profiles.marriage_date, 'YYYY-MM-DD') AS marriage_date,
@@ -82,6 +85,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       const row = profileResult.rows[0];
       const profile = {
         phone: row?.phone ?? null,
+        whatsappCommunicationOptIn: row?.whatsapp_communication_opt_in ?? false,
         birthDate: row?.birth_date ?? null,
         spouseName: row?.spouse_name ?? null,
         marriageDate: row?.marriage_date ?? null,
@@ -125,24 +129,47 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
     });
   }
 
-  private async saveProfile(client: PoolClient, tenantId: string, userId: string, draft: MemberProfileDraft) {
+  private async saveProfile(
+    client: PoolClient,
+    tenantId: string,
+    userId: string,
+    draft: MemberProfileDraft,
+    familyRegistrationEnabled: boolean,
+  ) {
     const profile = await client.query<{ id: string }>(`
       INSERT INTO member_profiles (
-        tenant_id, user_id, phone, birth_date, spouse_name, marriage_date, updated_by_user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $2)
+        tenant_id, user_id, phone, birth_date, spouse_name, marriage_date,
+        whatsapp_communication_opt_in, whatsapp_communication_opted_in_at, updated_by_user_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, false), CASE WHEN $7 IS TRUE THEN now() END, $2)
       ON CONFLICT (user_id, tenant_id) DO UPDATE SET
         phone = EXCLUDED.phone,
-        birth_date = EXCLUDED.birth_date,
-        spouse_name = EXCLUDED.spouse_name,
-        marriage_date = EXCLUDED.marriage_date,
+        birth_date = CASE WHEN $8 THEN EXCLUDED.birth_date ELSE member_profiles.birth_date END,
+        spouse_name = CASE WHEN $8 THEN EXCLUDED.spouse_name ELSE member_profiles.spouse_name END,
+        marriage_date = CASE WHEN $8 THEN EXCLUDED.marriage_date ELSE member_profiles.marriage_date END,
+        whatsapp_communication_opt_in = CASE
+          WHEN EXCLUDED.phone IS NULL THEN false
+          ELSE COALESCE($7, member_profiles.whatsapp_communication_opt_in)
+        END,
+        whatsapp_communication_opted_in_at = CASE
+          WHEN $7 IS TRUE AND NOT member_profiles.whatsapp_communication_opt_in THEN now()
+          ELSE member_profiles.whatsapp_communication_opted_in_at
+        END,
+        whatsapp_communication_opted_out_at = CASE
+          WHEN (EXCLUDED.phone IS NULL OR $7 IS FALSE) AND member_profiles.whatsapp_communication_opt_in THEN now()
+          WHEN $7 IS TRUE THEN NULL
+          ELSE member_profiles.whatsapp_communication_opted_out_at
+        END,
         updated_by_user_id = EXCLUDED.updated_by_user_id,
         updated_at = now()
       RETURNING id
     `, [
       tenantId, userId, draft.props.phone ?? null, draft.props.birthDate ?? null,
       draft.props.spouseName ?? null, draft.props.marriageDate ?? null,
+      draft.props.whatsappCommunicationOptIn,
+      familyRegistrationEnabled,
     ]);
     const profileId = profile.rows[0]!.id;
+    if (!familyRegistrationEnabled) return;
     await client.query('DELETE FROM member_children WHERE profile_id = $1', [profileId]);
     for (const child of draft.props.children) {
       await client.query(`

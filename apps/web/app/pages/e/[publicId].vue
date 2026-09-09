@@ -17,6 +17,7 @@ const password = ref('');
 const answers = reactive<Record<string, any>>({});
 const profile = reactive({
   phone: '',
+  whatsappCommunicationOptIn: false,
   birthDate: '',
   spouseName: '',
   marriageDate: '',
@@ -50,15 +51,16 @@ function registrationPayload() {
     answers: payloadAnswers(),
     participantKeys,
     offeringIds: selectedOfferingIds.value,
-    ...(event.value?.familyRegistrationEnabled ? {
-      profile: {
-        phone: profile.phone || undefined,
+    profile: {
+      phone: profile.phone || undefined,
+      whatsappCommunicationOptIn: profile.whatsappCommunicationOptIn,
+      ...(event.value?.familyRegistrationEnabled ? {
         birthDate: profile.birthDate || undefined,
         spouseName: profile.spouseName || undefined,
         marriageDate: profile.marriageDate || undefined,
         children: children.map((child) => ({ name: child.name, birthDate: child.birthDate || undefined })),
-      },
-    } : {}),
+      } : { children: [] }),
+    },
   };
 }
 
@@ -68,6 +70,7 @@ async function loadRegistrationContext() {
   try {
     const context = await api<any>(`/public/events/${publicId}/registration-context`);
     profile.phone = context.profile.phone ?? '';
+    profile.whatsappCommunicationOptIn = context.profile.whatsappCommunicationOptIn ?? false;
     profile.birthDate = context.profile.birthDate ?? '';
     profile.spouseName = context.profile.spouseName ?? '';
     profile.marriageDate = context.profile.marriageDate ?? '';
@@ -88,6 +91,9 @@ async function loadRegistrationContext() {
 }
 
 onMounted(loadRegistrationContext);
+watch(() => profile.phone, (phone) => {
+  if (!phone.trim()) profile.whatsappCommunicationOptIn = false;
+});
 
 function addChild() {
   profile.children.push({ name: '', birthDate: '' });
@@ -205,6 +211,15 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
               <label v-if="!auth.session.value" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" required></label>
               <label v-if="!auth.session.value" class="field"><span>Senha</span><input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" required></label>
 
+              <div v-if="auth.session.value || mode === 'signup'" class="registration-section">
+                <div class="registration-section__heading"><div><h3>Seu WhatsApp</h3><p>Use o mesmo contato nos próximos eventos.</p></div></div>
+                <label class="field"><span>Número com DDD</span><input v-model="profile.phone" autocomplete="tel" inputmode="tel" maxlength="32" placeholder="(00) 00000-0000"></label>
+                <label class="communication-consent" :class="{ 'communication-consent--disabled': !profile.phone.trim() }">
+                  <input v-model="profile.whatsappCommunicationOptIn" type="checkbox" :disabled="!profile.phone.trim()">
+                  <span><strong>Autorizo conversas individuais pelo WhatsApp</strong><small>A comunidade poderá iniciar uma conversa neste número. Você pode desativar esta autorização ao atualizar sua inscrição.</small></span>
+                </label>
+              </div>
+
               <div v-if="event.familyRegistrationEnabled && (auth.session.value || mode === 'signup')" class="registration-section">
                 <div class="registration-section__heading"><div><h3>Quem vai participar?</h3><p>Uma pessoa confirma a participação da família.</p></div><strong>{{ selectedPeopleCount }}</strong></div>
                 <label class="participant-option">
@@ -212,7 +227,6 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                   <span><strong>{{ auth.session.value?.user.name || name || 'Você' }}</strong><small>Responsável pela inscrição</small></span>
                 </label>
                 <div class="profile-fields">
-                  <label class="field"><span>WhatsApp</span><input v-model="profile.phone" autocomplete="tel" placeholder="(00) 00000-0000"></label>
                   <label class="field"><span>Sua data de nascimento</span><input v-model="profile.birthDate" type="date"></label>
                 </div>
                 <div class="family-person">

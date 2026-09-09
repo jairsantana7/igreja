@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { MemberProfileDraft } from '../src/domain/entities/member-profile';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
 import type { MemberProfileRepository } from '../src/application/ports/member-profile.port';
-import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from '../src/application/use-cases/member-profile.use-cases';
-import { AuthorizationError } from '../src/application/use-cases/errors';
+import type { ConversationRepository } from '../src/application/ports/conversation.port';
+import { GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from '../src/application/use-cases/member-profile.use-cases';
+import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 
 const principal = (permissions: AuthenticatedPrincipal['permissions']): AuthenticatedPrincipal => ({
   userId: '10000000-0000-4000-8000-000000000001', tenantId: '00000000-0000-4000-8000-000000000001',
@@ -18,6 +19,7 @@ describe('perfil complementar do membro', () => {
       birthDate: '1988-05-10',
       spouseName: undefined,
       marriageDate: undefined,
+      whatsappCommunicationOptIn: undefined,
       address: { postalCode: undefined, street: undefined, number: undefined, complement: undefined, neighborhood: undefined, city: 'São Paulo', state: 'SP' },
       children: [{ name: 'Ana', birthDate: '2020-01-02' }],
     });
@@ -35,6 +37,11 @@ describe('perfil complementar do membro', () => {
     expect(MemberProfileDraft.create({ birthDate: '1990-01-01' }).isEmpty).toBe(false);
   });
 
+  it('exige um número para autorizar conversas pelo WhatsApp', () => {
+    expect(() => MemberProfileDraft.create({ whatsappCommunicationOptIn: true })).toThrow('Informe o WhatsApp');
+    expect(MemberProfileDraft.create({ phone: '13999999999', whatsappCommunicationOptIn: true }).props.whatsappCommunicationOptIn).toBe(true);
+  });
+
   it('separa permissões de perfil das permissões gerais de usuário', async () => {
     const find = vi.fn();
     const save = vi.fn();
@@ -44,5 +51,44 @@ describe('perfil complementar do membro', () => {
     await expect(update.execute(principal(['users.update']), 'member', {})).rejects.toThrow(AuthorizationError);
     expect(find).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('inicia conversa usando os dados protegidos do perfil somente com autorização ativa', async () => {
+    const profile = {
+      member: { id: '20000000-0000-4000-8000-000000000002', name: 'Membro', email: 'membro@example.test' },
+      phone: '+5513999999999',
+      whatsappCommunication: { allowed: true, optedInAt: '2026-09-08T10:00:00.000Z', optedOutAt: null },
+    };
+    const find = vi.fn().mockResolvedValue(profile);
+    const create = vi.fn().mockResolvedValue({ id: 'conversation' });
+    const useCase = new StartMemberConversationUseCase(
+      { find } as unknown as MemberProfileRepository,
+      { create } as unknown as ConversationRepository,
+    );
+    await expect(useCase.execute(principal(['members.profile_read']), profile.member.id, { channelId: 'channel' }))
+      .rejects.toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['members.profile_read', 'conversations.reply']), profile.member.id, { channelId: 'channel' }))
+      .resolves.toEqual({ id: 'conversation' });
+    expect(create).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      memberUserId: profile.member.id,
+      contactName: 'Membro',
+      contactAddress: '+5513999999999',
+    }));
+  });
+
+  it('bloqueia contato iniciado pela comunidade sem autorização do membro', async () => {
+    const find = vi.fn().mockResolvedValue({
+      member: { id: 'member', name: 'Membro', email: 'membro@example.test' },
+      phone: '+5513999999999',
+      whatsappCommunication: { allowed: false, optedInAt: null, optedOutAt: null },
+    });
+    const create = vi.fn();
+    const useCase = new StartMemberConversationUseCase(
+      { find } as unknown as MemberProfileRepository,
+      { create } as unknown as ConversationRepository,
+    );
+    await expect(useCase.execute(principal(['members.profile_read', 'conversations.reply']), 'member', { channelId: 'channel' }))
+      .rejects.toThrow(ConflictError);
+    expect(create).not.toHaveBeenCalled();
   });
 });

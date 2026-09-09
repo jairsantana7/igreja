@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { Allow, ArrayMaxSize, IsArray, IsEmail, IsOptional, IsString, IsUUID, Length, Matches, MinLength, ValidateNested } from 'class-validator';
+import { Allow, ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsOptional, IsString, IsUUID, Length, Matches, MinLength, ValidateNested } from 'class-validator';
 import { MemberAddressDto, MemberChildDto } from './member-profile.dto';
 
 export class LoginDto {
@@ -26,6 +26,7 @@ export class EventLoginDto {
 
 export class ProgressiveProfileDto {
   @IsOptional() @IsString() @Length(8, 32) phone?: string;
+  @IsOptional() @IsBoolean() whatsappCommunicationOptIn?: boolean;
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) birthDate?: string;
   @IsOptional() @IsString() @Length(2, 120) spouseName?: string;
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) marriageDate?: string;

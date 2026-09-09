@@ -58,6 +58,7 @@ export interface PublicEventView {
 export interface RegistrationContextView {
   profile: {
     phone: string | null; birthDate: string | null; spouseName: string | null; marriageDate: string | null;
+    whatsappCommunicationOptIn: boolean;
     children: Array<{ name: string; birthDate: string | null }>;
   };
   selectedParticipantKeys: string[];

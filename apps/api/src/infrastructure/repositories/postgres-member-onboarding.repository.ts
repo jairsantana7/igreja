@@ -25,12 +25,12 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
           const address = input.profile.props.address;
           const profile = await client.query<{ id: string }>(`
             INSERT INTO member_profiles (
-              tenant_id, user_id, birth_date, postal_code, street, address_number, complement,
+              tenant_id, user_id, phone, birth_date, postal_code, street, address_number, complement,
               neighborhood, city, state, updated_by_user_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING id
           `, [
-            principal.tenantId, member.id, input.profile.props.birthDate ?? null,
+            principal.tenantId, member.id, input.profile.props.phone ?? null, input.profile.props.birthDate ?? null,
             address.postalCode ?? null, address.street ?? null, address.number ?? null,
             address.complement ?? null, address.neighborhood ?? null, address.city ?? null,
             address.state ?? null, principal.userId,

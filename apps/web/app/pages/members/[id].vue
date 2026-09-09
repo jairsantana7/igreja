@@ -2,6 +2,7 @@
 interface MemberProfile {
   member: { id: string; name: string; email: string };
   phone: string | null;
+  whatsappCommunication: { allowed: boolean; optedInAt: string | null; optedOutAt: string | null };
   birthDate: string | null;
   spouseName: string | null;
   marriageDate: string | null;
@@ -10,6 +11,8 @@ interface MemberProfile {
   children: Array<{ id: string; name: string; birthDate: string | null }>;
   updatedAt: string | null;
 }
+interface ConversationChannel { id: string; displayName: string; phoneNumber: string; owner: { id: string; name: string } }
+interface Conversation { id: string }
 
 useHead({ title: 'Perfil do membro' });
 const api = useApi();
@@ -17,7 +20,15 @@ const auth = useAuth();
 const route = useRoute();
 const memberId = String(route.params.id);
 const canManage = computed(() => auth.session.value?.user.permissions.includes('members.profile_manage'));
+const canStartConversation = computed(() => {
+  const permissions = auth.session.value?.user.permissions ?? [];
+  return permissions.includes('conversations.reply')
+    && (permissions.includes('conversations.read') || permissions.includes('channels.manage_own') || permissions.includes('channels.manage_all'));
+});
 const { data: profile, pending, error, refresh } = await useAsyncData(`member-profile-${memberId}`, () => api<MemberProfile>(`/members/${memberId}/profile`), { server: false });
+const { data: channels } = await useAsyncData(`member-conversation-channels-${memberId}`, () => canStartConversation.value
+  ? api<ConversationChannel[]>('/conversation-channels')
+  : Promise.resolve([]), { server: false });
 const form = reactive({
   phone: '',
   birthDate: '',
@@ -28,6 +39,8 @@ const form = reactive({
 });
 const editing = ref(false);
 const saving = ref(false);
+const conversationBusy = ref(false);
+const selectedChannelId = ref('');
 const feedback = ref('');
 const formatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' });
 const today = new Date().toISOString().slice(0, 10);
@@ -42,6 +55,9 @@ function loadForm() {
   form.children = profile.value.children.map((child) => ({ name: child.name, birthDate: child.birthDate ?? '' }));
 }
 watch(profile, loadForm, { immediate: true });
+watch(channels, (items) => {
+  if (!selectedChannelId.value && items?.[0]) selectedChannelId.value = items[0].id;
+}, { immediate: true });
 function addChild() { form.children.push({ name: '', birthDate: '' }); }
 
 async function save() {
@@ -63,6 +79,21 @@ async function save() {
     feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível atualizar o perfil.';
   } finally { saving.value = false; }
 }
+
+async function startConversation() {
+  if (!selectedChannelId.value) return;
+  conversationBusy.value = true; feedback.value = '';
+  try {
+    const conversation = await api<Conversation>(`/members/${memberId}/conversations`, {
+      method: 'POST',
+      body: { channelId: selectedChannelId.value },
+    });
+    await navigateTo({ path: '/conversations', query: { selected: conversation.id } });
+  } catch (requestError: any) {
+    const message = requestError?.data?.message;
+    feedback.value = Array.isArray(message) ? message.join(' ') : message ?? 'Não foi possível iniciar a conversa.';
+  } finally { conversationBusy.value = false; }
+}
 </script>
 
 <template>
@@ -75,7 +106,7 @@ async function save() {
       <p class="member-privacy-note"><strong>Dados pessoais:</strong> use estas informações somente para cuidado e relacionamento com a comunidade. Elas não aparecem na listagem geral nem na auditoria.</p>
 
       <form v-if="editing" class="member-profile-form" @submit.prevent="save">
-        <section class="editor-card"><div class="editor-card__heading"><span>♙</span><div><h2>Dados pessoais e familiares</h2><p>Todos os campos são opcionais e podem ser reaproveitados nas inscrições.</p></div></div><div class="form-grid"><label class="field"><span>WhatsApp</span><input v-model="form.phone" maxlength="32" autocomplete="tel"></label><label class="field"><span>Data de nascimento</span><input v-model="form.birthDate" type="date" :max="today" autocomplete="bday"></label><label class="field"><span>Nome do cônjuge</span><input v-model="form.spouseName" maxlength="120"></label><label class="field"><span>Data de casamento</span><input v-model="form.marriageDate" type="date" :max="today"></label></div></section>
+        <section class="editor-card"><div class="editor-card__heading"><span>♙</span><div><h2>Dados pessoais e familiares</h2><p>Todos os campos são opcionais e podem ser reaproveitados nas inscrições.</p></div></div><div class="form-grid"><label class="field"><span>WhatsApp</span><input v-model="form.phone" maxlength="32" autocomplete="tel"><small>A autorização de contato é controlada pelo próprio membro.</small></label><label class="field"><span>Data de nascimento</span><input v-model="form.birthDate" type="date" :max="today" autocomplete="bday"></label><label class="field"><span>Nome do cônjuge</span><input v-model="form.spouseName" maxlength="120"></label><label class="field"><span>Data de casamento</span><input v-model="form.marriageDate" type="date" :max="today"></label></div></section>
         <section class="editor-card"><div class="editor-card__heading"><span>⌂</span><div><h2>Endereço</h2><p>Todos os campos são opcionais.</p></div></div><div class="form-grid"><label class="field"><span>CEP</span><input v-model="form.address.postalCode" maxlength="16"></label><label class="field"><span>Logradouro</span><input v-model="form.address.street" maxlength="160"></label><label class="field"><span>Número</span><input v-model="form.address.number" maxlength="32"></label><label class="field"><span>Complemento</span><input v-model="form.address.complement" maxlength="120"></label><label class="field"><span>Bairro</span><input v-model="form.address.neighborhood" maxlength="120"></label><label class="field"><span>Cidade</span><input v-model="form.address.city" maxlength="120"></label><label class="field"><span>Estado</span><input v-model="form.address.state" maxlength="2" pattern="[A-Za-z]{2}" placeholder="SP"></label></div></section>
         <section class="editor-card"><div class="editor-card__heading"><span>♙</span><div><h2>Filhos</h2><p>Cadastre somente o necessário. A data de nascimento é opcional.</p></div><button type="button" class="button button--small" @click="addChild">＋ Adicionar</button></div><div v-if="!form.children.length" class="form-empty">Nenhum filho informado.</div><div v-for="(child, index) in form.children" :key="index" class="member-child-editor"><label class="field"><span>Nome</span><input v-model="child.name" minlength="2" maxlength="120" required></label><label class="field"><span>Data de nascimento</span><input v-model="child.birthDate" type="date" :max="new Date().toISOString().slice(0, 10)"></label><button type="button" class="remove" :aria-label="`Remover ${child.name || 'filho'}`" @click="form.children.splice(index, 1)">×</button></div></section>
         <footer class="editor-actions"><p class="muted">O perfil não é obrigatório para participação em eventos.</p><div><button type="button" class="button" @click="editing = false; loadForm()">Cancelar</button><button class="button button--primary" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar perfil' }}</button></div></footer>
@@ -83,6 +114,17 @@ async function save() {
 
       <div v-else class="member-profile-grid">
         <section class="operation-card"><p class="eyebrow">Dados pessoais</p><h2>{{ profile.birthDate ? formatter.format(new Date(`${profile.birthDate}T00:00:00`)) : 'Nascimento não informado' }}</h2><p>{{ profile.phone || 'WhatsApp não informado' }}</p></section>
+        <section class="operation-card member-communication-card">
+          <p class="eyebrow">Comunicação</p>
+          <div class="member-communication-status"><h2>WhatsApp</h2><span class="status-badge" :class="profile.whatsappCommunication.allowed ? 'status-badge--published' : 'status-badge--draft'">{{ profile.whatsappCommunication.allowed ? 'Autorizada pelo membro' : 'Não autorizada' }}</span></div>
+          <p v-if="!profile.phone">O membro precisa informar um número antes de autorizar conversas.</p>
+          <p v-else-if="!profile.whatsappCommunication.allowed">O membro pode ativar a autorização ao atualizar uma inscrição de evento.</p>
+          <template v-else-if="canStartConversation">
+            <label v-if="channels?.length" class="field"><span>Conversar usando</span><select v-model="selectedChannelId"><option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.displayName }} · {{ channel.phoneNumber }} · {{ channel.owner.name }}</option></select></label>
+            <button class="button button--primary" type="button" :disabled="conversationBusy || !selectedChannelId" @click="startConversation">{{ conversationBusy ? 'Abrindo…' : '◌ Iniciar conversa' }}</button>
+            <p v-if="!channels?.length">Configure um canal próprio antes de iniciar a conversa.</p>
+          </template>
+        </section>
         <section class="operation-card"><p class="eyebrow">Endereço</p><h2>{{ profile.address.street ? `${profile.address.street}${profile.address.number ? `, ${profile.address.number}` : ''}` : 'Não informado' }}</h2><p v-if="profile.address.complement">{{ profile.address.complement }}</p><p v-if="profile.address.neighborhood">{{ profile.address.neighborhood }}</p><p v-if="profile.address.city || profile.address.state">{{ [profile.address.city, profile.address.state].filter(Boolean).join(' · ') }}</p><p v-if="profile.address.postalCode">CEP {{ profile.address.postalCode }}</p></section>
         <section class="operation-card"><p class="eyebrow">Família</p><h2>{{ profile.spouseName || (profile.hasChildren ? `${profile.children.length} ${profile.children.length === 1 ? 'filho informado' : 'filhos informados'}` : 'Nenhum familiar informado') }}</h2><p v-if="profile.marriageDate">Casamento: {{ formatter.format(new Date(`${profile.marriageDate}T00:00:00`)) }}</p><div v-if="profile.children.length" class="member-children-list"><article v-for="child in profile.children" :key="child.id"><span class="member-avatar">{{ child.name.charAt(0).toUpperCase() }}</span><div><strong>{{ child.name }}</strong><small>{{ child.birthDate ? `Nascimento: ${formatter.format(new Date(`${child.birthDate}T00:00:00`))}` : 'Nascimento não informado' }}</small></div></article></div></section>
       </div>

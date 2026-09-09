@@ -14,6 +14,7 @@ const form = reactive({
   email: '',
   password: '',
   roleIds: [] as string[],
+  phone: '',
   birthDate: '',
   address: { postalCode: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '' },
   children: [] as Array<{ name: string; birthDate: string }>,
@@ -28,8 +29,9 @@ function optionalProfile() {
   if (!canManageProfile.value) return undefined;
   const address = Object.fromEntries(Object.entries(form.address).map(([key, value]) => [key, value.trim() || undefined]));
   const hasAddress = Object.values(address).some(Boolean);
-  if (!form.birthDate && !hasAddress && !form.children.length) return undefined;
+  if (!form.phone.trim() && !form.birthDate && !hasAddress && !form.children.length) return undefined;
   return {
+    phone: form.phone.trim() || undefined,
     birthDate: form.birthDate || undefined,
     address,
     children: form.children.map((child) => ({ name: child.name, birthDate: child.birthDate || undefined })),
@@ -79,6 +81,7 @@ async function submit() {
       <section v-if="canManageProfile" class="editor-card">
         <div class="editor-card__heading"><span>2</span><div><h2>Perfil complementar</h2><p>Essas informações são opcionais e não impedem o cadastro.</p></div></div>
         <div class="form-grid">
+          <label class="field"><span>WhatsApp</span><input v-model="form.phone" autocomplete="tel" inputmode="tel" minlength="8" maxlength="32" placeholder="(00) 00000-0000"><small>A pessoa autoriza o contato no próprio fluxo de inscrição.</small></label>
           <label class="field"><span>Data de nascimento</span><input v-model="form.birthDate" type="date" :max="today" autocomplete="bday"></label>
           <label class="field"><span>CEP</span><input v-model="form.address.postalCode" maxlength="16" autocomplete="postal-code"></label>
           <label class="field"><span>Logradouro</span><input v-model="form.address.street" maxlength="160" autocomplete="street-address"></label>

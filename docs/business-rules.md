@@ -53,8 +53,12 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Ler perfis exige `members.profile_read`; editar exige `members.profile_manage`. `users.read` isoladamente não libera endereço ou filhos.
 - A listagem geral continua exibindo apenas identidade, papéis e contagens. Dados complementares aparecem somente no detalhe protegido.
 - O cadastro administrativo pode criar identidade, papéis e perfil complementar na mesma transação; os dados complementares só são aceitos com `members.profile_manage`.
+- Informar um número de WhatsApp não autoriza contato. O membro concede ou revoga separadamente a comunicação individual durante seu cadastro ou atualização pelo fluxo de evento.
+- A autorização de WhatsApp começa desativada, exige um número informado e registra o instante da concessão e da última revogação. O administrador pode corrigir o número, mas não conceder autorização em nome do membro; remover o número revoga a autorização ativa.
+- Iniciar uma conversa pelo perfil exige `members.profile_read`, `conversations.reply`, um canal acessível e autorização ativa. Uma mensagem recebida do próprio contato pode ser atendida mesmo sem autorização prévia, pois a iniciativa foi dele.
+- A autorização cobre somente conversa individual. Ela não habilita lembretes, campanhas ou envio em massa, que continuam dependendo de regras próprias ainda não definidas.
 - Alterações são auditadas por identidade do registro, sem copiar endereço, nomes ou nascimento para a metadata de auditoria.
-- Autoedição pelo membro, consentimento específico, base legal, retenção, exportação e exclusão desses dados permanecem decisões abertas antes de uso em produção.
+- Autoedição geral pelo membro, base legal, retenção, exportação e exclusão desses dados permanecem decisões abertas antes de uso em produção.
 
 ## Presença e check-in
 
@@ -88,7 +92,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Habilitação possui duas barreiras independentes: o modelo precisa estar ativo globalmente e a regra precisa estar ativa no evento.
 - A interface pode preparar e ativar regras mesmo sem fila instalada, mas deve informar que não haverá entrega até um scheduler e um adapter de fila/canal serem configurados.
 - Templates oficiais da Meta continuam somente como catálogo sincronizado. Usá-los em lembretes oficiais e submetê-los para aprovação permanecem bloqueados até o fluxo de conta WABA ser separado de seus números.
-- Consentimento, opt-out, custo, janela de envio e disparo real permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
+- Consentimento para lembretes/campanhas, opt-out por mensagem, custo, janela de envio e disparo real permanecem decisões abertas; nenhum disparo real é habilitado por padrão.
 
 ## Central de conversas
 
@@ -101,6 +105,8 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O QR é efêmero e as credenciais do dispositivo vinculado são criptografadas. Nenhum desses valores entra em logs, respostas de auditoria ou variáveis salvas pelo usuário.
 - O conector não oficial aceita somente conversas individuais. Grupos, status, newsletters, chamadas e anexos sem texto não entram no MVP.
 - Ao receber a primeira mensagem textual de um contato, o sistema cria uma conversa atribuída ao proprietário do canal; mensagens repetidas do provedor são ignoradas de forma idempotente.
+- Mensagens textuais enviadas diretamente pelo celular conectado também entram no histórico como saída. Se a mesma mensagem foi criada pelo sistema, o identificador do provedor evita duplicação.
+- Identificadores internos `@lid` nunca são apresentados como telefone: o adapter prioriza o número alternativo, consulta o mapeamento criptográfico do canal e repara conversas antigas quando a relação estiver disponível.
 - Respostas manuais da central podem usar `whatsapp_web`. Envio em massa, campanhas e lembretes automáticos não podem usar esse driver.
 - Um usuário administra seus próprios canais com `channels.manage_own`; `channels.manage_all` permite supervisão explícita.
 - Conversas podem ser vinculadas a um membro e a um evento, mas também aceitam um contato externo ainda não cadastrado.
@@ -148,6 +154,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Preço de adicional é guardado em centavos. A seleção não comprova pagamento; cobrança, conciliação e reembolso continuam pertencendo ao contexto futuro de pagamentos.
 - Quando houver PIX manual habilitado, a página apresenta os dados públicos do recebedor após uma confirmação que tenha adicional pago selecionado. Segredos de gateway nunca entram na resposta pública.
 - Perfil, participantes e seleções pertencem à comunidade, usam RLS e não aceitam `tenant_id` fornecido pelo cliente.
+- WhatsApp e sua autorização individual fazem parte do cadastro progressivo em qualquer evento; a coleta não depende de o evento permitir inscrição familiar.
 
 ## Modelos e recorrência
 

@@ -18,11 +18,13 @@ export interface MemberChildDraft {
 export class MemberProfileDraft {
   private constructor(readonly props: {
     phone?: string; birthDate?: string; spouseName?: string; marriageDate?: string;
+    whatsappCommunicationOptIn?: boolean;
     address: MemberAddress; children: MemberChildDraft[];
   }) {}
 
   static create(input: {
     phone?: string; birthDate?: string; spouseName?: string; marriageDate?: string;
+    whatsappCommunicationOptIn?: boolean;
     address?: MemberAddress; children?: MemberChildDraft[];
   }) {
     const clean = (value: string | undefined, max: number) => {
@@ -32,6 +34,9 @@ export class MemberProfileDraft {
     };
     const phone = clean(input.phone, 32);
     if (phone && phone.length < 8) throw new DomainError('O telefone deve ter entre 8 e 32 caracteres.');
+    if (input.whatsappCommunicationOptIn && !phone) {
+      throw new DomainError('Informe o WhatsApp antes de autorizar a comunicação.');
+    }
     const birthDate = this.validateBirthDate(input.birthDate, 'A data de nascimento do membro é inválida.');
     const spouseName = clean(input.spouseName, 120);
     if (spouseName && spouseName.length < 2) throw new DomainError('O nome do cônjuge deve ter entre 2 e 120 caracteres.');
@@ -52,7 +57,15 @@ export class MemberProfileDraft {
       return { name, birthDate: this.validateBirthDate(child.birthDate, 'A data de nascimento do filho é inválida.') };
     });
     if (children.length > 50) throw new DomainError('O perfil aceita no máximo 50 filhos cadastrados.');
-    return new MemberProfileDraft({ phone, birthDate, spouseName, marriageDate, address, children });
+    return new MemberProfileDraft({
+      phone,
+      birthDate,
+      spouseName,
+      marriageDate,
+      whatsappCommunicationOptIn: input.whatsappCommunicationOptIn,
+      address,
+      children,
+    });
   }
 
   get isEmpty() {
@@ -60,6 +73,7 @@ export class MemberProfileDraft {
       && !this.props.birthDate
       && !this.props.spouseName
       && !this.props.marriageDate
+      && this.props.whatsappCommunicationOptIn === undefined
       && Object.values(this.props.address).every((value) => !value)
       && this.props.children.length === 0;
   }

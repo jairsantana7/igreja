@@ -22,6 +22,14 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (user_id, tenant_id) DO UPDATE SET
           phone = EXCLUDED.phone,
+          whatsapp_communication_opted_out_at = CASE
+            WHEN EXCLUDED.phone IS NULL AND member_profiles.whatsapp_communication_opt_in THEN now()
+            ELSE member_profiles.whatsapp_communication_opted_out_at
+          END,
+          whatsapp_communication_opt_in = CASE
+            WHEN EXCLUDED.phone IS NULL THEN false
+            ELSE member_profiles.whatsapp_communication_opt_in
+          END,
           birth_date = EXCLUDED.birth_date,
           spouse_name = EXCLUDED.spouse_name,
           marriage_date = EXCLUDED.marriage_date,
@@ -57,12 +65,16 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
   private async findWithClient(client: PoolClient, memberId: string): Promise<MemberProfileView | null> {
     const result = await client.query<{
       id: string; name: string; email: string; phone: string | null; birth_date: string | null;
+      whatsapp_communication_opt_in: boolean | null; whatsapp_communication_opted_in_at: Date | null;
+      whatsapp_communication_opted_out_at: Date | null;
       spouse_name: string | null; marriage_date: string | null; postal_code: string | null; street: string | null;
       address_number: string | null; complement: string | null; neighborhood: string | null;
       city: string | null; state: string | null; updated_at: Date | null;
       children: Array<{ id: string; name: string; birthDate: string | null }>;
     }>(`
       SELECT users.id, users.name, users.email, profiles.phone,
+        profiles.whatsapp_communication_opt_in, profiles.whatsapp_communication_opted_in_at,
+        profiles.whatsapp_communication_opted_out_at,
         to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
         profiles.spouse_name, to_char(profiles.marriage_date, 'YYYY-MM-DD') AS marriage_date,
         profiles.postal_code, profiles.street, profiles.address_number, profiles.complement,
@@ -84,6 +96,11 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
     return {
       member: { id: row.id, name: row.name, email: row.email },
       phone: row.phone,
+      whatsappCommunication: {
+        allowed: row.whatsapp_communication_opt_in ?? false,
+        optedInAt: row.whatsapp_communication_opted_in_at?.toISOString() ?? null,
+        optedOutAt: row.whatsapp_communication_opted_out_at?.toISOString() ?? null,
+      },
       birthDate: row.birth_date,
       spouseName: row.spouse_name,
       marriageDate: row.marriage_date,

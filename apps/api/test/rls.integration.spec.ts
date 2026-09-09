@@ -59,9 +59,12 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${sessionA}', '${tenantA}', '${userA}', now() + interval '1 hour', repeat('a', 64), repeat('1', 64)),
         ('${sessionB}', '${tenantB}', '${userB}', now() + interval '1 hour', repeat('b', 64), repeat('2', 64))
       ON CONFLICT DO NOTHING;
-      INSERT INTO member_profiles (id, tenant_id, user_id, birth_date, city, state, updated_by_user_id) VALUES
-        ('${profileA}', '${tenantA}', '${userA}', DATE '1990-01-01', 'Cidade A', 'SP', '${userA}'),
-        ('${profileB}', '${tenantB}', '${userB}', DATE '1991-02-02', 'Cidade B', 'RJ', '${userB}')
+      INSERT INTO member_profiles (
+        id, tenant_id, user_id, phone, whatsapp_communication_opt_in,
+        whatsapp_communication_opted_in_at, birth_date, city, state, updated_by_user_id
+      ) VALUES
+        ('${profileA}', '${tenantA}', '${userA}', '+551100000001', true, now(), DATE '1990-01-01', 'Cidade A', 'SP', '${userA}'),
+        ('${profileB}', '${tenantB}', '${userB}', '+551100000002', true, now(), DATE '1991-02-02', 'Cidade B', 'RJ', '${userB}')
       ON CONFLICT DO NOTHING;
       INSERT INTO member_children (tenant_id, profile_id, member_user_id, name) VALUES
         ('${tenantA}', '${profileA}', '${userA}', 'Filho A'),
@@ -227,6 +230,7 @@ describeDatabase('PostgreSQL RLS', () => {
   it('sem contexto não retorna linhas de tenant', async () => {
     const result = await runtime.query('SELECT id FROM users');
     expect(result.rows).toEqual([]);
+    expect((await runtime.query('SELECT phone, whatsapp_communication_opt_in FROM member_profiles')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM communication_templates')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM event_reminder_rules')).rows).toEqual([]);
     expect((await runtime.query('SELECT id FROM pastoral_followups')).rows).toEqual([]);
@@ -407,7 +411,8 @@ describeDatabase('PostgreSQL RLS', () => {
     try {
       await inTenant(client, tenantA, async () => {
         expect((await client.query('SELECT id FROM auth_sessions')).rows.map((row) => row.id)).toEqual([sessionA]);
-        expect((await client.query('SELECT birth_date::text, city FROM member_profiles')).rows).toEqual([{ birth_date: '1990-01-01', city: 'Cidade A' }]);
+        expect((await client.query('SELECT birth_date::text, city, phone, whatsapp_communication_opt_in FROM member_profiles')).rows)
+          .toEqual([{ birth_date: '1990-01-01', city: 'Cidade A', phone: '+551100000001', whatsapp_communication_opt_in: true }]);
         expect((await client.query('SELECT name FROM member_children')).rows).toEqual([{ name: 'Filho A' }]);
       });
       expect((await client.query('SELECT id FROM member_profiles')).rows).toEqual([]);

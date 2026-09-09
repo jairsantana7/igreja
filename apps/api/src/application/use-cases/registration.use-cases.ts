@@ -12,7 +12,15 @@ type ProgressiveProfileInput = Parameters<typeof MemberProfileDraft.create>[0];
 function prepareRegistration(event: Awaited<ReturnType<GetPublicEventUseCase['resolve']>>, registrantName: string, input: {
   profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[];
 }) {
-  const profile = event.familyRegistrationEnabled ? MemberProfileDraft.create(input.profile ?? {}) : undefined;
+  const profileInput = event.familyRegistrationEnabled
+    ? input.profile ?? {}
+    : input.profile
+      ? {
+          phone: input.profile.phone,
+          whatsappCommunicationOptIn: input.profile.whatsappCommunicationOptIn,
+        }
+      : undefined;
+  const profile = profileInput ? MemberProfileDraft.create(profileInput) : undefined;
   const selection = EventRegistrationSelection.create({
     registrantName,
     familyRegistrationEnabled: event.familyRegistrationEnabled,

@@ -51,7 +51,7 @@ import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, Cr
 import { PostgresMemberProfileRepository } from './infrastructure/repositories/postgres-member-profile.repository';
 import { PostgresMemberOnboardingRepository } from './infrastructure/repositories/postgres-member-onboarding.repository';
 import { MemberProfilesController } from './presentation/http/controllers/member-profiles.controller';
-import { GetMemberProfileUseCase, UpdateMemberProfileUseCase } from './application/use-cases/member-profile.use-cases';
+import { GetMemberProfileUseCase, StartMemberConversationUseCase, UpdateMemberProfileUseCase } from './application/use-cases/member-profile.use-cases';
 import { PostgresWhatsAppTemplateRepository } from './infrastructure/repositories/postgres-whatsapp-template.repository';
 import { EnvironmentSecretResolver } from './infrastructure/security/environment-secret-resolver';
 import { MetaWhatsAppTemplateProvider } from './infrastructure/integrations/meta-whatsapp-template.provider';
@@ -425,6 +425,12 @@ import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
       provide: TOKENS.updateMemberProfileUseCase,
       useFactory: (profiles: PostgresMemberProfileRepository) => new UpdateMemberProfileUseCase(profiles),
       inject: [TOKENS.memberProfileRepository],
+    },
+    {
+      provide: TOKENS.startMemberConversationUseCase,
+      useFactory: (profiles: PostgresMemberProfileRepository, conversations: PostgresConversationRepository) =>
+        new StartMemberConversationUseCase(profiles, conversations),
+      inject: [TOKENS.memberProfileRepository, TOKENS.conversationRepository],
     },
     {
       provide: TOKENS.listWhatsAppTemplatesUseCase,
