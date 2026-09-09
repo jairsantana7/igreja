@@ -65,6 +65,7 @@ export const TOKENS = {
   updateEventReminderUseCase: Symbol('UpdateEventReminderUseCase'),
   deleteEventReminderUseCase: Symbol('DeleteEventReminderUseCase'),
   listFollowupBoardUseCase: Symbol('ListFollowupBoardUseCase'),
+  getFollowupCapabilitiesUseCase: Symbol('GetFollowupCapabilitiesUseCase'),
   getFollowupUseCase: Symbol('GetFollowupUseCase'),
   createFollowupFromConversationUseCase: Symbol('CreateFollowupFromConversationUseCase'),
   moveFollowupUseCase: Symbol('MoveFollowupUseCase'),

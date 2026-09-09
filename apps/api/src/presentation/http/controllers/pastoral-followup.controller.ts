@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Inject, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, DeleteFollowupUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from '../../../application/use-cases/pastoral-followup.use-cases';
+import type { AddFollowupNoteUseCase, CreateFollowupFromConversationUseCase, CreateFollowupStageUseCase, CreateFollowupTagUseCase, DeleteFollowupUseCase, GetFollowupCapabilitiesUseCase, GetFollowupUseCase, ListFollowupBoardUseCase, ListFollowupStagesUseCase, ListFollowupTagsUseCase, MoveFollowupUseCase, RemoveFollowupNoteUseCase, UpdateFollowupUseCase } from '../../../application/use-cases/pastoral-followup.use-cases';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
@@ -13,6 +13,7 @@ import { PermissionsGuard } from '../guards/permissions.guard';
 export class PastoralFollowupController {
   constructor(
     @Inject(TOKENS.listFollowupBoardUseCase) private readonly listBoard: ListFollowupBoardUseCase,
+    @Inject(TOKENS.getFollowupCapabilitiesUseCase) private readonly getCapabilities: GetFollowupCapabilitiesUseCase,
     @Inject(TOKENS.getFollowupUseCase) private readonly getOne: GetFollowupUseCase,
     @Inject(TOKENS.createFollowupFromConversationUseCase) private readonly createFromConversation: CreateFollowupFromConversationUseCase,
     @Inject(TOKENS.moveFollowupUseCase) private readonly moveOne: MoveFollowupUseCase,
@@ -28,6 +29,8 @@ export class PastoralFollowupController {
 
   @Get() @RequireAnyPermission(PERMISSIONS.followupsReadOwn, PERMISSIONS.followupsReadAll)
   board(@CurrentPrincipal() principal: AuthenticatedPrincipal) { return this.listBoard.execute(principal); }
+  @Get('capabilities') @RequireAnyPermission(PERMISSIONS.followupsReadOwn, PERMISSIONS.followupsReadAll)
+  capabilities(@CurrentPrincipal() principal: AuthenticatedPrincipal) { return this.getCapabilities.execute(principal); }
   @Get('stages') @RequireAnyPermission(PERMISSIONS.followupsReadOwn, PERMISSIONS.followupsReadAll)
   stages(@CurrentPrincipal() principal: AuthenticatedPrincipal) { return this.listStages.execute(principal); }
   @Post('stages') @RequirePermissions(PERMISSIONS.followupsPipelineManage)

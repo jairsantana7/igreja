@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PastoralFollowupRepository } from '../src/application/ports/pastoral-followup.port';
-import { AddFollowupNoteUseCase, CreateFollowupStageUseCase, DeleteFollowupUseCase, ListFollowupBoardUseCase, MoveFollowupUseCase, UpdateFollowupUseCase } from '../src/application/use-cases/pastoral-followup.use-cases';
+import { AddFollowupNoteUseCase, CreateFollowupStageUseCase, DeleteFollowupUseCase, GetFollowupCapabilitiesUseCase, ListFollowupBoardUseCase, MoveFollowupUseCase, UpdateFollowupUseCase } from '../src/application/use-cases/pastoral-followup.use-cases';
 import { AuthorizationError, NotFoundError } from '../src/application/use-cases/errors';
 import { FollowupNoteContent, FollowupStageDefinition, FollowupTagDefinition } from '../src/domain/entities/pastoral-followup';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
@@ -22,6 +22,16 @@ describe('acompanhamento pastoral', () => {
     const useCase = new ListFollowupBoardUseCase({ board } as unknown as PastoralFollowupRepository);
     expect(() => useCase.execute(principal([]))).toThrow(AuthorizationError);
     expect(board).not.toHaveBeenCalled();
+  });
+
+  it('expõe as capacidades atuais sem depender da sessão armazenada no navegador', () => {
+    const useCase = new GetFollowupCapabilitiesUseCase();
+    expect(useCase.execute(principal(['followups.read_own', 'followups.delete']))).toEqual({
+      canManage: false,
+      canDelete: true,
+      canManageNotes: false,
+      canManagePipeline: false,
+    });
   });
 
   it('separa a administração do pipeline da gestão dos cartões', () => {
