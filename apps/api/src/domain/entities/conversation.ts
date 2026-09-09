@@ -14,6 +14,9 @@ export const CHANNEL_CONNECTION_STATUSES = [
 ] as const;
 export type ChannelConnectionStatus = (typeof CHANNEL_CONNECTION_STATUSES)[number];
 
+export const CONVERSATION_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+export type ConversationReactionEmoji = (typeof CONVERSATION_REACTION_EMOJIS)[number];
+
 export class ConversationChannelConfiguration {
   private constructor(readonly props: { providerKey: string; displayName: string; phoneNumber: string; providerAccountId: string; secretReference?: string }) {}
 

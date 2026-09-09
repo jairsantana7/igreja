@@ -42,7 +42,9 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         SELECT messages.id AS message_id, messages.body, conversations.id AS conversation_id,
           conversations.contact_address, channels.id AS channel_id, channels.tenant_id,
           channels.provider_key, channels.phone_number, channels.owner_user_id,
-          attachments.storage_key, attachments.mime_type, attachments.media_kind
+          attachments.storage_key, attachments.mime_type, attachments.media_kind,
+          quoted.provider_message_id AS quoted_provider_message_id,
+          quoted.direction AS quoted_direction, quoted.body AS quoted_body
         FROM conversation_messages AS messages
         JOIN conversations ON conversations.id = messages.conversation_id
           AND conversations.tenant_id = messages.tenant_id
@@ -57,6 +59,9 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
           ORDER BY id
           LIMIT 1
         ) AS attachments ON true
+        LEFT JOIN conversation_messages AS quoted ON quoted.id = messages.quoted_message_id
+          AND quoted.conversation_id = messages.conversation_id
+          AND quoted.tenant_id = messages.tenant_id
         WHERE messages.id = $1 AND conversations.id = $2
           AND messages.direction = 'outbound' AND messages.status IN ('pending', 'queued')
       `, [messageId, conversationId]);
@@ -79,6 +84,54 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
           mimeType: row.mime_type,
           mediaKind: row.media_kind,
         } : undefined,
+        quotedMessage: row.quoted_provider_message_id ? {
+          providerMessageId: row.quoted_provider_message_id,
+          direction: row.quoted_direction,
+          body: row.quoted_body,
+        } : undefined,
+      };
+    });
+  }
+
+  findReactionDelivery(
+    tenantId: string,
+    conversationId: string,
+    messageId: string,
+    emoji: Parameters<ConversationRuntimeRepository['findReactionDelivery']>[3],
+  ): ReturnType<ConversationRuntimeRepository['findReactionDelivery']> {
+    return this.database.withTenant(tenantId, async (client) => {
+      const result = await client.query(`
+        SELECT messages.id AS message_id, messages.provider_message_id, messages.direction, messages.body,
+          conversations.id AS conversation_id, conversations.contact_address,
+          channels.id AS channel_id, channels.tenant_id, channels.provider_key,
+          channels.phone_number, channels.owner_user_id
+        FROM conversation_messages AS messages
+        JOIN conversations ON conversations.id = messages.conversation_id
+          AND conversations.tenant_id = messages.tenant_id
+        JOIN conversation_channels AS channels ON channels.id = conversations.channel_id
+          AND channels.tenant_id = conversations.tenant_id
+        WHERE messages.id = $1 AND conversations.id = $2
+          AND messages.provider_message_id IS NOT NULL
+      `, [messageId, conversationId]);
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        channel: {
+          id: row.channel_id,
+          tenantId: row.tenant_id,
+          providerKey: row.provider_key,
+          phoneNumber: row.phone_number,
+          ownerUserId: row.owner_user_id,
+        },
+        conversationId: row.conversation_id,
+        messageId: row.message_id,
+        recipient: row.contact_address,
+        target: {
+          providerMessageId: row.provider_message_id,
+          direction: row.direction,
+          body: row.body,
+        },
+        emoji,
       };
     });
   }
@@ -164,14 +217,22 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         `, [input.tenantId, input.channelId, channel.rows[0].owner_user_id, input.contactName, input.contactAddress]);
       }
 
+      const quotedMessageId = input.quotedProviderMessageId
+        ? (await client.query<{ id: string }>(`
+            SELECT id FROM conversation_messages
+            WHERE conversation_id = $1 AND provider_message_id = $2
+            LIMIT 1
+          `, [conversation.rows[0]!.id, input.quotedProviderMessageId])).rows[0]?.id ?? null
+        : null;
+
       const inserted = await client.query<{ id: string }>(`
         INSERT INTO conversation_messages (
-          tenant_id, conversation_id, direction, body, status, provider_message_id, created_at
-        ) VALUES ($1, $2, 'inbound', $3, 'received', $4, $5)
+          tenant_id, conversation_id, direction, body, status, provider_message_id, quoted_message_id, created_at
+        ) VALUES ($1, $2, 'inbound', $3, 'received', $4, $5, $6)
         ON CONFLICT (tenant_id, conversation_id, provider_message_id)
           WHERE provider_message_id IS NOT NULL DO NOTHING
         RETURNING id
-      `, [input.tenantId, conversation.rows[0]!.id, input.body, input.providerMessageId, input.receivedAt]);
+      `, [input.tenantId, conversation.rows[0]!.id, input.body, input.providerMessageId, quotedMessageId, input.receivedAt]);
       if (inserted.rowCount) {
         if (input.attachment) {
           await this.insertAttachment(client, input.tenantId, conversation.rows[0]!.id, inserted.rows[0]!.id, input.attachment);
@@ -210,6 +271,13 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
         `, [input.tenantId, input.channelId, channel.rows[0].owner_user_id, input.contactName, input.contactAddress]);
       }
       const conversationId = conversation.rows[0]!.id;
+      const quotedMessageId = input.quotedProviderMessageId
+        ? (await client.query<{ id: string }>(`
+            SELECT id FROM conversation_messages
+            WHERE conversation_id = $1 AND provider_message_id = $2
+            LIMIT 1
+          `, [conversationId, input.quotedProviderMessageId])).rows[0]?.id ?? null
+        : null;
 
       const matched = input.attachment ? await client.query(`
         UPDATE conversation_messages SET status = 'sent', provider_message_id = $5
@@ -241,12 +309,16 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       if (!matched.rowCount) {
         const inserted = await client.query<{ id: string }>(`
           INSERT INTO conversation_messages (
-            tenant_id, conversation_id, sent_by_user_id, direction, body, status, provider_message_id, created_at
-          ) VALUES ($1, $2, $3, 'outbound', $4, 'sent', $5, $6)
+            tenant_id, conversation_id, sent_by_user_id, direction, body, status,
+            provider_message_id, quoted_message_id, created_at
+          ) VALUES ($1, $2, $3, 'outbound', $4, 'sent', $5, $6, $7)
           ON CONFLICT (tenant_id, conversation_id, provider_message_id)
             WHERE provider_message_id IS NOT NULL DO NOTHING
           RETURNING id
-        `, [input.tenantId, conversationId, channel.rows[0].owner_user_id, input.body, input.providerMessageId, input.sentAt]);
+        `, [
+          input.tenantId, conversationId, channel.rows[0].owner_user_id, input.body,
+          input.providerMessageId, quotedMessageId, input.sentAt,
+        ]);
         if (inserted.rows[0] && input.attachment) {
           await this.insertAttachment(client, input.tenantId, conversationId, inserted.rows[0].id, input.attachment);
           attachmentRetained = true;
@@ -294,6 +366,42 @@ export class PostgresConversationRuntimeRepository implements ConversationRuntim
       `, [
         input.tenantId, input.channelId, channel.rows[0].owner_user_id,
         input.contactName, input.contactAddress, input.lastActivityAt,
+      ]);
+    }));
+  }
+
+  async applyReaction(input: Parameters<ConversationRuntimeRepository['applyReaction']>[0]): Promise<void> {
+    const databaseContext = input.createdByUserId
+      ? { tenantId: input.tenantId, userId: input.createdByUserId }
+      : input.tenantId;
+    await this.withRealtime(input.tenantId, 'conversations', () => this.database.withTenant(databaseContext, async (client) => {
+      const target = await client.query<{ id: string; conversation_id: string }>(`
+        SELECT messages.id, messages.conversation_id
+        FROM conversation_messages AS messages
+        JOIN conversations ON conversations.id = messages.conversation_id
+          AND conversations.tenant_id = messages.tenant_id
+        WHERE conversations.channel_id = $1 AND messages.provider_message_id = $2
+        LIMIT 1
+      `, [input.channelId, input.targetProviderMessageId]);
+      if (!target.rows[0]) return;
+      if (!input.emoji) {
+        await client.query(`
+          DELETE FROM conversation_message_reactions
+          WHERE message_id = $1 AND actor_kind = $2
+        `, [target.rows[0].id, input.actor]);
+        return;
+      }
+      await client.query(`
+        INSERT INTO conversation_message_reactions (
+          tenant_id, conversation_id, message_id, actor_kind, emoji, created_by_user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (tenant_id, message_id, actor_kind) DO UPDATE
+        SET emoji = EXCLUDED.emoji,
+          created_by_user_id = EXCLUDED.created_by_user_id,
+          updated_at = now()
+      `, [
+        input.tenantId, target.rows[0].conversation_id, target.rows[0].id,
+        input.actor, input.emoji, input.createdByUserId ?? null,
       ]);
     }));
   }

@@ -1,4 +1,4 @@
-import { ConversationChannelConfiguration, OutboundConversationMessage, type ConversationStatus } from '../../domain/entities/conversation';
+import { ConversationChannelConfiguration, OutboundConversationMessage, type ConversationReactionEmoji, type ConversationStatus } from '../../domain/entities/conversation';
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
 import type { ConversationProviderCatalog, ConversationRepository } from '../ports/conversation.port';
 import type { JobQueue } from '../ports/job-queue.port';
@@ -215,10 +215,15 @@ export class GetConversationMediaUseCase {
 
 export class ReplyConversationUseCase {
   constructor(private readonly conversations: ConversationRepository, private readonly queue: JobQueue) {}
-  async execute(principal: AuthenticatedPrincipal, conversationId: string, body: string) {
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, body: string, replyToMessageId?: string) {
     requirePermission(principal, PERMISSIONS.conversationsReply);
-    const message = await this.conversations.addOutbound(principal, conversationId, OutboundConversationMessage.create(body));
-    if (!message) throw new NotFoundError('Conversa não encontrada ou sem acesso.');
+    const message = await this.conversations.addOutbound(
+      principal,
+      conversationId,
+      OutboundConversationMessage.create(body),
+      replyToMessageId,
+    );
+    if (!message) throw new NotFoundError('Conversa ou mensagem citada não encontrada ou sem acesso.');
     try {
       const job = await this.queue.enqueue({
         name: 'conversations.message.dispatch',
@@ -232,6 +237,43 @@ export class ReplyConversationUseCase {
   }
 }
 
+export class ReactConversationMessageUseCase {
+  constructor(
+    private readonly conversations: ConversationRepository,
+    private readonly queue: JobQueue,
+    private readonly providers: ConversationProviderCatalog,
+  ) {}
+
+  async execute(
+    principal: AuthenticatedPrincipal,
+    conversationId: string,
+    messageId: string,
+    emoji?: ConversationReactionEmoji,
+  ): Promise<void> {
+    requirePermission(principal, PERMISSIONS.conversationsReply);
+    const target = await this.conversations.messageActionTarget(principal, conversationId, messageId);
+    if (!target) throw new NotFoundError('Mensagem não encontrada ou sem acesso.');
+    if (!this.providers.supportsConnection(target.providerKey)) {
+      throw new ConflictError('O canal desta conversa não oferece reações.');
+    }
+    try {
+      await this.queue.enqueue({
+        name: 'conversations.message.react',
+        payload: {
+          tenantId: principal.tenantId,
+          userId: principal.userId,
+          conversationId,
+          messageId,
+          emoji: emoji ?? '',
+        },
+        deduplicationKey: `${messageId}:reaction`,
+      }, { attempts: 3 });
+    } catch {
+      throw new ConflictError('O worker de WhatsApp não está disponível para enviar a reação.');
+    }
+  }
+}
+
 export class SendConversationMediaUseCase {
   constructor(
     private readonly conversations: ConversationRepository,
@@ -239,7 +281,7 @@ export class SendConversationMediaUseCase {
     private readonly queue: JobQueue,
   ) {}
 
-  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { content: Buffer; mimeType: string; caption?: string }) {
+  async execute(principal: AuthenticatedPrincipal, conversationId: string, input: { content: Buffer; mimeType: string; caption?: string; replyToMessageId?: string }) {
     requirePermission(principal, PERMISSIONS.conversationsReply);
     const mimeType = canonicalConversationMimeType(input.mimeType);
     if (!mimeType) throw new DomainError('O anexo deve ser uma imagem JPEG, PNG ou WebP, ou um áudio OGG, MP3, M4A ou AAC.');
@@ -260,6 +302,7 @@ export class SendConversationMediaUseCase {
       message = await this.conversations.addOutboundMedia(principal, conversationId, {
         body,
         attachment: { ...stored, mediaKind, byteSize: input.content.length },
+        replyToMessageId: input.replyToMessageId,
       });
     } catch (error) {
       await this.storage.delete(stored.storageKey).catch(() => undefined);

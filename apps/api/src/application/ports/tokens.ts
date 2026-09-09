@@ -44,6 +44,7 @@ export const TOKENS = {
   getConversationMediaUseCase: Symbol('GetConversationMediaUseCase'),
   sendConversationMediaUseCase: Symbol('SendConversationMediaUseCase'),
   replyConversationUseCase: Symbol('ReplyConversationUseCase'),
+  reactConversationMessageUseCase: Symbol('ReactConversationMessageUseCase'),
   updateConversationStatusUseCase: Symbol('UpdateConversationStatusUseCase'),
   listWhatsAppTemplatesUseCase: Symbol('ListWhatsAppTemplatesUseCase'),
   syncWhatsAppTemplatesUseCase: Symbol('SyncWhatsAppTemplatesUseCase'),

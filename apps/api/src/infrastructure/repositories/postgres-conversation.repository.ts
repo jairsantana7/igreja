@@ -80,6 +80,7 @@ export class PostgresConversationRepository implements ConversationRepository {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
       const result = await client.query(`
         SELECT messages.*, users.name AS sender_name,
+          quoted.id AS quoted_id, quoted.direction AS quoted_direction, quoted.body AS quoted_body,
           COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
               'id', attachments.id,
@@ -92,9 +93,22 @@ export class PostgresConversationRepository implements ConversationRepository {
             WHERE attachments.message_id = messages.id
               AND attachments.conversation_id = messages.conversation_id
               AND attachments.tenant_id = messages.tenant_id
-          ), '[]'::jsonb) AS attachments
+          ), '[]'::jsonb) AS attachments,
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+              'actor', reactions.actor_kind,
+              'emoji', reactions.emoji
+            ) ORDER BY reactions.actor_kind)
+            FROM conversation_message_reactions AS reactions
+            WHERE reactions.message_id = messages.id
+              AND reactions.conversation_id = messages.conversation_id
+              AND reactions.tenant_id = messages.tenant_id
+          ), '[]'::jsonb) AS reactions
         FROM conversation_messages AS messages
         LEFT JOIN users ON users.id = messages.sent_by_user_id AND users.tenant_id = messages.tenant_id
+        LEFT JOIN conversation_messages AS quoted ON quoted.id = messages.quoted_message_id
+          AND quoted.conversation_id = messages.conversation_id
+          AND quoted.tenant_id = messages.tenant_id
         WHERE messages.conversation_id = $1
         ORDER BY messages.created_at, messages.id
       `, [conversationId]);
@@ -116,6 +130,23 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  messageActionTarget(principal: AuthenticatedPrincipal, conversationId: string, messageId: string): Promise<{ providerKey: string } | null> {
+    return this.database.withTenant(principal, async (client) => {
+      if (!(await this.canAccess(client, principal, conversationId))) return null;
+      const result = await client.query<{ provider_key: string }>(`
+        SELECT channels.provider_key
+        FROM conversation_messages AS messages
+        JOIN conversations ON conversations.id = messages.conversation_id
+          AND conversations.tenant_id = messages.tenant_id
+        JOIN conversation_channels AS channels ON channels.id = conversations.channel_id
+          AND channels.tenant_id = conversations.tenant_id
+        WHERE messages.id = $1 AND conversations.id = $2
+          AND messages.provider_message_id IS NOT NULL
+      `, [messageId, conversationId]);
+      return result.rows[0] ? { providerKey: result.rows[0].provider_key } : null;
+    });
+  }
+
   resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string) {
     return this.database.withTenant(principal, async (client) => {
       const result = await client.query(`
@@ -133,27 +164,42 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
-  addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null> {
+  addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage, replyToMessageId?: string): Promise<ConversationMessageView | null> {
     return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
+      if (replyToMessageId && !(await client.query(
+        'SELECT 1 FROM conversation_messages WHERE id = $1 AND conversation_id = $2 AND provider_message_id IS NOT NULL',
+        [replyToMessageId, conversationId],
+      )).rowCount) return null;
       const result = await client.query(`
-        INSERT INTO conversation_messages (tenant_id, conversation_id, sent_by_user_id, direction, body, status)
-        VALUES ($1, $2, $3, 'outbound', $4, 'pending')
+        INSERT INTO conversation_messages (
+          tenant_id, conversation_id, sent_by_user_id, direction, body, status, quoted_message_id
+        )
+        VALUES ($1, $2, $3, 'outbound', $4, 'pending', $5)
         RETURNING *
-      `, [principal.tenantId, conversationId, principal.userId, message.body]);
+      `, [principal.tenantId, conversationId, principal.userId, message.body, replyToMessageId ?? null]);
       await client.query('UPDATE conversations SET last_message_at = now(), updated_at = now(), status = $2 WHERE id = $1', [conversationId, 'waiting']);
-      return this.mapMessage({ ...result.rows[0], sender_name: principal.name });
+      const quoted = replyToMessageId
+        ? await client.query('SELECT id AS quoted_id, direction AS quoted_direction, body AS quoted_body FROM conversation_messages WHERE id = $1', [replyToMessageId])
+        : null;
+      return this.mapMessage({ ...result.rows[0], ...quoted?.rows[0], sender_name: principal.name });
     }));
   }
 
   addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: Parameters<ConversationRepository['addOutboundMedia']>[2]): Promise<ConversationMessageView | null> {
     return this.withRealtime(principal.tenantId, 'conversations', () => this.database.withTenant(principal, async (client) => {
       if (!(await this.canAccess(client, principal, conversationId))) return null;
+      if (input.replyToMessageId && !(await client.query(
+        'SELECT 1 FROM conversation_messages WHERE id = $1 AND conversation_id = $2 AND provider_message_id IS NOT NULL',
+        [input.replyToMessageId, conversationId],
+      )).rowCount) return null;
       const result = await client.query(`
-        INSERT INTO conversation_messages (tenant_id, conversation_id, sent_by_user_id, direction, body, status)
-        VALUES ($1, $2, $3, 'outbound', $4, 'pending')
+        INSERT INTO conversation_messages (
+          tenant_id, conversation_id, sent_by_user_id, direction, body, status, quoted_message_id
+        )
+        VALUES ($1, $2, $3, 'outbound', $4, 'pending', $5)
         RETURNING *
-      `, [principal.tenantId, conversationId, principal.userId, input.body]);
+      `, [principal.tenantId, conversationId, principal.userId, input.body, input.replyToMessageId ?? null]);
       const message = result.rows[0];
       const attachment = await client.query(`
         INSERT INTO conversation_message_attachments (
@@ -168,7 +214,10 @@ export class PostgresConversationRepository implements ConversationRepository {
         input.attachment.durationSeconds ?? null,
       ]);
       await client.query('UPDATE conversations SET last_message_at = now(), updated_at = now(), status = $2 WHERE id = $1', [conversationId, 'waiting']);
-      return this.mapMessage({ ...message, sender_name: principal.name, attachments: attachment.rows });
+      const quoted = input.replyToMessageId
+        ? await client.query('SELECT id AS quoted_id, direction AS quoted_direction, body AS quoted_body FROM conversation_messages WHERE id = $1', [input.replyToMessageId])
+        : null;
+      return this.mapMessage({ ...message, ...quoted?.rows[0], sender_name: principal.name, attachments: attachment.rows });
     }));
   }
 
@@ -317,6 +366,16 @@ export class PostgresConversationRepository implements ConversationRepository {
   }
 
   private mapMessage(row: any): ConversationMessageView {
-    return { id: row.id, direction: row.direction, body: row.body, status: row.status, sentBy: row.sender_name ?? null, createdAt: row.created_at.toISOString(), attachments: row.attachments ?? [] };
+    return {
+      id: row.id,
+      direction: row.direction,
+      body: row.body,
+      status: row.status,
+      sentBy: row.sender_name ?? null,
+      createdAt: row.created_at.toISOString(),
+      attachments: row.attachments ?? [],
+      quotedMessage: row.quoted_id ? { id: row.quoted_id, direction: row.quoted_direction, body: row.quoted_body } : null,
+      reactions: row.reactions ?? [],
+    };
   }
 }

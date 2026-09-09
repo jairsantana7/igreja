@@ -158,6 +158,69 @@ describe('adapters do conector de conversas', () => {
     }));
   });
 
+  it('traduz resposta citada e reação sem vazar detalhes do Baileys para a aplicação', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ key: { id: 'provider-reply' } });
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      {} as ConversationRuntimeRepository,
+      {} as MediaStorage,
+      {} as ApplicationLogger,
+    );
+    (provider as any).sessions.set('channel', { socket: { sendMessage }, ready: Promise.resolve() });
+    const channel = { id: 'channel', tenantId: 'tenant', providerKey: 'whatsapp_web', phoneNumber: '+5511999999999', ownerUserId: 'owner' };
+
+    await provider.send({
+      channel,
+      conversationId: 'conversation',
+      messageId: 'reply',
+      recipient: '+5511988888888',
+      body: 'Resposta',
+      quotedMessage: { providerMessageId: 'provider-original', direction: 'inbound', body: 'Pergunta' },
+      idempotencyKey: 'reply',
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      '5511988888888@s.whatsapp.net',
+      { text: 'Resposta' },
+      { quoted: expect.objectContaining({ key: expect.objectContaining({ id: 'provider-original', fromMe: false }) }) },
+    );
+
+    await provider.react({
+      channel,
+      conversationId: 'conversation',
+      messageId: 'original',
+      recipient: '+5511988888888',
+      target: { providerMessageId: 'provider-original', direction: 'inbound', body: 'Pergunta' },
+      emoji: '🙏',
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith('5511988888888@s.whatsapp.net', {
+      react: { text: '🙏', key: { remoteJid: '5511988888888@s.whatsapp.net', id: 'provider-original', fromMe: false } },
+    });
+  });
+
+  it('registra reação recebida do celular ou do contato sobre a mensagem original', async () => {
+    const applyReaction = vi.fn();
+    const provider = new BaileysConversationProvider(
+      {} as ConversationProviderStateStore,
+      { applyReaction } as unknown as ConversationRuntimeRepository,
+      {} as MediaStorage,
+      {} as ApplicationLogger,
+    );
+    const channel = { id: 'channel', tenantId: 'tenant', providerKey: 'whatsapp_web', phoneNumber: '+5511999999999', ownerUserId: 'owner' };
+
+    await (provider as any).receiveReaction(channel, {
+      key: { id: 'provider-original' },
+      reaction: { key: { fromMe: false }, text: '👍' },
+    });
+
+    expect(applyReaction).toHaveBeenCalledWith({
+      tenantId: 'tenant',
+      channelId: 'channel',
+      targetProviderMessageId: 'provider-original',
+      actor: 'contact',
+      emoji: '👍',
+    });
+  });
+
   it('solicita ao celular mensagens anteriores usando o cursor da conversa', async () => {
     const fetchMessageHistory = vi.fn().mockResolvedValue('request-id');
     const provider = new BaileysConversationProvider(

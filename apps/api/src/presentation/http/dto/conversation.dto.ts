@@ -1,5 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, MinLength } from 'class-validator';
-import type { ConversationStatus } from '../../../domain/entities/conversation';
+import { CONVERSATION_REACTION_EMOJIS, type ConversationStatus } from '../../../domain/entities/conversation';
 
 export class CreateConversationChannelDto {
   @IsOptional() @IsUUID('4') ownerUserId?: string;
@@ -20,10 +20,16 @@ export class CreateConversationDto {
 
 export class ReplyConversationDto {
   @IsString() @Length(1, 10000) body!: string;
+  @IsOptional() @IsUUID('4') replyToMessageId?: string;
+}
+
+export class ReactConversationMessageDto {
+  @IsOptional() @IsIn(CONVERSATION_REACTION_EMOJIS) emoji?: (typeof CONVERSATION_REACTION_EMOJIS)[number];
 }
 
 export class SendConversationMediaDto {
   @IsOptional() @IsString() @Length(0, 4000) caption?: string;
+  @IsOptional() @IsUUID('4') replyToMessageId?: string;
 }
 
 export class CreateMemberFromConversationDto {

@@ -1,5 +1,5 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
-import type { ChannelConnectionStatus, ConversationChannelConfiguration, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
+import type { ChannelConnectionStatus, ConversationChannelConfiguration, ConversationReactionEmoji, ConversationStatus, OutboundConversationMessage } from '../../domain/entities/conversation';
 import type { StoredMedia } from './media-storage.port';
 
 export interface ConversationChannelView {
@@ -44,6 +44,8 @@ export interface ConversationMessageView {
   sentBy: string | null;
   createdAt: string;
   attachments: ConversationMessageAttachmentView[];
+  quotedMessage: { id: string; direction: 'inbound' | 'outbound'; body: string } | null;
+  reactions: Array<{ actor: 'channel' | 'contact'; emoji: string }>;
 }
 
 export interface ConversationMessageAttachmentView {
@@ -63,9 +65,10 @@ export interface ConversationRepository {
   create(principal: AuthenticatedPrincipal, input: { channelId: string; eventId?: string; memberUserId?: string; contactName: string; contactAddress: string }): Promise<ConversationSummaryView | null>;
   messages(principal: AuthenticatedPrincipal, conversationId: string): Promise<ConversationMessageView[] | null>;
   historySyncTarget(principal: AuthenticatedPrincipal, conversationId: string): Promise<{ providerKey: string } | null>;
+  messageActionTarget(principal: AuthenticatedPrincipal, conversationId: string, messageId: string): Promise<{ providerKey: string } | null>;
   resolveAttachment(principal: AuthenticatedPrincipal, conversationId: string, attachmentId: string): Promise<ConversationAttachmentSource | null>;
-  addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage): Promise<ConversationMessageView | null>;
-  addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: { body: string; attachment: ConversationIncomingAttachment }): Promise<ConversationMessageView | null>;
+  addOutbound(principal: AuthenticatedPrincipal, conversationId: string, message: OutboundConversationMessage, replyToMessageId?: string): Promise<ConversationMessageView | null>;
+  addOutboundMedia(principal: AuthenticatedPrincipal, conversationId: string, input: { body: string; attachment: ConversationIncomingAttachment; replyToMessageId?: string }): Promise<ConversationMessageView | null>;
   markQueued(principal: AuthenticatedPrincipal, conversationId: string, messageId: string, jobId: string): Promise<ConversationMessageView | null>;
   updateStatus(principal: AuthenticatedPrincipal, conversationId: string, status: ConversationStatus): Promise<ConversationSummaryView | null>;
   connection(principal: AuthenticatedPrincipal, channelId: string): Promise<ConversationChannelConnectionView | null>;
@@ -90,6 +93,22 @@ export interface ConversationOutboundDelivery {
   recipient: string;
   body: string;
   attachment?: ConversationAttachmentSource & { mediaKind: 'image' | 'audio' };
+  quotedMessage?: ConversationProviderMessageReference;
+}
+
+export interface ConversationProviderMessageReference {
+  providerMessageId: string;
+  direction: 'inbound' | 'outbound';
+  body: string;
+}
+
+export interface ConversationReactionDelivery {
+  channel: ConversationRuntimeChannel;
+  conversationId: string;
+  messageId: string;
+  recipient: string;
+  target: ConversationProviderMessageReference;
+  emoji: ConversationReactionEmoji | null;
 }
 
 export interface ConversationHistorySync {
@@ -108,6 +127,7 @@ export interface ConversationRuntimeRepository {
   findChannel(tenantId: string, channelId: string): Promise<ConversationRuntimeChannel | null>;
   findOutbound(tenantId: string, conversationId: string, messageId: string): Promise<ConversationOutboundDelivery | null>;
   findHistorySync(tenantId: string, conversationId: string): Promise<ConversationHistorySync | null>;
+  findReactionDelivery(tenantId: string, conversationId: string, messageId: string, emoji: ConversationReactionEmoji | null): Promise<ConversationReactionDelivery | null>;
   updateConnection(tenantId: string, channelId: string, update: {
     status: ChannelConnectionStatus;
     failureCode?: string | null;
@@ -122,6 +142,7 @@ export interface ConversationRuntimeRepository {
     contactAddressAliases?: string[];
     body: string;
     attachment?: ConversationIncomingAttachment;
+    quotedProviderMessageId?: string;
     receivedAt: Date;
   }): Promise<boolean>;
   receiveOutboundMirror(input: {
@@ -133,6 +154,7 @@ export interface ConversationRuntimeRepository {
     contactAddressAliases?: string[];
     body: string;
     attachment?: ConversationIncomingAttachment;
+    quotedProviderMessageId?: string;
     sentAt: Date;
   }): Promise<boolean>;
   ensureConversation(input: {
@@ -142,6 +164,14 @@ export interface ConversationRuntimeRepository {
     contactAddress: string;
     contactAddressAliases?: string[];
     lastActivityAt: Date;
+  }): Promise<void>;
+  applyReaction(input: {
+    tenantId: string;
+    channelId: string;
+    targetProviderMessageId: string;
+    actor: 'channel' | 'contact';
+    emoji: string | null;
+    createdByUserId?: string;
   }): Promise<void>;
   listUnresolvedContacts(tenantId: string, channelId: string): Promise<Array<{ conversationId: string; contactAddress: string }>>;
   resolveContactAddress(tenantId: string, channelId: string, conversationId: string, contactAddress: string): Promise<void>;
@@ -161,6 +191,7 @@ export interface ConversationProvider {
   connect(channel: ConversationRuntimeChannel): Promise<void>;
   disconnect(channel: ConversationRuntimeChannel): Promise<void>;
   send(input: ConversationOutboundDelivery & { idempotencyKey: string }): Promise<{ providerMessageId: string }>;
+  react(input: ConversationReactionDelivery): Promise<void>;
   syncHistory(input: ConversationHistorySync): Promise<void>;
   shutdown(): Promise<void>;
 }

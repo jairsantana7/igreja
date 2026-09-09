@@ -5,9 +5,11 @@ import IORedis from 'ioredis';
 import {
   ConnectConversationChannelJobUseCase,
   DisconnectConversationChannelJobUseCase,
+  DispatchConversationReactionJobUseCase,
   DispatchConversationMessageJobUseCase,
   SyncConversationHistoryJobUseCase,
 } from './application/use-cases/conversation-runtime.use-cases';
+import { CONVERSATION_REACTION_EMOJIS, type ConversationReactionEmoji } from './domain/entities/conversation';
 import { env } from './infrastructure/config/env';
 import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { BaileysConversationProvider } from './infrastructure/integrations/baileys/baileys-conversation.provider';
@@ -28,6 +30,15 @@ function requiredUuid(payload: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function reactionEmoji(payload: Record<string, unknown>): ConversationReactionEmoji | null {
+  const value = payload.emoji;
+  if (value === '') return null;
+  if (typeof value !== 'string' || !(CONVERSATION_REACTION_EMOJIS as readonly string[]).includes(value)) {
+    throw new UnrecoverableError('Payload inválido: emoji.');
+  }
+  return value as ConversationReactionEmoji;
+}
+
 async function bootstrap(): Promise<void> {
   if (env.jobQueueDriver !== 'bullmq' || env.whatsappWebDriver !== 'baileys') {
     throw new Error('O worker exige JOB_QUEUE_DRIVER=bullmq e WHATSAPP_WEB_DRIVER=baileys.');
@@ -46,6 +57,7 @@ async function bootstrap(): Promise<void> {
   const connectChannel = new ConnectConversationChannelJobUseCase(runtime, providers);
   const disconnectChannel = new DisconnectConversationChannelJobUseCase(runtime, providers);
   const dispatchMessage = new DispatchConversationMessageJobUseCase(runtime, providers);
+  const dispatchReaction = new DispatchConversationReactionJobUseCase(runtime, providers);
   const syncHistory = new SyncConversationHistoryJobUseCase(runtime, providers);
   const connection = new IORedis(env.redisUrl, { maxRetriesPerRequest: null });
   connection.on('error', () => undefined);
@@ -63,6 +75,16 @@ async function bootstrap(): Promise<void> {
     }
     if (job.name === 'conversations.message.dispatch') {
       await dispatchMessage.execute(tenantId, requiredUuid(payload, 'conversationId'), requiredUuid(payload, 'messageId'));
+      return;
+    }
+    if (job.name === 'conversations.message.react') {
+      await dispatchReaction.execute(
+        tenantId,
+        requiredUuid(payload, 'userId'),
+        requiredUuid(payload, 'conversationId'),
+        requiredUuid(payload, 'messageId'),
+        reactionEmoji(payload),
+      );
       return;
     }
     if (job.name === 'conversations.history.sync') {

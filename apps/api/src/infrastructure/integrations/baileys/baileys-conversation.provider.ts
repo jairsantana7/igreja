@@ -16,6 +16,7 @@ import type {
   ConversationHistorySync,
   ConversationOutboundDelivery,
   ConversationProvider,
+  ConversationReactionDelivery,
   ConversationProviderStateStore,
   ConversationRuntimeChannel,
   ConversationRuntimeRepository,
@@ -113,6 +114,16 @@ function textBody(message: WAMessage): string | null {
     ?? content?.documentMessage?.caption;
   const normalized = body?.trim();
   return normalized ? normalized.slice(0, 4_000) : null;
+}
+
+function quotedProviderMessageId(message: WAMessage): string | undefined {
+  const content = normalizeMessageContent(message.message);
+  const context = content?.extendedTextMessage?.contextInfo
+    ?? content?.imageMessage?.contextInfo
+    ?? content?.audioMessage?.contextInfo
+    ?? content?.videoMessage?.contextInfo
+    ?? content?.documentMessage?.contextInfo;
+  return context?.stanzaId || undefined;
 }
 
 function numericValue(value: number | { toString(): string } | null | undefined): number | null {
@@ -223,6 +234,11 @@ export class BaileysConversationProvider implements ConversationProvider {
     socket.ev.on('messaging-history.set', (history) => {
       session.inbound = session.inbound.then(() => this.receiveHistory(channel, session, history));
     });
+    socket.ev.on('messages.reaction', (reactions) => {
+      for (const item of reactions) {
+        session.inbound = session.inbound.then(() => this.receiveReaction(channel, item));
+      }
+    });
     socket.ev.on('connection.update', (update) => {
       void this.handleConnectionUpdate(channel, session, auth.clear, update.connection, update.qr, update.lastDisconnect?.error);
     });
@@ -250,26 +266,58 @@ export class BaileysConversationProvider implements ConversationProvider {
     ]);
     const jid = directJid(input.recipient);
     if (!jid) throw new Error('O destinatário não possui um endereço individual válido.');
+    const quoted = input.quotedMessage ? {
+      key: {
+        id: input.quotedMessage.providerMessageId,
+        remoteJid: jid,
+        fromMe: input.quotedMessage.direction === 'outbound',
+      },
+      message: { conversation: input.quotedMessage.body },
+    } as WAMessage : undefined;
     let result;
     if (input.attachment) {
       const content = await this.storage.read(input.attachment.storageKey);
-      result = input.attachment.mediaKind === 'image'
-        ? await session.socket.sendMessage(jid, {
+      const media = input.attachment.mediaKind === 'image'
+        ? {
             image: content,
             mimetype: input.attachment.mimeType,
             caption: input.body === 'Imagem' ? undefined : input.body,
-          })
-        : await session.socket.sendMessage(jid, {
+          }
+        : {
             audio: content,
             mimetype: input.attachment.mimeType,
             ptt: input.attachment.mimeType === 'audio/ogg',
-          });
+          };
+      result = quoted
+        ? await session.socket.sendMessage(jid, media, { quoted })
+        : await session.socket.sendMessage(jid, media);
     } else {
-      result = await session.socket.sendMessage(jid, { text: input.body });
+      result = quoted
+        ? await session.socket.sendMessage(jid, { text: input.body }, { quoted })
+        : await session.socket.sendMessage(jid, { text: input.body });
     }
     const providerMessageId = result?.key.id;
     if (!providerMessageId) throw new Error('O WhatsApp não retornou o identificador da mensagem.');
     return { providerMessageId };
+  }
+
+  async react(input: ConversationReactionDelivery): Promise<void> {
+    await this.connect(input.channel);
+    const session = this.sessions.get(input.channel.id);
+    if (!session) throw new Error('A sessão do canal não pôde ser inicializada.');
+    await this.waitUntilReady(session);
+    const jid = directJid(input.recipient);
+    if (!jid) throw new Error('A conversa não possui um endereço individual válido.');
+    await session.socket.sendMessage(jid, {
+      react: {
+        text: input.emoji ?? '',
+        key: {
+          remoteJid: jid,
+          id: input.target.providerMessageId,
+          fromMe: input.target.direction === 'outbound',
+        },
+      },
+    });
   }
 
   async syncHistory(input: ConversationHistorySync): Promise<void> {
@@ -332,6 +380,7 @@ export class BaileysConversationProvider implements ConversationProvider {
               contactAddressAliases: contact.aliases,
               body,
               attachment,
+              quotedProviderMessageId: quotedProviderMessageId(message),
               sentAt: receivedAt(message),
             })
           : await this.conversations.receiveInbound({
@@ -343,6 +392,7 @@ export class BaileysConversationProvider implements ConversationProvider {
               contactAddressAliases: contact.aliases,
               body,
               attachment,
+              quotedProviderMessageId: quotedProviderMessageId(message),
               receivedAt: receivedAt(message),
             });
         if (attachment && !stored) await this.storage.delete(attachment.storageKey);
@@ -353,6 +403,22 @@ export class BaileysConversationProvider implements ConversationProvider {
     } catch (error) {
       this.logger.captureException(error, { event: 'whatsapp_inbound_processing_failed', channelId: channel.id });
     }
+  }
+
+  private async receiveReaction(
+    channel: ConversationRuntimeChannel,
+    item: { key: WAMessage['key']; reaction: { key?: WAMessage['key'] | null; text?: string | null } },
+  ): Promise<void> {
+    const targetProviderMessageId = item.key.id;
+    if (!targetProviderMessageId) return;
+    const emoji = item.reaction.text?.trim().slice(0, 32) || null;
+    await this.conversations.applyReaction({
+      tenantId: channel.tenantId,
+      channelId: channel.id,
+      targetProviderMessageId,
+      actor: item.reaction.key?.fromMe ? 'channel' : 'contact',
+      emoji,
+    });
   }
 
   private async receiveHistory(

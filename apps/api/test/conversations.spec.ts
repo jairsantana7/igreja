@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationRepository } from '../src/application/ports/conversation.port';
 import type { AuthenticatedPrincipal } from '../src/domain/entities/permission';
-import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase } from '../src/application/use-cases/conversation.use-cases';
+import { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, GetConversationMediaUseCase, ListConversationsUseCase, ReactConversationMessageUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase } from '../src/application/use-cases/conversation.use-cases';
 import { AuthorizationError, ConflictError } from '../src/application/use-cases/errors';
 import type { MemberOnboardingRepository } from '../src/application/ports/member-onboarding.port';
 import type { PasswordHasher } from '../src/application/ports/authentication.port';
@@ -56,6 +56,46 @@ describe('central de conversas', () => {
     await expect(useCase.execute(principal(['conversations.reply']), 'conversation', 'Lembrete')).resolves.toMatchObject({ status: 'queued' });
     expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ deduplicationKey: message.id }), { attempts: 5 });
     expect(conversations.markQueued).toHaveBeenCalledWith(expect.any(Object), 'conversation', message.id, 'job-1');
+  });
+
+  it('preserva a referência da mensagem ao responder um trecho específico', async () => {
+    const message = { id: '90000000-0000-4000-8000-000000000001', status: 'pending' };
+    const conversations = {
+      addOutbound: vi.fn().mockResolvedValue(message),
+      markQueued: vi.fn().mockResolvedValue({ ...message, status: 'queued' }),
+    };
+    const useCase = new ReplyConversationUseCase(
+      conversations as unknown as ConversationRepository,
+      { enqueue: vi.fn().mockResolvedValue({ jobId: 'job-reply' }) },
+    );
+
+    await useCase.execute(principal(['conversations.reply']), 'conversation', 'Resposta', 'quoted-message');
+
+    expect(conversations.addOutbound).toHaveBeenCalledWith(
+      expect.any(Object),
+      'conversation',
+      expect.objectContaining({ body: 'Resposta' }),
+      'quoted-message',
+    );
+  });
+
+  it('valida acesso e adapter antes de enfileirar uma reação', async () => {
+    const conversations = { messageActionTarget: vi.fn().mockResolvedValue({ providerKey: 'whatsapp_web' }) };
+    const queue = { enqueue: vi.fn().mockResolvedValue({ jobId: 'job-reaction' }) };
+    const useCase = new ReactConversationMessageUseCase(
+      conversations as unknown as ConversationRepository,
+      queue,
+      { supportsConnection: (providerKey) => providerKey === 'whatsapp_web' },
+    );
+
+    await expect(useCase.execute(principal([]), 'conversation', 'message', '👍')).rejects.toThrow(AuthorizationError);
+    expect(conversations.messageActionTarget).not.toHaveBeenCalled();
+    await expect(useCase.execute(principal(['conversations.reply']), 'conversation', 'message', '❤️')).resolves.toBeUndefined();
+    expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'conversations.message.react',
+      deduplicationKey: 'message:reaction',
+      payload: expect.objectContaining({ messageId: 'message', emoji: '❤️' }),
+    }), { attempts: 3 });
   });
 
   it('valida e enfileira uma imagem privada enviada pela Central', async () => {

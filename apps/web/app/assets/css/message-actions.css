@@ -1,0 +1,194 @@
+.message-bubble {
+  position: relative;
+  margin-top: 1.4rem;
+}
+
+.message-actions {
+  position: absolute;
+  z-index: 4;
+  top: -2rem;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  border: 1px solid #cdd8d2;
+  border-radius: .65rem;
+  background: #fff;
+  padding: .2rem;
+  box-shadow: 0 4px 14px rgba(16, 43, 36, .12);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(.25rem);
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.message-bubble--inbound .message-actions { left: .3rem; }
+.message-bubble--outbound .message-actions { right: .3rem; }
+.message-bubble:hover .message-actions,
+.message-bubble:focus-within .message-actions,
+.message-actions--open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.message-actions button,
+.message-reaction-options button {
+  display: inline-flex;
+  min-height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  border: 0;
+  border-radius: .45rem;
+  background: transparent;
+  padding: .25rem .4rem;
+  color: #24453a;
+  font: inherit;
+  font-size: .66rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.message-actions button:hover,
+.message-actions button:focus-visible,
+.message-reaction-options button:hover,
+.message-reaction-options button:focus-visible,
+.message-reaction-options button.active {
+  outline: none;
+  background: #dcefe4;
+  color: #154b36;
+}
+
+.message-actions button:disabled { cursor: wait; opacity: .5; }
+.message-reaction-picker { position: relative; }
+
+.message-reaction-options {
+  position: absolute;
+  z-index: 6;
+  top: -3.25rem;
+  left: 50%;
+  display: flex;
+  gap: .15rem;
+  border: 1px solid #cdd8d2;
+  border-radius: 999px;
+  background: #fff;
+  padding: .35rem;
+  box-shadow: 0 7px 22px rgba(16, 43, 36, .16);
+  transform: translateX(-50%);
+}
+
+.message-reaction-options button {
+  width: 2rem;
+  min-height: 2rem;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.message-quote {
+  display: grid;
+  width: 100%;
+  max-width: 32rem;
+  gap: .15rem;
+  margin: 0 0 .55rem;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid #2f6b56;
+  border-radius: .35rem;
+  background: rgba(255, 255, 255, .62);
+  padding: .45rem .6rem;
+  color: #31473f;
+  text-align: left;
+  cursor: pointer;
+}
+
+.message-quote strong { color: #1d5a43; font-size: .67rem; }
+.message-quote span {
+  overflow: hidden;
+  font-size: .69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment { position: relative; }
+.message-media-download {
+  position: absolute;
+  right: .4rem;
+  bottom: .4rem;
+  border-radius: 999px;
+  background: rgba(18, 48, 39, .9);
+  padding: .3rem .55rem;
+  color: #fff;
+  font-size: .63rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.message-reactions {
+  display: flex;
+  min-height: 1.4rem;
+  align-items: center;
+  gap: .2rem;
+  margin: .35rem 0 -.25rem;
+}
+
+.message-reactions span {
+  display: grid;
+  min-width: 1.7rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid #b9cec1;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 .35rem;
+  font-size: .85rem;
+}
+
+.conversation-composer > .composer-reply {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .65rem;
+  margin: 0 0 .65rem;
+  border-left: 3px solid #2f6b56;
+  border-radius: .55rem;
+  background: #edf5f0;
+  padding: .55rem .7rem;
+}
+
+.composer-reply > span:nth-child(2) { min-width: 0; }
+.composer-reply strong,
+.composer-reply small { display: block; }
+.composer-reply strong { color: #1d5a43; font-size: .7rem; }
+.composer-reply small {
+  overflow: hidden;
+  margin-top: .15rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-reply button {
+  border: 0;
+  background: transparent;
+  color: #355a4c;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .message-actions {
+    position: static;
+    width: fit-content;
+    margin: -.35rem 0 .45rem;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  .message-bubble { margin-top: .65rem; }
+}
+
+@media (max-width: 650px) {
+  .message-actions button span { display: none; }
+  .message-reaction-options { left: 0; transform: none; }
+  .conversation-composer > .composer-reply { display: grid; }
+}

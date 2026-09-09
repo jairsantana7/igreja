@@ -57,6 +57,7 @@ Este projeto separa configuração, regra de negócio e comunicação com fornec
 - Invalidações em tempo real usam SSE entre API e navegador e a porta `ConversationRealtimeBus` entre processos. O adapter Redis publica apenas tenant e tipo do recurso; configure o proxy com buffering desabilitado para `/api/conversations/events`.
 - O worker restaura sessões conectáveis na inicialização. A descoberta usa uma função de banco estreita que retorna apenas tenant e canal; a leitura do canal e de suas credenciais continua ocorrendo sob RLS com contexto transacional.
 - O adapter Baileys solicita histórico de desktop e processa os blocos de forma idempotente. `WHATSAPP_HISTORY_CHAT_LIMIT` e `WHATSAPP_HISTORY_MESSAGE_LIMIT` limitam a importação inicial; uma solicitação incremental é enfileirada quando a conversa é aberta.
+- Citações e reações usam contratos neutros da porta de conversas. O adapter Baileys reconstrói somente a chave mínima da mensagem citada/alvo; copiar texto e baixar mídia não atravessam o provider.
 
 ### WhatsApp Web não oficial
 

@@ -23,6 +23,8 @@ interface Message {
   id: string; direction: 'inbound' | 'outbound'; body: string;
   status: 'received' | 'pending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed';
   sentBy: string | null; createdAt: string; attachments: MessageAttachment[];
+  quotedMessage: { id: string; direction: 'inbound' | 'outbound'; body: string } | null;
+  reactions: Array<{ actor: 'channel' | 'contact'; emoji: string }>;
 }
 interface MessageAttachment { id: string; kind: 'image' | 'audio'; mimeType: string; byteSize: number; durationSeconds: number | null }
 interface EventOption { id: string; title: string; owner: { id: string; name: string } }
@@ -63,6 +65,9 @@ const busy = ref(false);
 const busyChannelId = ref<string | null>(null);
 const feedback = ref('');
 const replyBody = ref('');
+const replyingTo = ref<Message | null>(null);
+const reactionBusyId = ref<string | null>(null);
+const openReactionId = ref<string | null>(null);
 const selectedMedia = ref<File | null>(null);
 const mediaInput = ref<HTMLInputElement | null>(null);
 const channelForm = reactive({ providerKey: 'whatsapp_web', displayName: '', phoneNumber: '', providerAccountId: '', secretReference: '' });
@@ -85,6 +90,7 @@ const channelStatusLabels: Record<ChannelConnectionStatus, string> = {
   configured: 'Pronto para conectar', connecting: 'Conectando', awaiting_qr: 'Aguardando leitura do QR',
   connected: 'Conectado', disconnecting: 'Desconectando', disconnected: 'Desconectado', failed: 'Falha na conexão',
 };
+const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
 const filtered = computed(() => (conversations.value ?? []).filter((item) => {
   const term = query.value.trim().toLocaleLowerCase('pt-BR');
   const matchesFilter = filter.value === 'active' ? item.status !== 'resolved' : item.status === filter.value;
@@ -100,6 +106,8 @@ watch(() => route.query.selected, (id) => {
 watch(selectedId, async (id) => {
   clearMediaUrls();
   clearSelectedMedia();
+  replyingTo.value = null;
+  openReactionId.value = null;
   showMemberForm.value = false;
   Object.assign(memberForm, { email: '', password: '' });
   if (id) {
@@ -334,11 +342,16 @@ async function reply() {
       const form = new FormData();
       form.append('media', selectedMedia.value);
       if (selectedMedia.value.type.startsWith('image/') && replyBody.value.trim()) form.append('caption', replyBody.value.trim());
+      if (replyingTo.value) form.append('replyToMessageId', replyingTo.value.id);
       await api(`/conversations/${selected.value.id}/media`, { method: 'POST', body: form });
     } else {
-      await api(`/conversations/${selected.value.id}/messages`, { method: 'POST', body: { body: replyBody.value } });
+      await api(`/conversations/${selected.value.id}/messages`, {
+        method: 'POST',
+        body: { body: replyBody.value, replyToMessageId: replyingTo.value?.id },
+      });
     }
     replyBody.value = '';
+    replyingTo.value = null;
     clearSelectedMedia();
   } catch (requestError: any) {
     const message = requestError?.data?.message;
@@ -346,6 +359,43 @@ async function reply() {
   } finally {
     await Promise.all([refreshMessages(), refresh()]);
     busy.value = false;
+  }
+}
+
+function quoteMessage(message: Message) {
+  replyingTo.value = message;
+  openReactionId.value = null;
+  nextTick(() => document.querySelector<HTMLTextAreaElement>('.conversation-composer textarea')?.focus());
+}
+
+function scrollToMessage(messageId: string) {
+  document.getElementById(`message-${messageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function reactToMessage(message: Message, emoji: typeof quickReactions[number]) {
+  if (!selected.value || reactionBusyId.value) return;
+  reactionBusyId.value = message.id;
+  openReactionId.value = null;
+  const current = message.reactions?.find((reaction) => reaction.actor === 'channel')?.emoji;
+  try {
+    await api(`/conversations/${selected.value.id}/messages/${message.id}/reaction`, {
+      method: 'PUT',
+      body: { emoji: current === emoji ? undefined : emoji },
+    });
+    feedback.value = current === emoji ? 'Reação removida.' : 'Reação enviada.';
+  } catch (requestError: any) {
+    feedback.value = requestError?.data?.message ?? 'Não foi possível enviar a reação.';
+  } finally {
+    reactionBusyId.value = null;
+  }
+}
+
+async function copyMessage(message: Message) {
+  try {
+    await navigator.clipboard.writeText(message.body);
+    feedback.value = 'Mensagem copiada.';
+  } catch {
+    feedback.value = 'O navegador não permitiu copiar a mensagem.';
   }
 }
 
@@ -519,16 +569,37 @@ function clearMediaUrls() {
           <p v-else-if="historySyncingId === selected.id" class="conversation-day">Buscando mensagens anteriores no celular…</p>
           <div v-else-if="!messages?.length" class="conversation-thread-empty"><span>◌</span><p>A conversa começou, mas ainda não há mensagens.</p></div>
           <div v-for="message in messages" :key="message.id" class="message-bubble" :class="message.direction === 'outbound' ? 'message-bubble--outbound' : 'message-bubble--inbound'">
+            <div class="message-actions" :class="{ 'message-actions--open': openReactionId === message.id }">
+              <button v-if="canReply" type="button" title="Responder esta mensagem" @click="quoteMessage(message)">↩ <span>Responder</span></button>
+              <div v-if="canReply" class="message-reaction-picker">
+                <button type="button" title="Reagir à mensagem" :disabled="reactionBusyId === message.id" @click="openReactionId = openReactionId === message.id ? null : message.id">☺ <span>Reagir</span></button>
+                <div v-if="openReactionId === message.id" class="message-reaction-options">
+                  <button v-for="emoji in quickReactions" :key="emoji" type="button" :class="{ active: message.reactions?.some((reaction) => reaction.actor === 'channel' && reaction.emoji === emoji) }" @click="reactToMessage(message, emoji)">{{ emoji }}</button>
+                </div>
+              </div>
+              <button type="button" title="Copiar texto" @click="copyMessage(message)">▣ <span>Copiar</span></button>
+            </div>
+            <button v-if="message.quotedMessage" type="button" class="message-quote" @click="scrollToMessage(message.quotedMessage.id)">
+              <strong>{{ message.quotedMessage.direction === 'outbound' ? 'Você' : selected.contact.name }}</strong>
+              <span>{{ message.quotedMessage.body }}</span>
+            </button>
             <div v-for="attachment in message.attachments" :key="attachment.id" class="message-attachment">
               <a v-if="attachment.kind === 'image' && mediaUrls[attachment.id]" :href="mediaUrls[attachment.id]" target="_blank" rel="noopener noreferrer" aria-label="Abrir imagem em tamanho original"><img :src="mediaUrls[attachment.id]" :alt="message.body === 'Imagem' ? 'Imagem recebida na conversa' : message.body"></a>
               <audio v-else-if="attachment.kind === 'audio' && mediaUrls[attachment.id]" :src="mediaUrls[attachment.id]" controls preload="metadata">Seu navegador não consegue reproduzir este áudio.</audio>
               <span v-else-if="mediaErrors[attachment.id]" class="message-attachment__error">Mídia indisponível</span>
               <span v-else class="message-attachment__loading">Carregando mídia…</span>
+              <a v-if="mediaUrls[attachment.id]" class="message-media-download" :href="mediaUrls[attachment.id]" :download="`mensagem-${message.id}`">↓ Baixar</a>
             </div>
-            <p>{{ message.body }}</p><small>{{ formatter.format(new Date(message.createdAt)) }} · {{ messageStatusLabels[message.status] }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
+            <p :id="`message-${message.id}`">{{ message.body }}</p>
+            <div v-if="message.reactions?.length" class="message-reactions"><span v-for="reaction in message.reactions" :key="reaction.actor" :title="reaction.actor === 'channel' ? 'Reação do canal' : `Reação de ${selected.contact.name}`">{{ reaction.emoji }}</span></div>
+            <small>{{ formatter.format(new Date(message.createdAt)) }} · {{ messageStatusLabels[message.status] }}<template v-if="message.sentBy"> · {{ message.sentBy }}</template></small>
           </div>
         </div>
         <form v-if="canReply" class="conversation-composer" @submit.prevent="reply">
+          <div v-if="replyingTo" class="composer-reply">
+            <span>↩</span><span><strong>Respondendo a {{ replyingTo.direction === 'outbound' ? 'você' : selected.contact.name }}</strong><small>{{ replyingTo.body }}</small></span>
+            <button type="button" aria-label="Cancelar resposta" @click="replyingTo = null">×</button>
+          </div>
           <div v-if="selectedMedia" class="composer-attachment">
             <span class="composer-attachment__icon">{{ selectedMedia.type.startsWith('image/') ? '▧' : '♪' }}</span>
             <span><strong>{{ selectedMedia.name }}</strong><small>{{ formatFileSize(selectedMedia.size) }} · {{ selectedMedia.type.startsWith('image/') ? 'Imagem' : 'Áudio' }}</small></span>

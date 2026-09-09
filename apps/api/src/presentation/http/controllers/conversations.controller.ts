@@ -2,12 +2,12 @@ import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, I
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable } from 'rxjs';
 import { TOKENS } from '../../../application/ports/tokens';
-import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
+import type { ConnectConversationChannelUseCase, CreateConversationChannelUseCase, CreateConversationUseCase, CreateMemberFromConversationUseCase, DeleteConversationChannelUseCase, DisconnectConversationChannelUseCase, GetConversationChannelConnectionUseCase, GetConversationMediaUseCase, GetConversationMessagesUseCase, ListConversationChannelsUseCase, ListConversationsUseCase, ReactConversationMessageUseCase, ReplyConversationUseCase, RequestConversationHistorySyncUseCase, SendConversationMediaUseCase, UpdateConversationStatusUseCase } from '../../../application/use-cases/conversation.use-cases';
 import { MAX_CONVERSATION_MEDIA_SIZE } from '../../../application/services/conversation-media.policy';
 import { PERMISSIONS, type AuthenticatedPrincipal } from '../../../domain/entities/permission';
 import { CurrentPrincipal } from '../decorators/current-principal.decorator';
 import { RequireAnyPermission, RequirePermissions } from '../decorators/require-permissions.decorator';
-import { CreateConversationChannelDto, CreateConversationDto, CreateMemberFromConversationDto, ReplyConversationDto, SendConversationMediaDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
+import { CreateConversationChannelDto, CreateConversationDto, CreateMemberFromConversationDto, ReactConversationMessageDto, ReplyConversationDto, SendConversationMediaDto, UpdateConversationStatusDto } from '../dto/conversation.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import type { ListWhatsAppTemplatesUseCase, SyncWhatsAppTemplatesUseCase } from '../../../application/use-cases/whatsapp-template.use-cases';
@@ -31,6 +31,7 @@ export class ConversationsController {
     @Inject(TOKENS.requestConversationHistorySyncUseCase) private readonly requestHistorySync: RequestConversationHistorySyncUseCase,
     @Inject(TOKENS.getConversationMediaUseCase) private readonly getMedia: GetConversationMediaUseCase,
     @Inject(TOKENS.replyConversationUseCase) private readonly replyConversation: ReplyConversationUseCase,
+    @Inject(TOKENS.reactConversationMessageUseCase) private readonly reactMessage: ReactConversationMessageUseCase,
     @Inject(TOKENS.sendConversationMediaUseCase) private readonly sendMedia: SendConversationMediaUseCase,
     @Inject(TOKENS.updateConversationStatusUseCase) private readonly updateStatus: UpdateConversationStatusUseCase,
     @Inject(TOKENS.listWhatsAppTemplatesUseCase) private readonly listWhatsAppTemplates: ListWhatsAppTemplatesUseCase,
@@ -141,7 +142,22 @@ export class ConversationsController {
 
   @Post('conversations/:conversationId/messages')
   @RequirePermissions(PERMISSIONS.conversationsReply)
-  reply(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() dto: ReplyConversationDto) { return this.replyConversation.execute(principal, id, dto.body); }
+  reply(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('conversationId', new ParseUUIDPipe()) id: string, @Body() dto: ReplyConversationDto) {
+    return this.replyConversation.execute(principal, id, dto.body, dto.replyToMessageId);
+  }
+
+  @Put('conversations/:conversationId/messages/:messageId/reaction')
+  @HttpCode(202)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @RequirePermissions(PERMISSIONS.conversationsReply)
+  reaction(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('conversationId', new ParseUUIDPipe()) conversationId: string,
+    @Param('messageId', new ParseUUIDPipe()) messageId: string,
+    @Body() dto: ReactConversationMessageDto,
+  ) {
+    return this.reactMessage.execute(principal, conversationId, messageId, dto.emoji);
+  }
 
   @Post('conversations/:conversationId/media')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -158,6 +174,7 @@ export class ConversationsController {
       content: file.buffer,
       mimeType: file.mimetype,
       caption: dto.caption,
+      replyToMessageId: dto.replyToMessageId,
     });
   }
 

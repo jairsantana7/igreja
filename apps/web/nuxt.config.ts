@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-09-01',
   devtools: { enabled: true },
   srcDir: 'app/',
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/message-actions.css'],
   runtimeConfig: {
     public: {
       appName: process.env.APP_NAME ?? 'Minha Comunidade',
