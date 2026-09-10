@@ -24,15 +24,15 @@ pnpm dev
 Abra `http://localhost:3100`. O seed local cria:
 
 - comunidade: `comunidade-demo`
-- usuário inicial: `Admin Inicial`
-- e-mail: `admin@comunidade.local`
-- senha: `Comunidade#2026`
+- administrador inicial: `Admin Inicial` — `admin@comunidade.local` / `Comunidade#2026`
+- membro para testar confirmações: `Membro Demonstração` — `membro@comunidade.local` / `Membro#2026`
 - evento futuro: `Encontro de boas-vindas`
 - evento concluído: `Domingo em comunidade`
 - galeria pública com três fotos sintéticas: `http://localhost:3100/g/65000000-0000-4000-8000-000000000001`
 - evento público com a galeria anterior vinculada: `http://localhost:3100/e/40000000-0000-4000-8000-000000000001`
 
 Essas credenciais são apenas para desenvolvimento. A API fica em `http://localhost:3101/api` e o PostgreSQL escuta somente em `127.0.0.1:5434`.
+O membro de demonstração possui somente as permissões mínimas para confirmar eventos, gerenciar sua sessão e visualizar galerias destinadas a membros; ele não acessa o dashboard administrativo.
 
 ## Comandos
 

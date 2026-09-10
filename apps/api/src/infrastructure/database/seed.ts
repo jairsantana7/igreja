@@ -8,6 +8,7 @@ import { SharpGalleryImageProcessor } from '../media/sharp-gallery-image.process
 const ids = {
   tenant: '00000000-0000-4000-8000-000000000001',
   admin: '10000000-0000-4000-8000-000000000001',
+  member: '10000000-0000-4000-8000-000000000002',
   adminRole: '20000000-0000-4000-8000-000000000001',
   pastorRole: '20000000-0000-4000-8000-000000000002',
   memberRole: '20000000-0000-4000-8000-000000000003',
@@ -79,7 +80,8 @@ async function seed(): Promise<void> {
   const pool = new Pool({ connectionString: env.migrationUrl, application_name: 'igreja-seed' });
   const client = await pool.connect();
   try {
-    const passwordHash = await hash('Comunidade#2026', 12);
+    const adminPasswordHash = await hash('Comunidade#2026', 12);
+    const memberPasswordHash = await hash('Membro#2026', 12);
     await client.query('BEGIN');
     await client.query('SET LOCAL ROLE igreja_owner');
     await client.query(`
@@ -95,7 +97,13 @@ async function seed(): Promise<void> {
       INSERT INTO users (id, tenant_id, name, email, password_hash)
       VALUES ($1, $2, 'Admin Inicial', 'admin@comunidade.local', $3)
       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, password_hash = EXCLUDED.password_hash, updated_at = now()
-    `, [ids.admin, ids.tenant, passwordHash]);
+    `, [ids.admin, ids.tenant, adminPasswordHash]);
+    await client.query(`
+      INSERT INTO users (id, tenant_id, name, email, password_hash)
+      VALUES ($1, $2, 'Membro Demonstração', 'membro@comunidade.local', $3)
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email,
+        password_hash = EXCLUDED.password_hash, updated_at = now()
+    `, [ids.member, ids.tenant, memberPasswordHash]);
     await client.query(`
       INSERT INTO roles (id, tenant_id, key, name, is_system) VALUES
         ($1, $4, 'admin', 'Administrador', true),
@@ -135,9 +143,11 @@ async function seed(): Promise<void> {
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.memberRole]);
     await client.query(`
-      INSERT INTO user_roles (tenant_id, user_id, role_id) VALUES ($1, $2, $3)
+      INSERT INTO user_roles (tenant_id, user_id, role_id) VALUES
+        ($1, $2, $3),
+        ($1, $4, $5)
       ON CONFLICT DO NOTHING
-    `, [ids.tenant, ids.admin, ids.adminRole]);
+    `, [ids.tenant, ids.admin, ids.adminRole, ids.member, ids.memberRole]);
     await client.query(`
       INSERT INTO events (
         id, tenant_id, created_by_user_id, public_id, slug, title, description,
