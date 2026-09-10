@@ -5,16 +5,20 @@ const auth = useAuth();
 const config = useRuntimeConfig();
 const saving = ref(false);
 const errorMessage = ref('');
-const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as 'hero' | 'carousel' | 'fixed', heroShadeColor: '#173D32', linkedGalleryId: '', familyRegistrationEnabled: false, publish: true, fields: [] as any[], offerings: [] as any[] });
+const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as 'hero' | 'carousel' | 'fixed', heroShadeColor: '#173D32', linkedGalleryId: '', pixEnabled: false, familyRegistrationEnabled: false, publish: true, fields: [] as any[], offerings: [] as any[] });
 const images = ref<File[]>([]);
 const previews = ref<string[]>([]);
 const createdEvent = ref<any>(null);
 interface EventTemplate { id: string; name: string; description: string; location: string; capacity: number | null; mediaDisplayMode: 'hero' | 'carousel' | 'fixed'; fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }> }
 interface LinkableGallery { id: string; publicId: string; title: string; photoCount: number; coverPhotoId: string | null; event: { title: string; startsAt: string } }
+interface PixSettings { payments: { pix: { enabled: boolean; key: string; recipientName: string } } }
 const canUseTemplates = computed(() => auth.session.value?.user.permissions.includes('events.templates_manage'));
 const canLinkGallery = computed(() => auth.session.value?.user.permissions.includes('galleries.link'));
+const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
 const { data: templates } = await useAsyncData('event-templates', () => canUseTemplates.value ? api<EventTemplate[]>('/event-templates') : Promise.resolve([]), { server: false });
 const { data: galleryOptions } = await useAsyncData('linkable-event-galleries', () => canLinkGallery.value ? api<LinkableGallery[]>('/events/linkable-galleries') : Promise.resolve([]), { server: false, watch: [canLinkGallery] });
+const { data: pixSettings } = await useAsyncData('event-pix-settings', () => canReadSettings.value ? api<PixSettings>('/settings') : Promise.resolve(null), { server: false, watch: [canReadSettings] });
+const pixReady = computed(() => Boolean(pixSettings.value?.payments.pix.enabled && pixSettings.value.payments.pix.key));
 const selectedTemplate = ref('');
 const selectedGallery = computed(() => galleryOptions.value?.find((gallery) => gallery.id === form.linkedGalleryId));
 const galleryDate = (value: string) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(value));
@@ -52,8 +56,8 @@ onBeforeUnmount(() => previews.value.forEach(URL.revokeObjectURL));
 async function save() {
   saving.value = true; errorMessage.value = '';
   try {
-    const { linkedGalleryId, ...eventForm } = form;
-    const event = createdEvent.value ?? await api<any>('/events', { method: 'POST', body: { ...eventForm, ...(canLinkGallery.value ? { linkedGalleryId: linkedGalleryId || null } : {}), registrationDeadline: form.registrationDeadline || undefined, capacity: form.capacity || undefined, fields: form.fields.map(({ optionsText, ...field }) => ({ ...field, options: field.type === 'single_choice' ? optionsText.split('\n').map((v: string) => v.trim()).filter(Boolean) : [] })), offerings: form.offerings.map(({ priceReais, ...offering }) => ({ ...offering, priceCents: Math.round(Number(priceReais || 0) * 100) })) } });
+    const { linkedGalleryId, pixEnabled, ...eventForm } = form;
+    const event = createdEvent.value ?? await api<any>('/events', { method: 'POST', body: { ...eventForm, ...(canLinkGallery.value ? { linkedGalleryId: linkedGalleryId || null } : {}), ...(canReadSettings.value ? { pixEnabled } : {}), registrationDeadline: form.registrationDeadline || undefined, capacity: form.capacity || undefined, fields: form.fields.map(({ optionsText, ...field }) => ({ ...field, options: field.type === 'single_choice' ? optionsText.split('\n').map((v: string) => v.trim()).filter(Boolean) : [] })), offerings: form.offerings.map(({ priceReais, ...offering }) => ({ ...offering, priceCents: Math.round(Number(priceReais || 0) * 100) })) } });
     createdEvent.value = event;
     if (images.value.length) {
       const body = new FormData();
@@ -84,7 +88,15 @@ async function save() {
         </div>
       </section>
       <section class="editor-card"><div class="editor-card__heading"><span>3</span><div><h2>Participantes e formulário</h2><p>Nome e e-mail já fazem parte da conta do membro.</p></div><button type="button" class="button" @click="addField">＋ Adicionar pergunta</button></div><label class="feature-option"><input v-model="form.familyRegistrationEnabled" type="checkbox"><span><strong>Permitir confirmação da família</strong><small>O responsável poderá selecionar a si, cônjuge e filhos já cadastrados ou informá-los no primeiro acesso.</small></span></label><div v-if="!form.fields.length" class="form-empty">Nenhuma pergunta adicional. Você pode publicar apenas com os dados da conta.</div><div v-for="(field, index) in form.fields" :key="index" class="field-builder"><span class="drag">⋮⋮</span><label class="field"><span>Pergunta</span><input v-model="field.label" placeholder="Ex.: Possui alguma restrição alimentar?" required></label><label class="field"><span>Tipo</span><select v-model="field.type"><option value="short_text">Texto curto</option><option value="long_text">Texto longo</option><option value="single_choice">Escolha única</option><option value="checkbox">Confirmação</option></select></label><label v-if="field.type === 'single_choice'" class="field field--wide"><span>Opções (uma por linha)</span><textarea v-model="field.optionsText" rows="3" required></textarea></label><label class="check"><input v-model="field.required" type="checkbox"> Obrigatório</label><button type="button" class="remove" aria-label="Remover campo" @click="removeField(index)">×</button></div></section>
-      <section class="editor-card"><div class="editor-card__heading"><span>4</span><div><h2>Opções do evento</h2><p>Adicionais opcionais, como café da manhã. A escolha não representa pagamento confirmado.</p></div><button type="button" class="button" @click="addOffering">＋ Adicionar opção</button></div><div v-if="!form.offerings.length" class="form-empty">Nenhuma opção adicional configurada.</div><div v-for="(offering, index) in form.offerings" :key="index" class="offering-builder"><label class="field"><span>Nome</span><input v-model="offering.name" placeholder="Café da manhã" required></label><label class="field"><span>Valor (R$)</span><input v-model.number="offering.priceReais" type="number" min="0" step="0.01"></label><label class="field field--wide"><span>Descrição</span><input v-model="offering.description" placeholder="Opcional para quem desejar participar"></label><button type="button" class="remove" aria-label="Remover opção" @click="removeOffering(index)">×</button></div></section>
+      <section class="editor-card">
+        <div class="editor-card__heading"><span>4</span><div><h2>Opções do evento</h2><p>Adicionais opcionais, como café da manhã.</p></div><button type="button" class="button" @click="addOffering">＋ Adicionar opção</button></div>
+        <div v-if="!form.offerings.length" class="form-empty">Nenhuma opção adicional configurada.</div>
+        <div v-for="(offering, index) in form.offerings" :key="index" class="offering-builder"><label class="field"><span>Nome</span><input v-model="offering.name" placeholder="Café da manhã" required></label><label class="field"><span>Valor (R$)</span><input v-model.number="offering.priceReais" type="number" min="0" step="0.01"></label><label class="field field--wide"><span>Descrição</span><input v-model="offering.description" placeholder="Opcional para quem desejar participar"></label><button type="button" class="remove" aria-label="Remover opção" @click="removeOffering(index)">×</button></div>
+        <div v-if="canReadSettings" class="event-pix-link">
+          <label class="feature-option" :class="{ 'feature-option--disabled': !pixReady }"><input v-model="form.pixEnabled" type="checkbox" :disabled="!pixReady"><span><strong>Receber os adicionais por PIX</strong><small v-if="pixReady">O QR Code usará {{ pixSettings?.payments.pix.recipientName }} · chave {{ pixSettings?.payments.pix.key }}.</small><small v-else>Configure e habilite uma chave PIX nas Configurações antes de vincular.</small></span></label>
+          <NuxtLink v-if="!pixReady" to="/settings" class="button button--small">Configurar PIX</NuxtLink>
+        </div>
+      </section>
       <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p><footer class="editor-actions"><label class="check"><input v-model="form.publish" type="checkbox" :disabled="Boolean(createdEvent)"> Publicar e ativar o link agora</label><div><NuxtLink to="/dashboard" class="button">Cancelar</NuxtLink><button class="button button--primary" type="submit" :disabled="saving">{{ saving ? 'Salvando…' : createdEvent ? 'Tentar enviar imagens' : 'Salvar evento' }}</button></div></footer>
     </form>
   </div>

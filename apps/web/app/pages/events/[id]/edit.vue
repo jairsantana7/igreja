@@ -12,10 +12,12 @@ interface ManagedEvent {
   mediaDisplayMode: 'hero' | 'carousel' | 'fixed';
   heroShadeColor: string;
   familyRegistrationEnabled: boolean;
+  pixEnabled: boolean;
   fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>;
   offerings: Array<{ key: string; name: string; description: string; priceCents: number }>;
   linkedGallery: (LinkableGallery & { description: string }) | null;
 }
+interface PixSettings { payments: { pix: { enabled: boolean; key: string; recipientName: string } } }
 
 useHead({ title: 'Editar evento' });
 const route = useRoute();
@@ -25,9 +27,12 @@ const config = useRuntimeConfig();
 const canUpdate = computed(() => auth.session.value?.user.permissions.includes('events.update'));
 const canCancel = computed(() => auth.session.value?.user.permissions.includes('events.publish'));
 const canLinkGallery = computed(() => auth.session.value?.user.permissions.includes('galleries.link'));
+const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
 const eventId = String(route.params.id);
 const { data: event, pending, error } = await useAsyncData(`event-${eventId}`, () => api<ManagedEvent>(`/events/${eventId}`), { server: false });
 const { data: linkableGalleries } = await useAsyncData('linkable-event-galleries', () => canLinkGallery.value ? api<LinkableGallery[]>('/events/linkable-galleries') : Promise.resolve([]), { server: false, watch: [canLinkGallery] });
+const { data: pixSettings } = await useAsyncData('event-pix-settings', () => canReadSettings.value ? api<PixSettings>('/settings') : Promise.resolve(null), { server: false, watch: [canReadSettings] });
+const pixReady = computed(() => Boolean(pixSettings.value?.payments.pix.enabled && pixSettings.value.payments.pix.key));
 const saving = ref(false);
 const cancelling = ref(false);
 const cancelDialogOpen = ref(false);
@@ -35,7 +40,7 @@ const errorMessage = ref('');
 const images = ref<File[]>([]);
 const previews = ref<string[]>([]);
 const originalLinkedGalleryId = ref('');
-const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as ManagedEvent['mediaDisplayMode'], heroShadeColor: '#173D32', linkedGalleryId: '', familyRegistrationEnabled: false, fields: [] as any[], offerings: [] as any[] });
+const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as ManagedEvent['mediaDisplayMode'], heroShadeColor: '#173D32', linkedGalleryId: '', pixEnabled: false, familyRegistrationEnabled: false, fields: [] as any[], offerings: [] as any[] });
 const galleryOptions = computed(() => {
   const options = [...(linkableGalleries.value ?? [])];
   const current = event.value?.linkedGallery;
@@ -67,6 +72,7 @@ watch(event, (current) => {
     mediaDisplayMode: current.mediaDisplayMode,
     heroShadeColor: current.heroShadeColor,
     linkedGalleryId: current.linkedGallery?.id ?? '',
+    pixEnabled: current.pixEnabled,
     familyRegistrationEnabled: current.familyRegistrationEnabled,
     fields: current.fields.map((field) => ({ ...field, optionsText: field.options.join('\n') })),
     offerings: current.offerings.map((offering) => ({ ...offering, priceReais: offering.priceCents / 100 })),
@@ -91,7 +97,7 @@ onBeforeUnmount(() => previews.value.forEach(URL.revokeObjectURL));
 async function save() {
   saving.value = true; errorMessage.value = '';
   try {
-    const { linkedGalleryId, ...eventDetails } = form;
+    const { linkedGalleryId, pixEnabled, ...eventDetails } = form;
     await api(`/events/${eventId}`, {
       method: 'PUT',
       body: {
@@ -99,6 +105,7 @@ async function save() {
         ...(canLinkGallery.value && linkedGalleryId !== originalLinkedGalleryId.value
           ? { linkedGalleryId: linkedGalleryId || null }
           : {}),
+        ...(canReadSettings.value ? { pixEnabled } : {}),
         registrationDeadline: form.registrationDeadline || undefined,
         capacity: form.capacity || undefined,
         fields: form.fields.map(({ optionsText, id: _id, ...field }) => ({ ...field, options: field.type === 'single_choice' ? optionsText.split('\n').map((value: string) => value.trim()).filter(Boolean) : [] })),
@@ -149,7 +156,15 @@ async function cancelEvent() {
         </div>
       </section>
       <section class="editor-card"><div class="editor-card__heading"><span>3</span><div><h2>Participantes e formulário</h2><p>Campos que já possuem respostas não podem ser removidos.</p></div><button type="button" class="button" @click="addField">＋ Adicionar pergunta</button></div><label class="feature-option"><input v-model="form.familyRegistrationEnabled" type="checkbox"><span><strong>Permitir confirmação da família</strong><small>O responsável poderá escolher quem vai participar usando seu cadastro familiar.</small></span></label><div v-if="!form.fields.length" class="form-empty">Nenhuma pergunta adicional.</div><div v-for="(field, index) in form.fields" :key="field.key || index" class="field-builder"><span class="drag">⋮⋮</span><label class="field"><span>Pergunta</span><input v-model="field.label" required></label><label class="field"><span>Tipo</span><select v-model="field.type"><option value="short_text">Texto curto</option><option value="long_text">Texto longo</option><option value="single_choice">Escolha única</option><option value="checkbox">Confirmação</option></select></label><label v-if="field.type === 'single_choice'" class="field field--wide"><span>Opções (uma por linha)</span><textarea v-model="field.optionsText" rows="3" required></textarea></label><label class="check"><input v-model="field.required" type="checkbox"> Obrigatório</label><button type="button" class="remove" aria-label="Remover campo" @click="removeField(index)">×</button></div></section>
-      <section class="editor-card"><div class="editor-card__heading"><span>4</span><div><h2>Opções do evento</h2><p>Adicionais opcionais, como café da manhã. A escolha não representa pagamento confirmado.</p></div><button type="button" class="button" @click="addOffering">＋ Adicionar opção</button></div><div v-if="!form.offerings.length" class="form-empty">Nenhuma opção adicional configurada.</div><div v-for="(offering, index) in form.offerings" :key="offering.key || index" class="offering-builder"><label class="field"><span>Nome</span><input v-model="offering.name" required></label><label class="field"><span>Valor (R$)</span><input v-model.number="offering.priceReais" type="number" min="0" step="0.01"></label><label class="field field--wide"><span>Descrição</span><input v-model="offering.description"></label><button type="button" class="remove" aria-label="Remover opção" @click="removeOffering(index)">×</button></div></section>
+      <section class="editor-card">
+        <div class="editor-card__heading"><span>4</span><div><h2>Opções do evento</h2><p>Adicionais opcionais, como café da manhã.</p></div><button type="button" class="button" @click="addOffering">＋ Adicionar opção</button></div>
+        <div v-if="!form.offerings.length" class="form-empty">Nenhuma opção adicional configurada.</div>
+        <div v-for="(offering, index) in form.offerings" :key="offering.key || index" class="offering-builder"><label class="field"><span>Nome</span><input v-model="offering.name" required></label><label class="field"><span>Valor (R$)</span><input v-model.number="offering.priceReais" type="number" min="0" step="0.01"></label><label class="field field--wide"><span>Descrição</span><input v-model="offering.description"></label><button type="button" class="remove" aria-label="Remover opção" @click="removeOffering(index)">×</button></div>
+        <div v-if="canReadSettings" class="event-pix-link">
+          <label class="feature-option" :class="{ 'feature-option--disabled': !pixReady }"><input v-model="form.pixEnabled" type="checkbox" :disabled="!pixReady && !form.pixEnabled"><span><strong>Receber os adicionais por PIX</strong><small v-if="pixReady">O QR Code usará {{ pixSettings?.payments.pix.recipientName }} · chave {{ pixSettings?.payments.pix.key }}.</small><small v-else>Desmarque para retirar o vínculo ou reative a chave PIX nas Configurações.</small></span></label>
+          <NuxtLink v-if="!pixReady" to="/settings" class="button button--small">Configurar PIX</NuxtLink>
+        </div>
+      </section>
       <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p><footer class="editor-actions"><span class="muted">Todas as alterações serão registradas na auditoria.</span><div><NuxtLink to="/events" class="button">Cancelar edição</NuxtLink><button v-if="canUpdate" class="button button--primary" type="submit" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar alterações' }}</button></div></footer>
     </form>
     <ConfirmDialog :open="cancelDialogOpen" :title="`Cancelar ${event?.title ?? 'evento'}?`" description="O link público será fechado imediatamente. Inscrições e respostas existentes continuarão disponíveis no histórico." confirm-label="Cancelar evento" :busy="cancelling" @cancel="cancelDialogOpen = false" @confirm="cancelEvent" />

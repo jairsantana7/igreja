@@ -65,6 +65,10 @@ export class EventDetailsDto {
   @IsUUID('4')
   linkedGalleryId?: string | null;
 
+  @IsOptional()
+  @IsBoolean()
+  pixEnabled?: boolean;
+
   @IsBoolean()
   familyRegistrationEnabled = false;
 

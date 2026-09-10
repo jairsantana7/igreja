@@ -15,6 +15,8 @@ export interface ManagedRegistrationView {
   registeredAt: string;
   checkedInAt: string | null;
   checkedInBy: string | null;
+  pixPaymentDeclaredAt: string | null;
+  pixPaymentAmountCents: number | null;
   participants: Array<{
     id: string; name: string; sourceType: 'registrant' | 'spouse' | 'child';
     checkedInAt: string | null; checkedInBy: string | null;

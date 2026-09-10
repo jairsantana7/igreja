@@ -169,13 +169,14 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quando o evento habilita inscrição familiar, o responsável pela inscrição assinala quais pessoas irão: ele próprio, cônjuge e filhos já apresentados no perfil.
 - A inscrição pertence ao responsável, mas cada pessoa assinalada vira um participante do evento. A lista guarda uma fotografia do nome e da relação no momento da confirmação.
 - O responsável pode corrigir seu perfil durante a inscrição; os dados salvos serão sugeridos em eventos futuros para evitar perguntas repetidas.
+- Quando o perfil já existe, a inscrição mostra primeiro um resumo e mantém a edição recolhida. O membro abre “Revisar/editar meus dados” somente quando precisar alterar o cadastro; a seleção de participantes continua visível.
 - Deve existir ao menos um participante por inscrição. Em eventos sem seleção familiar, a própria pessoa autenticada é confirmada automaticamente.
 - Não haverá no MVP convite, aprovação do cônjuge ou conciliação complexa entre confirmações feitas pelas duas pessoas do casal. A família coordena quem fará a confirmação.
 - Capacidade e total de pessoas consideram participantes confirmados, não apenas a quantidade de inscrições.
 - A presença pode ser registrada por participante. A ação de check-in da inscrição inteira continua disponível como atalho para marcar ou desmarcar todo o grupo.
 - Um evento pode oferecer itens opcionais, como café da manhã. Não selecionar o item nunca impede a confirmação do evento.
 - Preço de adicional é guardado em centavos. A seleção não comprova pagamento; cobrança, conciliação e reembolso continuam pertencendo ao contexto futuro de pagamentos.
-- Quando houver PIX manual habilitado, a página apresenta os dados públicos do recebedor após uma confirmação que tenha adicional pago selecionado. Segredos de gateway nunca entram na resposta pública.
+- Quando o evento estiver vinculado ao PIX manual, a página apresenta somente os dados públicos necessários para pagar adicionais selecionados. Segredos de gateway nunca entram na resposta pública.
 - Perfil, participantes e seleções pertencem à comunidade, usam RLS e não aceitam `tenant_id` fornecido pelo cliente.
 - WhatsApp e sua autorização individual fazem parte do cadastro progressivo em qualquer evento; a coleta não depende de o evento permitir inscrição familiar.
 
@@ -218,6 +219,10 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Pagamentos são opcionais e não fazem parte da confirmação gratuita de presença.
 - A comunidade pode configurar PIX manual ou indicar um gateway por uma chave de provedor estável.
 - A chave PIX, o nome do recebedor e a cidade são dados administrativos visíveis somente a usuários autorizados.
+- O criador escolhe explicitamente se a integração PIX manual habilitada será usada em cada evento; eventos sem esse vínculo não expõem a chave.
+- Ao selecionar um ou mais adicionais pagos, o membro vê um QR Code PIX estático com a soma da seleção e pode copiar o código “Pix Copia e Cola”. Alterar a seleção recalcula o valor e invalida a marcação anterior.
+- Para concluir uma inscrição que usa PIX manual, o membro precisa marcar “Já efetuei o Pix”. O sistema registra essa autodeclaração, o instante e o valor apresentado, mas não afirma que o banco confirmou o recebimento.
+- A equipe visualiza na lista de inscrições se o PIX foi informado pelo membro. Conciliação e confirmação financeira continuam pendentes de um adaptador de pagamento.
 - Credenciais privadas de gateway não são armazenadas no banco; somente sua referência externa é persistida.
 - A configuração não cobra nem confirma pagamentos até existir um adaptador de `PaymentGateway` instalado e uma regra de cobrança vinculada ao evento.
 - Taxas, reembolsos, conciliação, expiração, webhooks e efeitos de falha ainda precisam de definição antes de ativar cobrança real.

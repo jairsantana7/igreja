@@ -27,6 +27,7 @@ interface ManagedEventRow extends EventRow {
   hero_shade_color: string;
   current_form_version: number;
   family_registration_enabled: boolean;
+  pix_integration_id: string | null;
   linked_gallery_id: string | null;
   linked_gallery_public_id: string | null;
   linked_gallery_title: string | null;
@@ -109,6 +110,10 @@ export class PostgresEventRepository implements EventRepository {
     });
   }
 
+  canUseManualPix(principal: AuthenticatedPrincipal): Promise<boolean> {
+    return this.database.withTenant(principal, async (client) => Boolean(await this.findActiveManualPixId(client)));
+  }
+
   findById(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedEventView | null> {
     return this.database.withTenant(principal, async (client) => {
       const event = await this.queryEvent(client, eventId, principal);
@@ -152,6 +157,7 @@ export class PostgresEventRepository implements EventRepository {
           options: field.options,
         })),
         familyRegistrationEnabled: event.family_registration_enabled,
+        pixEnabled: Boolean(event.pix_integration_id),
         offerings: offerings.rows.map((offering) => ({
           id: offering.id, key: offering.offering_key, name: offering.name,
           description: offering.description, priceCents: offering.price_cents,
@@ -175,14 +181,18 @@ export class PostgresEventRepository implements EventRepository {
 
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent> {
     return this.database.withTenant(principal, async (client) => {
+      const pixIntegrationId = draft.props.pixEnabled ? await this.findActiveManualPixId(client) : null;
+      if (draft.props.pixEnabled && !pixIntegrationId) {
+        throw new ConflictError('Configure e habilite o PIX manual antes de vinculá-lo ao evento.');
+      }
       const baseSlug = slugify(draft.props.title) || 'evento';
       const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
       const eventResult = await client.query<EventRow>(`
         INSERT INTO events (
           tenant_id, created_by_user_id, slug, title, description, location,
           starts_at, registration_deadline, capacity, media_display_mode, hero_shade_color,
-          linked_gallery_id, family_registration_enabled, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          linked_gallery_id, pix_integration_id, family_registration_enabled, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
           '0'::text AS registrations, '0'::text AS participants, '0'::text AS attendance,
           created_by_user_id, ''::text AS owner_name
@@ -199,6 +209,7 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.mediaDisplayMode,
         draft.props.heroShadeColor,
         draft.props.linkedGalleryId ?? null,
+        pixIntegrationId,
         draft.props.familyRegistrationEnabled,
         draft.props.publish ? 'published' : 'draft',
       ]);
@@ -215,6 +226,10 @@ export class PostgresEventRepository implements EventRepository {
   update(principal: AuthenticatedPrincipal, eventId: string, draft: EventDraft): Promise<DashboardEvent> {
     return this.database.withTenant(principal, async (client) => {
       if (!(await this.canManageEvent(client, principal, eventId))) throw new NotFoundError('Evento não encontrado ou sem acesso para editar.');
+      const pixIntegrationId = draft.props.pixEnabled ? await this.findActiveManualPixId(client) : null;
+      if (draft.props.pixEnabled && !pixIntegrationId) {
+        throw new ConflictError('Configure e habilite o PIX manual antes de vinculá-lo ao evento.');
+      }
       const result = await client.query(`
         UPDATE events SET
           title = $2,
@@ -226,7 +241,8 @@ export class PostgresEventRepository implements EventRepository {
           media_display_mode = $8,
           hero_shade_color = $9,
           linked_gallery_id = CASE WHEN $10::boolean THEN $11::uuid ELSE linked_gallery_id END,
-          family_registration_enabled = $12,
+          pix_integration_id = CASE WHEN $12::boolean THEN $13::uuid ELSE pix_integration_id END,
+          family_registration_enabled = $14,
           updated_at = now()
         WHERE id = $1
         RETURNING id
@@ -242,6 +258,8 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.heroShadeColor,
         draft.props.linkedGalleryId !== undefined,
         draft.props.linkedGalleryId ?? null,
+        draft.props.pixEnabled !== undefined,
+        pixIntegrationId,
         draft.props.familyRegistrationEnabled,
       ]);
       if (!result.rows[0]) throw new NotFoundError('Evento não encontrado nesta comunidade.');
@@ -439,6 +457,7 @@ export class PostgresEventRepository implements EventRepository {
       SELECT events.id, events.public_id, events.title, events.description, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
         events.media_display_mode, events.hero_shade_color, events.current_form_version, events.family_registration_enabled,
+        events.pix_integration_id,
         events.linked_gallery_id,
         linked_galleries.public_id AS linked_gallery_public_id,
         linked_galleries.title AS linked_gallery_title,
@@ -483,6 +502,15 @@ export class PostgresEventRepository implements EventRepository {
       ))
     `, [eventId, principal.permissions.includes('events.manage_all'), principal.userId]);
     return Boolean(result.rowCount);
+  }
+
+  private async findActiveManualPixId(client: PoolClient): Promise<string | null> {
+    const result = await client.query<{ id: string }>(`
+      SELECT id FROM community_integrations
+      WHERE category = 'payment' AND provider_key = 'pix_manual' AND enabled
+      LIMIT 1
+    `);
+    return result.rows[0]?.id ?? null;
   }
 
   private mapEvent(row: EventRow): DashboardEvent {

@@ -121,6 +121,23 @@ describe('gestão de evento existente', () => {
     expect(() => useCase.execute(principal([]))).toThrow(AuthorizationError);
     await expect(useCase.execute(principal(['galleries.link']))).resolves.toEqual([]);
   });
+
+  it('exige leitura da configuração e PIX habilitado para vincular ao evento', async () => {
+    const repository = {
+      update: vi.fn(),
+      canUseManualPix: vi.fn().mockResolvedValue(false),
+    } as unknown as EventRepository;
+    const useCase = new UpdateEventUseCase(repository);
+    await expect(useCase.execute(principal(['events.update']), '20000000-0000-4000-8000-000000000001', {
+      ...editableEvent,
+      pixEnabled: true,
+    })).rejects.toThrow(AuthorizationError);
+    await expect(useCase.execute(principal(['events.update', 'settings.read']), '20000000-0000-4000-8000-000000000001', {
+      ...editableEvent,
+      pixEnabled: true,
+    })).rejects.toThrow('Configure e habilite o PIX');
+    expect(repository.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('ciclo de vida do evento', () => {

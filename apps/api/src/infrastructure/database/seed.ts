@@ -25,6 +25,11 @@ const ids = {
   pastEventPublic: '40000000-0000-4000-8000-000000000002',
   gallery: '64000000-0000-4000-8000-000000000001',
   galleryPublic: '65000000-0000-4000-8000-000000000001',
+  pixIntegration: '69000000-0000-4000-8000-000000000001',
+  eventOffering: '6a000000-0000-4000-8000-000000000001',
+  memberProfile: '6b000000-0000-4000-8000-000000000001',
+  memberChildOne: '6c000000-0000-4000-8000-000000000001',
+  memberChildTwo: '6c000000-0000-4000-8000-000000000002',
 };
 
 const galleryAssetsPath = resolve(__dirname, '../../../../../database/seed-assets/gallery-demo');
@@ -148,17 +153,61 @@ async function seed(): Promise<void> {
         ($1, $4, $5)
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.admin, ids.adminRole, ids.member, ids.memberRole]);
+    const pixIntegration = await client.query<{ id: string }>(`
+      INSERT INTO community_integrations (
+        id, tenant_id, category, provider_key, enabled, configuration
+      ) VALUES ($1, $2, 'payment', 'pix_manual', true, $3::jsonb)
+      ON CONFLICT (tenant_id, category, provider_key) DO UPDATE SET
+        enabled = EXCLUDED.enabled, configuration = EXCLUDED.configuration, updated_at = now()
+      RETURNING id
+    `, [ids.pixIntegration, ids.tenant, JSON.stringify({
+      keyType: 'email',
+      key: 'recebimentos@example.test',
+      recipientName: 'Comunidade Demonstração',
+      city: 'Santos',
+    })]);
+    await client.query(`
+      INSERT INTO member_profiles (
+        id, tenant_id, user_id, phone, birth_date, spouse_name, marriage_date,
+        postal_code, street, address_number, neighborhood, city, state,
+        whatsapp_communication_opt_in, whatsapp_communication_opted_in_at, updated_by_user_id
+      ) VALUES (
+        $1, $2, $3, '+5513999990002', DATE '1988-04-12', 'Alex Demonstração', DATE '2014-06-21',
+        '11000-000', 'Rua da Comunidade', '100', 'Centro', 'Santos', 'SP', true, now(), $3
+      )
+      ON CONFLICT (user_id, tenant_id) DO UPDATE SET
+        phone = EXCLUDED.phone, birth_date = EXCLUDED.birth_date, spouse_name = EXCLUDED.spouse_name,
+        marriage_date = EXCLUDED.marriage_date, postal_code = EXCLUDED.postal_code,
+        street = EXCLUDED.street, address_number = EXCLUDED.address_number,
+        neighborhood = EXCLUDED.neighborhood, city = EXCLUDED.city, state = EXCLUDED.state,
+        whatsapp_communication_opt_in = true,
+        whatsapp_communication_opted_in_at = COALESCE(member_profiles.whatsapp_communication_opted_in_at, now()),
+        updated_by_user_id = EXCLUDED.updated_by_user_id, updated_at = now()
+    `, [ids.memberProfile, ids.tenant, ids.member]);
+    const memberProfile = await client.query<{ id: string }>(
+      'SELECT id FROM member_profiles WHERE user_id = $1',
+      [ids.member],
+    );
+    await client.query(`
+      INSERT INTO member_children (id, tenant_id, profile_id, member_user_id, name, birth_date) VALUES
+        ($1, $3, $4, $5, 'Clara Demonstração', DATE '2017-02-10'),
+        ($2, $3, $4, $5, 'Pedro Demonstração', DATE '2020-09-05')
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, birth_date = EXCLUDED.birth_date
+    `, [ids.memberChildOne, ids.memberChildTwo, ids.tenant, memberProfile.rows[0]!.id, ids.member]);
     await client.query(`
       INSERT INTO events (
         id, tenant_id, created_by_user_id, public_id, slug, title, description,
-        location, starts_at, registration_deadline, capacity, status
+        location, starts_at, registration_deadline, capacity, pix_integration_id,
+        family_registration_enabled, status
       ) VALUES (
         $1, $2, $3, $4, 'encontro-de-boas-vindas', 'Encontro de boas-vindas',
         'Um tempo para conhecer pessoas, compartilhar histórias e caminhar em comunidade.',
-        'Salão principal', now() + interval '14 days', now() + interval '12 days', 120, 'published'
+        'Salão principal', now() + interval '14 days', now() + interval '12 days', 120, $5, true, 'published'
       )
-      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status, updated_at = now()
-    `, [ids.event, ids.tenant, ids.admin, ids.eventPublic]);
+      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status,
+        pix_integration_id = EXCLUDED.pix_integration_id,
+        family_registration_enabled = EXCLUDED.family_registration_enabled, updated_at = now()
+    `, [ids.event, ids.tenant, ids.admin, ids.eventPublic, pixIntegration.rows[0]!.id]);
     await client.query(`
       INSERT INTO event_public_directory (public_id, tenant_id, event_id)
       VALUES ($1, $2, $3)
@@ -253,6 +302,14 @@ async function seed(): Promise<void> {
       required: false,
       options: [],
     }]), ids.admin]);
+    await client.query(`
+      INSERT INTO event_offerings (
+        id, tenant_id, event_id, offering_key, name, description, price_cents, active, position
+      ) VALUES ($1, $2, $3, 'cafe_da_manha', 'Café da manhã', 'Café preparado pela comunidade antes do encontro.', 2500, true, 0)
+      ON CONFLICT (event_id, offering_key) DO UPDATE SET
+        name = EXCLUDED.name, description = EXCLUDED.description, price_cents = EXCLUDED.price_cents,
+        active = true, position = EXCLUDED.position, updated_at = now()
+    `, [ids.eventOffering, ids.tenant, ids.event]);
     await client.query(`
       INSERT INTO communication_templates (id, tenant_id, created_by_user_id, name, purpose, channel, status) VALUES
         ($1, $3, $4, 'Lembrete do evento', 'event_reminder', 'whatsapp', 'active'),

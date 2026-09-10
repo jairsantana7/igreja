@@ -54,6 +54,8 @@ const galleryPublicA = 'a1a00000-0000-4000-8000-000000000001';
 const galleryPublicB = 'b1a00000-0000-4000-8000-000000000002';
 const galleryPhotoA = 'a1b00000-0000-4000-8000-000000000001';
 const galleryPhotoB = 'b1b00000-0000-4000-8000-000000000002';
+const pixIntegrationA = 'a1c00000-0000-4000-8000-000000000001';
+const pixIntegrationB = 'b1c00000-0000-4000-8000-000000000002';
 
 describeDatabase('PostgreSQL RLS', () => {
   const admin = new Pool({ connectionString: env.databaseAdminUrl });
@@ -116,6 +118,10 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${tenantA}', 'identity', 'google', false),
         ('${tenantB}', 'identity', 'google', false)
       ON CONFLICT DO NOTHING;
+      INSERT INTO community_integrations (id, tenant_id, category, provider_key, enabled, configuration) VALUES
+        ('${pixIntegrationA}', '${tenantA}', 'payment', 'pix_manual', true, '{"keyType":"email","key":"a@pix.test","recipientName":"Tenant A","city":"Cidade A"}'),
+        ('${pixIntegrationB}', '${tenantB}', 'payment', 'pix_manual', true, '{"keyType":"email","key":"b@pix.test","recipientName":"Tenant B","city":"Cidade B"}')
+      ON CONFLICT (tenant_id, category, provider_key) DO UPDATE SET enabled = true, configuration = EXCLUDED.configuration;
       INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id) VALUES
         ('${tenantA}', '${eventA}', 1, '[]', '${userA}'),
         ('${tenantB}', '${eventB}', 1, '[]', '${userB}')
@@ -326,6 +332,9 @@ describeDatabase('PostgreSQL RLS', () => {
         await expect(client.query('UPDATE events SET linked_gallery_id = $1 WHERE id = $2', [galleryB, eventA])).rejects.toThrow();
       });
       await inTenant(client, tenantA, async () => {
+        await expect(client.query('UPDATE events SET pix_integration_id = $1 WHERE id = $2', [pixIntegrationB, eventA])).rejects.toThrow();
+      });
+      await inTenant(client, tenantA, async () => {
         await expect(client.query(`
           INSERT INTO event_form_fields (tenant_id, event_id, field_key, label, type, position)
           VALUES ($1, $2, 'campo_teste', 'Campo teste', 'short_text', 0)
@@ -403,7 +412,8 @@ describeDatabase('PostgreSQL RLS', () => {
         const own = await client.query('SELECT id FROM users ORDER BY id');
         expect(own.rows.map((row) => row.id)).toEqual([userA]);
         const integrations = await client.query<{ tenant_id: string }>('SELECT tenant_id FROM community_integrations');
-        expect(integrations.rows.map((row) => row.tenant_id)).toEqual([tenantA]);
+        expect(integrations.rows).toHaveLength(2);
+        expect(integrations.rows.every((row) => row.tenant_id === tenantA)).toBe(true);
         const other = await client.query('SELECT id FROM users WHERE id = $1', [userB]);
         expect(other.rows).toEqual([]);
         expect((await client.query('SELECT id FROM event_galleries')).rows).toEqual([{ id: galleryA }]);
@@ -618,6 +628,26 @@ describeDatabase('PostgreSQL RLS', () => {
       await inTenant(client, tenantA, async () => {
         await client.query("UPDATE event_galleries SET visibility = 'public' WHERE id = $1", [galleryA]);
       });
+    } finally { client.release(); }
+  });
+
+  it('expõe PIX somente quando a integração da comunidade está vinculada ao evento', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantA, async () => {
+        await client.query("UPDATE events SET status = 'published', pix_integration_id = $1 WHERE id = $2", [pixIntegrationA, eventA]);
+      });
+      const linked = await client.query<{ event: { pix: { key: string } | null } }>(
+        'SELECT app.resolve_public_event($1) AS event', [publicEventA],
+      );
+      expect(linked.rows[0]?.event.pix).toMatchObject({ key: 'a@pix.test' });
+      await inTenant(client, tenantA, async () => {
+        await client.query('UPDATE events SET pix_integration_id = NULL WHERE id = $1', [eventA]);
+      });
+      const unlinked = await client.query<{ event: { pix: null } }>(
+        'SELECT app.resolve_public_event($1) AS event', [publicEventA],
+      );
+      expect(unlinked.rows[0]?.event.pix).toBeNull();
     } finally { client.release(); }
   });
 

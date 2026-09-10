@@ -36,7 +36,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       ]);
       if (input.profile) await this.saveProfile(client, input.event.tenantId, userId, input.profile, input.event.familyRegistrationEnabled);
       const registrationId = await this.persistRegistration(
-        client, input.event, userId, input.answers, input.participants, input.offeringIds,
+        client, input.event, userId, input.answers, input.participants, input.offeringIds, input.pixPaymentDeclared,
       );
       return {
         identity: await this.loadIdentity(client, input.event.tenantId, userId),
@@ -52,6 +52,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       );
       return this.persistRegistration(
         client, input.event, input.principal.userId, input.answers, input.participants, input.offeringIds,
+        input.pixPaymentDeclared,
       );
     });
   }
@@ -92,12 +93,19 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         children: row?.children ?? [],
       };
 
-      const registration = await client.query<{ id: string }>(`
-        SELECT id FROM event_registrations
+      const registration = await client.query<{ id: string; pix_payment_declared_at: Date | null }>(`
+        SELECT id, pix_payment_declared_at FROM event_registrations
         WHERE event_id = $1 AND user_id = $2 AND status = 'confirmed'
       `, [event.id, principal.userId]);
       if (!registration.rows[0]) {
-        return { profile, selectedParticipantKeys: ['registrant'], selectedOfferingIds: [], alreadyRegistered: false };
+        return {
+          profile,
+          selectedParticipantKeys: ['registrant'],
+          selectedOfferingIds: [],
+          pixPaymentDeclared: false,
+          hasSavedProfile: Boolean(row),
+          alreadyRegistered: false,
+        };
       }
 
       const registrationId = registration.rows[0].id;
@@ -124,6 +132,8 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         profile,
         selectedParticipantKeys: [...new Set(participantKeys)],
         selectedOfferingIds: offerings.rows.map((offering) => offering.offering_id),
+        pixPaymentDeclared: Boolean(registration.rows[0].pix_payment_declared_at),
+        hasSavedProfile: Boolean(row),
         alreadyRegistered: true,
       };
     });
@@ -186,13 +196,15 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
     answers: RegistrationAnswerInput[],
     participants: RegistrationParticipantSnapshot[],
     offeringIds: string[],
+    pixPaymentDeclared: boolean,
   ): Promise<string> {
     const event = await client.query<{
       capacity: number | null;
       registration_deadline: Date | null;
       current_form_version: number;
+      pix_integration_id: string | null;
     }>(`
-      SELECT capacity, registration_deadline, current_form_version FROM events
+      SELECT capacity, registration_deadline, current_form_version, pix_integration_id FROM events
       WHERE id = $1 AND status = 'published'
       FOR UPDATE
     `, [eventView.id]);
@@ -233,23 +245,45 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       }
     }
 
+    let pixPaymentAmountCents: number | null = null;
     if (offeringIds.length) {
-      const available = await client.query<{ id: string }>(`
-        SELECT id FROM event_offerings
+      const available = await client.query<{ id: string; price_cents: number }>(`
+        SELECT id, price_cents FROM event_offerings
         WHERE event_id = $1 AND active AND id = ANY($2::uuid[])
       `, [eventView.id, offeringIds]);
       if (available.rowCount !== offeringIds.length) {
         throw new ConflictError('Um dos adicionais selecionados não está mais disponível.');
       }
+      const paidTotal = available.rows.reduce((total, offering) => total + offering.price_cents, 0);
+      if (paidTotal > 0 && event.rows[0].pix_integration_id) {
+        if (!pixPaymentDeclared) {
+          throw new ConflictError('Confirme que o PIX foi efetuado para concluir a inscrição com itens pagos.');
+        }
+        pixPaymentAmountCents = paidTotal;
+      }
     }
 
     const registration = await client.query<{ id: string }>(`
-      INSERT INTO event_registrations (tenant_id, event_id, user_id, status, form_version)
-      VALUES ($1, $2, $3, 'confirmed', $4)
+      INSERT INTO event_registrations (
+        tenant_id, event_id, user_id, status, form_version,
+        pix_integration_id, pix_payment_amount_cents, pix_payment_declared_at
+      )
+      VALUES ($1, $2, $3, 'confirmed', $4, $5, $6, CASE WHEN $5::uuid IS NOT NULL THEN now() END)
       ON CONFLICT (event_id, user_id)
-      DO UPDATE SET status = 'confirmed', form_version = EXCLUDED.form_version, updated_at = now()
+      DO UPDATE SET status = 'confirmed', form_version = EXCLUDED.form_version,
+        pix_integration_id = EXCLUDED.pix_integration_id,
+        pix_payment_amount_cents = EXCLUDED.pix_payment_amount_cents,
+        pix_payment_declared_at = EXCLUDED.pix_payment_declared_at,
+        updated_at = now()
       RETURNING id
-    `, [eventView.tenantId, eventView.id, userId, event.rows[0].current_form_version]);
+    `, [
+      eventView.tenantId,
+      eventView.id,
+      userId,
+      event.rows[0].current_form_version,
+      pixPaymentAmountCents ? event.rows[0].pix_integration_id : null,
+      pixPaymentAmountCents,
+    ]);
     const registrationId = registration.rows[0]!.id;
 
     await client.query('DELETE FROM registration_answers WHERE registration_id = $1', [registrationId]);

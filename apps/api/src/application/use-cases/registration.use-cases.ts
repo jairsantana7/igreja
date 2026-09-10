@@ -9,8 +9,12 @@ import { EventRegistrationSelection } from '../../domain/entities/event-registra
 
 type ProgressiveProfileInput = Parameters<typeof MemberProfileDraft.create>[0];
 
+function answeredFields(answers: RegistrationAnswerInput[]): RegistrationAnswerInput[] {
+  return answers.filter((answer) => answer.value !== undefined);
+}
+
 function prepareRegistration(event: Awaited<ReturnType<GetPublicEventUseCase['resolve']>>, registrantName: string, input: {
-  profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[];
+  profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[]; pixPaymentDeclared?: boolean;
 }) {
   const profileInput = event.familyRegistrationEnabled
     ? input.profile ?? {}
@@ -27,7 +31,9 @@ function prepareRegistration(event: Awaited<ReturnType<GetPublicEventUseCase['re
     profile,
     participantKeys: input.participantKeys,
     offeringIds: input.offeringIds,
-    availableOfferingIds: event.offerings.map((offering) => offering.id),
+    availableOfferings: event.offerings.map((offering) => ({ id: offering.id, priceCents: offering.priceCents })),
+    pixAvailable: Boolean(event.pix),
+    pixPaymentDeclared: input.pixPaymentDeclared,
   });
   return { profile, ...selection.props };
 }
@@ -44,17 +50,18 @@ export class SignUpForEventUseCase {
 
   async execute(input: {
     publicId: string; name: string; email: string; password: string; answers: RegistrationAnswerInput[];
-    profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[];
+    profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[]; pixPaymentDeclared?: boolean;
   }, context: SessionClientContext) {
     const event = await this.publicEvents.resolve(input.publicId);
-    validateAnswers(event.fields, input.answers);
+    const answers = answeredFields(input.answers);
+    validateAnswers(event.fields, answers);
     const progressive = prepareRegistration(event, input.name, input);
     const result = await this.registrations.signUpAndRegister({
       event,
       name: input.name.trim(),
       email: input.email.toLowerCase().trim(),
       passwordHash: await this.passwords.hash(input.password),
-      answers: input.answers,
+      answers,
       ...progressive,
     });
     const principal: AuthenticatedPrincipal = {
@@ -78,15 +85,16 @@ export class RegisterForEventUseCase {
   ) {}
 
   async execute(principal: AuthenticatedPrincipal, publicId: string, input: {
-    answers: RegistrationAnswerInput[]; profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[];
+    answers: RegistrationAnswerInput[]; profile?: ProgressiveProfileInput; participantKeys?: string[]; offeringIds?: string[]; pixPaymentDeclared?: boolean;
   }) {
     if (!principal.permissions.includes(PERMISSIONS.eventsRegister)) {
       throw new AuthorizationError('Você não tem permissão para confirmar inscrição em eventos.');
     }
     const event = await this.publicEvents.resolve(publicId);
     if (principal.tenantId !== event.tenantId) throw new Error('Esta conta pertence a outra comunidade.');
-    validateAnswers(event.fields, input.answers);
-    return { registrationId: await this.registrations.register({ principal, event, answers: input.answers, ...prepareRegistration(event, principal.name, input) }) };
+    const answers = answeredFields(input.answers);
+    validateAnswers(event.fields, answers);
+    return { registrationId: await this.registrations.register({ principal, event, answers, ...prepareRegistration(event, principal.name, input) }) };
   }
 }
 

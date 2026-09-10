@@ -117,7 +117,7 @@ async function save() {
       </section>
 
       <section class="settings-section">
-        <div class="settings-section__heading"><span class="settings-icon">◇</span><div><p class="eyebrow">Recebimentos</p><h2>PIX</h2><p>Dados para PIX manual. Vincular cobrança a eventos será uma etapa separada.</p></div><label class="switch"><input v-model="form.payments.pix.enabled" type="checkbox" :disabled="!canManage"><span /><b>{{ form.payments.pix.enabled ? 'Ativado' : 'Desativado' }}</b></label></div>
+        <div class="settings-section__heading"><span class="settings-icon">◇</span><div><p class="eyebrow">Recebimentos</p><h2>PIX manual</h2><p>Cadastre a chave que poderá ser vinculada aos eventos. O valor do QR Code será calculado pelas opções escolhidas na inscrição.</p></div><label class="switch"><input v-model="form.payments.pix.enabled" type="checkbox" :disabled="!canManage"><span /><b>{{ form.payments.pix.enabled ? 'Ativado' : 'Desativado' }}</b></label></div>
         <div class="form-grid settings-fields">
           <label class="field"><span>Tipo de chave</span><select v-model="form.payments.pix.keyType" :disabled="!canManage"><option value="random">Aleatória</option><option value="email">E-mail</option><option value="phone">Telefone</option><option value="cpf">CPF</option><option value="cnpj">CNPJ</option></select></label>
           <label class="field"><span>Chave PIX</span><input v-model="form.payments.pix.key" :disabled="!canManage" maxlength="160" placeholder="Chave do recebedor"></label>

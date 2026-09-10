@@ -45,6 +45,7 @@ export interface ManagedEventView extends DashboardEvent {
   heroShadeColor: string;
   fields: Array<EventFormField & { id: string }>;
   familyRegistrationEnabled: boolean;
+  pixEnabled: boolean;
   offerings: Array<EventOffering & { id: string }>;
   currentFormVersion: number;
   collaborators: Array<{ id: string; name: string; email: string }>;
@@ -68,7 +69,7 @@ export interface PublicEventView {
   fields: Required<Pick<EventFormField, 'id'>>[] & EventFormField[];
   familyRegistrationEnabled: boolean;
   offerings: Array<Required<Pick<EventOffering, 'id'>> & EventOffering>;
-  pix: { keyType: string; key: string; recipientName: string; city: string } | null;
+  pix: { id: string; keyType: string; key: string; recipientName: string; city: string } | null;
   linkedGallery: LinkedGalleryView | null;
 }
 
@@ -80,6 +81,8 @@ export interface RegistrationContextView {
   };
   selectedParticipantKeys: string[];
   selectedOfferingIds: string[];
+  pixPaymentDeclared: boolean;
+  hasSavedProfile: boolean;
   alreadyRegistered: boolean;
 }
 
@@ -88,6 +91,7 @@ export interface EventRepository {
   list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]>;
   listLinkableGalleries(principal: AuthenticatedPrincipal): Promise<LinkableGalleryView[]>;
   canLinkGallery(principal: AuthenticatedPrincipal, galleryId: string): Promise<boolean>;
+  canUseManualPix(principal: AuthenticatedPrincipal): Promise<boolean>;
   findById(principal: AuthenticatedPrincipal, eventId: string): Promise<ManagedEventView | null>;
   create(principal: AuthenticatedPrincipal, draft: EventDraft): Promise<DashboardEvent>;
   update(principal: AuthenticatedPrincipal, eventId: string, draft: EventDraft): Promise<DashboardEvent>;
@@ -114,6 +118,7 @@ export interface EventRegistrationRepository {
     profile?: MemberProfileDraft;
     participants: RegistrationParticipantSnapshot[];
     offeringIds: string[];
+    pixPaymentDeclared: boolean;
   }): Promise<{ identity: LoginIdentity; registrationId: string }>;
   register(input: {
     principal: AuthenticatedPrincipal;
@@ -122,6 +127,7 @@ export interface EventRegistrationRepository {
     profile?: MemberProfileDraft;
     participants: RegistrationParticipantSnapshot[];
     offeringIds: string[];
+    pixPaymentDeclared: boolean;
   }): Promise<string>;
   context(principal: AuthenticatedPrincipal, event: PublicEventView): Promise<RegistrationContextView>;
 }

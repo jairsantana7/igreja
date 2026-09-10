@@ -51,6 +51,9 @@ export class RegistrationDto {
 
   @IsArray() @ArrayMaxSize(20) @IsUUID('4', { each: true })
   offeringIds: string[] = [];
+
+  @IsBoolean()
+  pixPaymentDeclared = false;
 }
 
 export class EventSignUpDto extends RegistrationDto {

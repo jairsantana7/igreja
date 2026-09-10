@@ -54,6 +54,8 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `event_registration_participants` | tenant-direct | pessoa confirmada é uma fotografia vinculada à inscrição e ao evento | RLS direta + FK composta para inscrição; check-in referencia ator do mesmo tenant |
 | `registration_offering_selections` | tenant-direct | seleção de adicional pertence à inscrição e à oferta do mesmo evento | RLS direta + FKs compostas para inscrição e oferta |
 
+As colunas `events.pix_integration_id` e `event_registrations.pix_integration_id` referenciam `community_integrations` com `tenant_id` na chave estrangeira composta. Não criam uma nova tabela: o vínculo e a declaração de pagamento permanecem protegidos pelas políticas RLS já forçadas em `events`, `event_registrations` e `community_integrations`.
+
 ## Funções estreitas sem contexto prévio
 
 - `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.

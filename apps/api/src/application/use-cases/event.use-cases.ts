@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EventDraft } from '../../domain/entities/event';
 import { PERMISSIONS, type AuthenticatedPrincipal, type Permission } from '../../domain/entities/permission';
 import type { EventRepository, RegistrationAnswerInput } from '../ports/event.port';
-import { AuthorizationError, NotFoundError } from './errors';
+import { AuthorizationError, ConflictError, NotFoundError } from './errors';
 
 function requirePermission(principal: AuthenticatedPrincipal, permission: Permission): void {
   if (!principal.permissions.includes(permission)) throw new AuthorizationError('Você não tem permissão para realizar esta ação.');
@@ -43,6 +43,12 @@ export class CreateEventUseCase {
         throw new NotFoundError('Galeria pública não encontrada nesta comunidade.');
       }
     }
+    if (input.pixEnabled) {
+      requirePermission(principal, PERMISSIONS.settingsRead);
+      if (!(await this.events.canUseManualPix(principal))) {
+        throw new ConflictError('Configure e habilite o PIX manual antes de vinculá-lo ao evento.');
+      }
+    }
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));
     const offerings = input.offerings.map((offering, index) => ({ ...offering, key: offering.key || `adicional_${index + 1}_${randomUUID().slice(0, 6)}` }));
     return this.events.create(principal, EventDraft.create({ ...input, fields, offerings }));
@@ -67,6 +73,12 @@ export class UpdateEventUseCase {
       requirePermission(principal, PERMISSIONS.galleriesLink);
       if (input.linkedGalleryId && !(await this.events.canLinkGallery(principal, input.linkedGalleryId))) {
         throw new NotFoundError('Galeria pública não encontrada nesta comunidade.');
+      }
+    }
+    if (input.pixEnabled) {
+      requirePermission(principal, PERMISSIONS.settingsRead);
+      if (!(await this.events.canUseManualPix(principal))) {
+        throw new ConflictError('Configure e habilite o PIX manual antes de vinculá-lo ao evento.');
       }
     }
     const fields = input.fields.map((field, index) => ({ ...field, key: field.key || `campo_${index + 1}_${randomUUID().slice(0, 6)}` }));

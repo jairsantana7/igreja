@@ -25,8 +25,8 @@ Abra `http://localhost:3100`. O seed local cria:
 
 - comunidade: `comunidade-demo`
 - administrador inicial: `Admin Inicial` — `admin@comunidade.local` / `Comunidade#2026`
-- membro para testar confirmações: `Membro Demonstração` — `membro@comunidade.local` / `Membro#2026`
-- evento futuro: `Encontro de boas-vindas`
+- membro com WhatsApp e família já cadastrados para testar confirmações sem repetir dados: `Membro Demonstração` — `membro@comunidade.local` / `Membro#2026`
+- evento futuro com café da manhã opcional e PIX manual de demonstração: `Encontro de boas-vindas`
 - evento concluído: `Domingo em comunidade`
 - galeria pública com três fotos sintéticas: `http://localhost:3100/g/65000000-0000-4000-8000-000000000001`
 - evento público com a galeria anterior vinculada: `http://localhost:3100/e/40000000-0000-4000-8000-000000000001`
@@ -65,6 +65,7 @@ pnpm db:down    # encerra containers
 - fotografias versionadas do formulário e modelos reutilizáveis de evento;
 - criação de evento, formulário dinâmico e imagens em hero, carrossel ou fundo fixo;
 - página pública para inscrição do membro;
+- PIX manual vinculado por evento, com QR Code no valor dos adicionais e autodeclaração do membro;
 - conta local de membro e base extensível para login social;
 - perfil complementar opcional com data de nascimento, endereço e filhos, protegido por permissões específicas;
 - papéis editáveis com permissões granulares verificadas no backend;

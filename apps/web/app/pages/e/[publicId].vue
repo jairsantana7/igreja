@@ -27,6 +27,10 @@ const profile = reactive({
 });
 const selectedParticipantKeys = ref<string[]>(['registrant']);
 const selectedOfferingIds = ref<string[]>([]);
+const pixPaymentDeclared = ref(false);
+const hasSavedProfile = ref(false);
+const profileEditorOpen = ref(true);
+const hydratingSelection = ref(false);
 const loading = ref(false);
 const contextLoading = ref(false);
 const message = ref('');
@@ -34,7 +38,10 @@ const confirmed = ref(false);
 const alreadyRegistered = ref(false);
 
 function payloadAnswers() {
-  return (event.value?.fields ?? []).map((field: any) => ({ fieldId: field.id, value: answers[field.id] }));
+  return (event.value?.fields ?? []).flatMap((field: any) => {
+    const value = answers[field.id];
+    return value === undefined ? [] : [{ fieldId: field.id, value }];
+  });
 }
 
 function registrationPayload() {
@@ -53,6 +60,7 @@ function registrationPayload() {
     answers: payloadAnswers(),
     participantKeys,
     offeringIds: selectedOfferingIds.value,
+    pixPaymentDeclared: pixPaymentDeclared.value,
     profile: {
       phone: profile.phone || undefined,
       whatsappCommunicationOptIn: profile.whatsappCommunicationOptIn,
@@ -80,11 +88,17 @@ async function loadRegistrationContext() {
       name: child.name,
       birthDate: child.birthDate ?? '',
     }));
+    hydratingSelection.value = true;
     selectedParticipantKeys.value = context.selectedParticipantKeys.length
       ? context.selectedParticipantKeys
       : ['registrant'];
     selectedOfferingIds.value = context.selectedOfferingIds;
+    pixPaymentDeclared.value = context.pixPaymentDeclared;
+    hasSavedProfile.value = context.hasSavedProfile;
+    profileEditorOpen.value = !context.hasSavedProfile;
     alreadyRegistered.value = context.alreadyRegistered;
+    await nextTick();
+    hydratingSelection.value = false;
   } catch (requestError: any) {
     message.value = requestError?.data?.message ?? 'Não foi possível carregar seus dados anteriores.';
   } finally {
@@ -99,6 +113,9 @@ onMounted(() => {
 watch(() => profile.phone, (phone) => {
   if (!phone.trim()) profile.whatsappCommunicationOptIn = false;
 });
+watch(selectedOfferingIds, () => {
+  if (!hydratingSelection.value) pixPaymentDeclared.value = false;
+}, { deep: true });
 
 function addChild() {
   profile.children.push({ name: '', birthDate: '' });
@@ -180,8 +197,9 @@ const mapsDirectionsUrl = computed(() => event.value?.location
   : '');
 const priceLabel = (priceCents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(priceCents / 100);
 const selectedPeopleCount = computed(() => selectedParticipantKeys.value.length);
-const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
-  .some((offering: any) => selectedOfferingIds.value.includes(offering.id) && offering.priceCents > 0));
+const selectedPaidAmountCents = computed(() => (event.value?.offerings ?? [])
+  .filter((offering: any) => selectedOfferingIds.value.includes(offering.id))
+  .reduce((total: number, offering: any) => total + Math.max(0, Number(offering.priceCents)), 0));
 </script>
 
 <template>
@@ -215,10 +233,10 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
             <div v-if="confirmed" class="success-state">
               <span>✓</span><p class="eyebrow">Inscrição confirmada</p><h2>Esperamos por você!</h2>
               <p>Sua participação em <strong>{{ event.title }}</strong> foi registrada para {{ selectedPeopleCount }} {{ selectedPeopleCount === 1 ? 'pessoa' : 'pessoas' }}.</p>
-              <div v-if="selectedPaidOffering && event.pix" class="pix-confirmation">
-                <strong>Pagamento do adicional por Pix</strong>
-                <span>{{ event.pix.key }}</span>
-                <small>{{ event.pix.recipientName }}</small>
+              <div v-if="selectedPaidAmountCents > 0 && event.pix && pixPaymentDeclared" class="pix-confirmation">
+                <strong>✓ PIX informado por você</strong>
+                <span>{{ priceLabel(selectedPaidAmountCents) }}</span>
+                <small>A equipe ainda poderá conferir o recebimento no banco.</small>
               </div>
             </div>
 
@@ -237,8 +255,13 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
               <label v-if="!visibleSession" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" required></label>
               <label v-if="!visibleSession" class="field"><span>Senha</span><input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" required></label>
 
-              <div v-if="visibleSession || mode === 'signup'" class="registration-section">
-                <div class="registration-section__heading"><div><h3>Seu WhatsApp</h3><p>Use o mesmo contato nos próximos eventos.</p></div></div>
+              <div v-if="visibleSession && hasSavedProfile && !profileEditorOpen" class="saved-profile-summary">
+                <div><p class="eyebrow">Dados já cadastrados</p><h3>Seu perfil está pronto</h3><p><span v-if="profile.phone">WhatsApp {{ profile.phone }}</span><span v-if="profile.spouseName"> · família de {{ profile.children.length + 2 }} pessoas</span></p></div>
+                <button class="button button--small" type="button" @click="profileEditorOpen = true">Revisar/editar meus dados</button>
+              </div>
+
+              <div v-if="(visibleSession || mode === 'signup') && (!visibleSession || profileEditorOpen)" class="registration-section">
+                <div class="registration-section__heading"><div><h3>Seu WhatsApp</h3><p>Use o mesmo contato nos próximos eventos.</p></div><button v-if="visibleSession && hasSavedProfile" class="text-action text-action--inline" type="button" @click="profileEditorOpen = false">Concluir revisão</button></div>
                 <label class="field"><span>Número com DDD</span><input v-model="profile.phone" autocomplete="tel" inputmode="tel" maxlength="32" placeholder="(00) 00000-0000"></label>
                 <label class="communication-consent" :class="{ 'communication-consent--disabled': !profile.phone.trim() }">
                   <input v-model="profile.whatsappCommunicationOptIn" type="checkbox" :disabled="!profile.phone.trim()">
@@ -252,25 +275,28 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                   <input v-model="selectedParticipantKeys" type="checkbox" value="registrant">
                   <span><strong>{{ visibleSession?.user.name || name || 'Você' }}</strong><small>Responsável pela inscrição</small></span>
                 </label>
-                <div class="profile-fields">
-                  <label class="field"><span>Sua data de nascimento</span><input v-model="profile.birthDate" type="date"></label>
-                </div>
+                <label v-if="profile.spouseName.trim()" class="participant-option">
+                  <input v-model="selectedParticipantKeys" type="checkbox" value="spouse">
+                  <span><strong>{{ profile.spouseName }}</strong><small>Cônjuge</small></span>
+                </label>
+                <label v-for="(child, index) in profile.children" v-show="child.name.trim()" :key="`participant-${index}`" class="participant-option">
+                  <input v-model="selectedParticipantKeys" type="checkbox" :value="`child:${index}`">
+                  <span><strong>{{ child.name || `Filho(a) ${index + 1}` }}</strong><small>Filho(a)</small></span>
+                </label>
+                <button v-if="!profileEditorOpen" type="button" class="text-action" @click="profileEditorOpen = true">＋ Atualizar pessoas cadastradas</button>
+              </div>
+
+              <div v-if="event.familyRegistrationEnabled && (visibleSession || mode === 'signup') && (!visibleSession || profileEditorOpen)" class="registration-section family-profile-editor">
+                <div class="registration-section__heading"><div><h3>Dados da família</h3><p>Preencha uma vez e reaproveite nos próximos eventos.</p></div></div>
+                <div class="profile-fields"><label class="field"><span>Sua data de nascimento</span><input v-model="profile.birthDate" type="date"></label></div>
                 <div class="family-person">
-                  <label class="participant-option participant-option--editable">
-                    <input v-model="selectedParticipantKeys" type="checkbox" value="spouse" :disabled="!profile.spouseName.trim()">
-                    <span><strong>Cônjuge</strong><small>Marque se também vai ao evento</small></span>
-                  </label>
                   <div class="profile-fields">
                     <label class="field"><span>Nome do cônjuge</span><input v-model="profile.spouseName" placeholder="Nome completo"></label>
                     <label class="field"><span>Data de casamento</span><input v-model="profile.marriageDate" type="date"></label>
                   </div>
                 </div>
                 <div v-for="(child, index) in profile.children" :key="index" class="family-person">
-                  <label class="participant-option participant-option--editable">
-                    <input v-model="selectedParticipantKeys" type="checkbox" :value="`child:${index}`" :disabled="!child.name.trim()">
-                    <span><strong>Filho(a) {{ index + 1 }}</strong><small>Marque se também vai ao evento</small></span>
-                    <button type="button" aria-label="Remover filho" @click.prevent="removeChild(index)">×</button>
-                  </label>
+                  <button type="button" class="family-person__remove" :aria-label="`Remover filho(a) ${index + 1}`" @click="removeChild(index)">×</button>
                   <div class="profile-fields">
                     <label class="field"><span>Nome</span><input v-model="child.name" placeholder="Nome completo"></label>
                     <label class="field"><span>Nascimento</span><input v-model="child.birthDate" type="date"></label>
@@ -287,6 +313,14 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                   <b>{{ offering.priceCents ? priceLabel(offering.priceCents) : 'Grátis' }}</b>
                 </label>
               </div>
+
+              <EventPixPaymentCard
+                v-if="selectedPaidAmountCents > 0 && event.pix && (visibleSession || mode === 'signup')"
+                v-model="pixPaymentDeclared"
+                :pix="event.pix"
+                :amount-cents="selectedPaidAmountCents"
+                :public-event-id="event.publicId"
+              />
 
               <div v-if="event.fields.length && (visibleSession || mode === 'signup')" class="dynamic-fields">
                 <h3>Sobre sua participação</h3>

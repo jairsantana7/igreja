@@ -33,12 +33,14 @@ export class PostgresEventOperationsRepository implements EventOperationsReposit
       const result = await client.query<{
         id: string; user_id: string; name: string; email: string; status: 'confirmed' | 'cancelled';
         form_version: number; created_at: Date; checked_in_at: Date | null; checked_in_by: string | null;
+        pix_payment_declared_at: Date | null; pix_payment_amount_cents: number | null;
         answers: Array<{ fieldId: string; label: string; value: unknown }>;
         participants: Array<{ id: string; name: string; sourceType: 'registrant' | 'spouse' | 'child'; checkedInAt: string | null; checkedInBy: string | null }>;
         offerings: Array<{ id: string; name: string; priceCents: number }>;
       }>(`
         SELECT registrations.id, users.id AS user_id, users.name, users.email, registrations.status,
-          registrations.form_version, registrations.created_at, check_ins.checked_in_at,
+          registrations.form_version, registrations.created_at, registrations.pix_payment_declared_at,
+          registrations.pix_payment_amount_cents, check_ins.checked_in_at,
           operators.name AS checked_in_by,
           COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
@@ -103,6 +105,8 @@ export class PostgresEventOperationsRepository implements EventOperationsReposit
         registeredAt: row.created_at.toISOString(),
         checkedInAt: row.checked_in_at?.toISOString() ?? null,
         checkedInBy: row.checked_in_by,
+        pixPaymentDeclaredAt: row.pix_payment_declared_at?.toISOString() ?? null,
+        pixPaymentAmountCents: row.pix_payment_amount_cents,
         participants: row.participants,
         offerings: row.offerings,
         answers: row.answers,

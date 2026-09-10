@@ -52,6 +52,7 @@ export interface EventDraftProps {
   mediaDisplayMode: EventMediaDisplayMode;
   heroShadeColor: string;
   linkedGalleryId?: string | null;
+  pixEnabled?: boolean;
   familyRegistrationEnabled: boolean;
   publish: boolean;
   fields: EventFormField[];

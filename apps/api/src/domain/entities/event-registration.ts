@@ -13,6 +13,7 @@ export class EventRegistrationSelection {
   private constructor(readonly props: {
     participants: RegistrationParticipantSnapshot[];
     offeringIds: string[];
+    pixPaymentDeclared: boolean;
   }) {}
 
   static create(input: {
@@ -21,7 +22,9 @@ export class EventRegistrationSelection {
     profile?: MemberProfileDraft;
     participantKeys?: string[];
     offeringIds?: string[];
-    availableOfferingIds: string[];
+    availableOfferings: Array<{ id: string; priceCents: number }>;
+    pixAvailable: boolean;
+    pixPaymentDeclared?: boolean;
   }) {
     const candidates = new Map<string, RegistrationParticipantSnapshot>([
       ['registrant', { sourceType: 'registrant', name: input.registrantName.trim() }],
@@ -44,9 +47,18 @@ export class EventRegistrationSelection {
     });
 
     const offeringIds = [...new Set(input.offeringIds ?? [])];
-    if (offeringIds.some((id) => !input.availableOfferingIds.includes(id))) {
+    if (offeringIds.some((id) => !input.availableOfferings.some((offering) => offering.id === id))) {
       throw new DomainError('A seleção contém um adicional indisponível para este evento.');
     }
-    return new EventRegistrationSelection({ participants, offeringIds });
+    const requiresManualPix = input.pixAvailable && input.availableOfferings
+      .some((offering) => offeringIds.includes(offering.id) && offering.priceCents > 0);
+    if (requiresManualPix && !input.pixPaymentDeclared) {
+      throw new DomainError('Confirme que o PIX foi efetuado para concluir a inscrição com itens pagos.');
+    }
+    return new EventRegistrationSelection({
+      participants,
+      offeringIds,
+      pixPaymentDeclared: requiresManualPix && Boolean(input.pixPaymentDeclared),
+    });
   }
 }
