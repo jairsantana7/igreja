@@ -6,6 +6,7 @@ export const EVENT_STATUSES = ['draft', 'published', 'registration_closed', 'can
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 export const EVENT_MEDIA_DISPLAY_MODES = ['hero', 'carousel', 'fixed'] as const;
 export type EventMediaDisplayMode = (typeof EVENT_MEDIA_DISPLAY_MODES)[number];
+export const DEFAULT_EVENT_HERO_SHADE_COLOR = '#173D32';
 
 export function isRegistrationOpen(
   event: { status: EventStatus; startsAt: Date; registrationDeadline?: Date | null },
@@ -49,6 +50,7 @@ export interface EventDraftProps {
   registrationDeadline?: Date;
   capacity?: number;
   mediaDisplayMode: EventMediaDisplayMode;
+  heroShadeColor: string;
   linkedGalleryId?: string | null;
   familyRegistrationEnabled: boolean;
   publish: boolean;
@@ -71,6 +73,10 @@ export class EventDraft {
     }
     if (!EVENT_MEDIA_DISPLAY_MODES.includes(input.mediaDisplayMode)) {
       throw new DomainError('O modo de exibição das imagens é inválido.');
+    }
+    const heroShadeColor = input.heroShadeColor.trim().toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(heroShadeColor)) {
+      throw new DomainError('A cor de destaque do evento deve estar no formato hexadecimal completo.');
     }
     if (input.linkedGalleryId !== undefined && input.linkedGalleryId !== null
       && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.linkedGalleryId)) {
@@ -113,6 +119,7 @@ export class EventDraft {
       title,
       description: input.description.trim(),
       location: input.location.trim(),
+      heroShadeColor,
       fields,
       offerings,
     });

@@ -5,6 +5,8 @@ const config = useRuntimeConfig();
 const api = useApi();
 const auth = useAuth();
 const publicId = String(route.params.publicId);
+const hydrated = ref(false);
+const visibleSession = computed(() => hydrated.value ? auth.session.value : null);
 const { data: event, error } = await useAsyncData(`public-event-${publicId}`, () =>
   $fetch<any>(`/public/events/${publicId}`, { baseURL: String(config.public.apiBaseUrl) }),
 );
@@ -90,7 +92,10 @@ async function loadRegistrationContext() {
   }
 }
 
-onMounted(loadRegistrationContext);
+onMounted(() => {
+  hydrated.value = true;
+  void loadRegistrationContext();
+});
 watch(() => profile.phone, (phone) => {
   if (!phone.trim()) profile.whatsappCommunicationOptIn = false;
 });
@@ -161,6 +166,18 @@ const linkedGalleryCover = computed(() => {
 const linkedGalleryDate = computed(() => event.value?.linkedGallery
   ? new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(event.value.linkedGallery.event.startsAt))
   : '');
+const heroShadeRgb = computed(() => {
+  const color = /^#[0-9A-F]{6}$/i.test(event.value?.heroShadeColor ?? '') ? event.value.heroShadeColor : '#173D32';
+  return [1, 3, 5]
+    .map((start) => Math.round(Number.parseInt(color.slice(start, start + 2), 16) * 0.35))
+    .join(', ');
+});
+const mapsEmbedUrl = computed(() => event.value?.location
+  ? `https://www.google.com/maps?q=${encodeURIComponent(event.value.location)}&output=embed`
+  : '');
+const mapsDirectionsUrl = computed(() => event.value?.location
+  ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(event.value.location)}`
+  : '');
 const priceLabel = (priceCents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(priceCents / 100);
 const selectedPeopleCount = computed(() => selectedParticipantKeys.value.length);
 const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
@@ -172,7 +189,7 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
     <div v-if="error" class="public-error"><h1>Evento não encontrado</h1><p>O link pode estar incorreto ou o evento ainda não foi publicado.</p></div>
     <div v-else-if="!event" class="public-error">Carregando evento…</div>
     <template v-else>
-      <section class="event-fold" :class="`event-fold--${event.mediaDisplayMode}`">
+      <section class="event-fold" :class="`event-fold--${event.mediaDisplayMode}`" :style="{ '--event-shade-rgb': heroShadeRgb }">
         <div class="event-fold__background" :class="{ 'event-fold__background--empty': !coverImage }">
           <img v-if="coverImage" :src="coverImage" :alt="event.images[0].altText || event.title">
         </div>
@@ -207,20 +224,20 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
 
             <form v-else @submit.prevent="submit">
               <div class="registration-card__heading">
-                <div><p class="eyebrow">Confirme sua presença</p><h2>{{ auth.session.value ? `Olá, ${auth.session.value.user.name.split(' ')[0]}` : 'Faça sua inscrição' }}</h2></div>
+                <div><p class="eyebrow">Confirme sua presença</p><h2>{{ visibleSession ? `Olá, ${visibleSession.user.name.split(' ')[0]}` : 'Faça sua inscrição' }}</h2></div>
                 <span v-if="alreadyRegistered" class="status-badge status-badge--published">Já inscrito</span>
               </div>
-              <p class="muted">{{ auth.session.value ? 'Revise os dados e escolha quem vai participar.' : 'Crie uma conta ou entre se você já participou antes.' }}</p>
+              <p class="muted">{{ visibleSession ? 'Revise os dados e escolha quem vai participar.' : 'Crie uma conta ou entre se você já participou antes.' }}</p>
 
-              <div v-if="!auth.session.value" class="tabs">
+              <div v-if="!visibleSession" class="tabs">
                 <button type="button" :class="{ active: mode === 'signup' }" @click="mode = 'signup'">Primeiro acesso</button>
                 <button type="button" :class="{ active: mode === 'login' }" @click="mode = 'login'">Já tenho conta</button>
               </div>
-              <label v-if="!auth.session.value && mode === 'signup'" class="field"><span>Nome completo</span><input v-model="name" autocomplete="name" required></label>
-              <label v-if="!auth.session.value" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" required></label>
-              <label v-if="!auth.session.value" class="field"><span>Senha</span><input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" required></label>
+              <label v-if="!visibleSession && mode === 'signup'" class="field"><span>Nome completo</span><input v-model="name" autocomplete="name" required></label>
+              <label v-if="!visibleSession" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" required></label>
+              <label v-if="!visibleSession" class="field"><span>Senha</span><input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" required></label>
 
-              <div v-if="auth.session.value || mode === 'signup'" class="registration-section">
+              <div v-if="visibleSession || mode === 'signup'" class="registration-section">
                 <div class="registration-section__heading"><div><h3>Seu WhatsApp</h3><p>Use o mesmo contato nos próximos eventos.</p></div></div>
                 <label class="field"><span>Número com DDD</span><input v-model="profile.phone" autocomplete="tel" inputmode="tel" maxlength="32" placeholder="(00) 00000-0000"></label>
                 <label class="communication-consent" :class="{ 'communication-consent--disabled': !profile.phone.trim() }">
@@ -229,11 +246,11 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                 </label>
               </div>
 
-              <div v-if="event.familyRegistrationEnabled && (auth.session.value || mode === 'signup')" class="registration-section">
+              <div v-if="event.familyRegistrationEnabled && (visibleSession || mode === 'signup')" class="registration-section">
                 <div class="registration-section__heading"><div><h3>Quem vai participar?</h3><p>Uma pessoa confirma a participação da família.</p></div><strong>{{ selectedPeopleCount }}</strong></div>
                 <label class="participant-option">
                   <input v-model="selectedParticipantKeys" type="checkbox" value="registrant">
-                  <span><strong>{{ auth.session.value?.user.name || name || 'Você' }}</strong><small>Responsável pela inscrição</small></span>
+                  <span><strong>{{ visibleSession?.user.name || name || 'Você' }}</strong><small>Responsável pela inscrição</small></span>
                 </label>
                 <div class="profile-fields">
                   <label class="field"><span>Sua data de nascimento</span><input v-model="profile.birthDate" type="date"></label>
@@ -262,7 +279,7 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                 <button type="button" class="text-action" @click="addChild">＋ Adicionar filho(a)</button>
               </div>
 
-              <div v-if="event.offerings.length && (auth.session.value || mode === 'signup')" class="registration-section">
+              <div v-if="event.offerings.length && (visibleSession || mode === 'signup')" class="registration-section">
                 <div class="registration-section__heading"><div><h3>Opções do evento</h3><p>Escolhas opcionais para esta participação.</p></div></div>
                 <label v-for="offering in event.offerings" :key="offering.id" class="offering-option">
                   <input v-model="selectedOfferingIds" type="checkbox" :value="offering.id">
@@ -271,7 +288,7 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
                 </label>
               </div>
 
-              <div v-if="event.fields.length && (auth.session.value || mode === 'signup')" class="dynamic-fields">
+              <div v-if="event.fields.length && (visibleSession || mode === 'signup')" class="dynamic-fields">
                 <h3>Sobre sua participação</h3>
                 <template v-for="field in event.fields" :key="field.id">
                   <label v-if="field.type === 'short_text'" class="field"><span>{{ field.label }}<b v-if="field.required"> *</b></span><input v-model="answers[field.id]" :required="field.required"></label>
@@ -283,11 +300,35 @@ const selectedPaidOffering = computed(() => (event.value?.offerings ?? [])
               <p v-if="contextLoading" class="muted">Carregando seus dados…</p>
               <p v-if="message" class="alert" role="status">{{ message }}</p>
               <button class="button button--primary button--large" type="submit" :disabled="loading || contextLoading">
-                {{ loading ? 'Aguarde…' : !auth.session.value && mode === 'login' ? 'Entrar e continuar' : alreadyRegistered ? 'Atualizar inscrição' : 'Confirmar inscrição' }}
+                {{ loading ? 'Aguarde…' : !visibleSession && mode === 'login' ? 'Entrar e continuar' : alreadyRegistered ? 'Atualizar inscrição' : 'Confirmar inscrição' }}
               </button>
               <p class="privacy-note">Seus dados são usados somente por esta comunidade para organizar o evento.</p>
             </form>
           </section>
+        </div>
+      </section>
+
+      <section v-if="event.location" class="event-location" aria-labelledby="event-location-title">
+        <div class="event-location__copy">
+          <p class="eyebrow">Como chegar</p>
+          <h2 id="event-location-title">Encontre o local do evento</h2>
+          <p class="event-location__address">{{ event.location }}</p>
+          <p>Consulte o mapa ou abra a rota no seu aplicativo de navegação.</p>
+          <a
+            class="button button--primary"
+            :href="mapsDirectionsUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Abrir rota no Google Maps</a>
+        </div>
+        <div class="event-location__map">
+          <iframe
+            :src="mapsEmbedUrl"
+            :title="`Mapa de ${event.location}`"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            allowfullscreen
+          />
         </div>
       </section>
 

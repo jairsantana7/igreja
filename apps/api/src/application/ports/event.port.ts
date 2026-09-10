@@ -42,6 +42,7 @@ export interface LinkedGalleryView extends LinkableGalleryView {
 export interface ManagedEventView extends DashboardEvent {
   description: string;
   mediaDisplayMode: EventMediaDisplayMode;
+  heroShadeColor: string;
   fields: Array<EventFormField & { id: string }>;
   familyRegistrationEnabled: boolean;
   offerings: Array<EventOffering & { id: string }>;
@@ -62,6 +63,7 @@ export interface PublicEventView {
   registrationDeadline: string | null;
   capacity: number | null;
   mediaDisplayMode: EventMediaDisplayMode;
+  heroShadeColor: string;
   images: { id: string; altText: string }[];
   fields: Required<Pick<EventFormField, 'id'>>[] & EventFormField[];
   familyRegistrationEnabled: boolean;

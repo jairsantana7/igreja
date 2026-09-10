@@ -24,6 +24,7 @@ interface EventRow {
 interface ManagedEventRow extends EventRow {
   description: string;
   media_display_mode: EventMediaDisplayMode;
+  hero_shade_color: string;
   current_form_version: number;
   family_registration_enabled: boolean;
   linked_gallery_id: string | null;
@@ -140,6 +141,7 @@ export class PostgresEventRepository implements EventRepository {
         ...this.mapEvent(event),
         description: event.description,
         mediaDisplayMode: event.media_display_mode,
+        heroShadeColor: event.hero_shade_color,
         currentFormVersion: event.current_form_version,
         fields: fields.rows.map((field) => ({
           id: field.id,
@@ -178,9 +180,9 @@ export class PostgresEventRepository implements EventRepository {
       const eventResult = await client.query<EventRow>(`
         INSERT INTO events (
           tenant_id, created_by_user_id, slug, title, description, location,
-          starts_at, registration_deadline, capacity, media_display_mode,
+          starts_at, registration_deadline, capacity, media_display_mode, hero_shade_color,
           linked_gallery_id, family_registration_enabled, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id, public_id, title, starts_at, registration_deadline, location, status, capacity,
           '0'::text AS registrations, '0'::text AS participants, '0'::text AS attendance,
           created_by_user_id, ''::text AS owner_name
@@ -195,6 +197,7 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.heroShadeColor,
         draft.props.linkedGalleryId ?? null,
         draft.props.familyRegistrationEnabled,
         draft.props.publish ? 'published' : 'draft',
@@ -221,8 +224,9 @@ export class PostgresEventRepository implements EventRepository {
           registration_deadline = $6,
           capacity = $7,
           media_display_mode = $8,
-          linked_gallery_id = CASE WHEN $9::boolean THEN $10::uuid ELSE linked_gallery_id END,
-          family_registration_enabled = $11,
+          hero_shade_color = $9,
+          linked_gallery_id = CASE WHEN $10::boolean THEN $11::uuid ELSE linked_gallery_id END,
+          family_registration_enabled = $12,
           updated_at = now()
         WHERE id = $1
         RETURNING id
@@ -235,6 +239,7 @@ export class PostgresEventRepository implements EventRepository {
         draft.props.registrationDeadline ?? null,
         draft.props.capacity ?? null,
         draft.props.mediaDisplayMode,
+        draft.props.heroShadeColor,
         draft.props.linkedGalleryId !== undefined,
         draft.props.linkedGalleryId ?? null,
         draft.props.familyRegistrationEnabled,
@@ -433,7 +438,7 @@ export class PostgresEventRepository implements EventRepository {
     const result = await client.query<ManagedEventRow>(`
       SELECT events.id, events.public_id, events.title, events.description, events.starts_at,
         events.registration_deadline, events.location, events.status, events.capacity,
-        events.media_display_mode, events.current_form_version, events.family_registration_enabled,
+        events.media_display_mode, events.hero_shade_color, events.current_form_version, events.family_registration_enabled,
         events.linked_gallery_id,
         linked_galleries.public_id AS linked_gallery_public_id,
         linked_galleries.title AS linked_gallery_title,

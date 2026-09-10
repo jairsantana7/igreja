@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateNested } from 'class-validator';
-import { EVENT_MEDIA_DISPLAY_MODES, FORM_FIELD_TYPES, type EventMediaDisplayMode, type FormFieldType } from '../../../domain/entities/event';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { DEFAULT_EVENT_HERO_SHADE_COLOR, EVENT_MEDIA_DISPLAY_MODES, FORM_FIELD_TYPES, type EventMediaDisplayMode, type FormFieldType } from '../../../domain/entities/event';
 
 export class EventFieldDto {
   @IsOptional()
@@ -57,6 +57,9 @@ export class EventDetailsDto {
 
   @IsIn(EVENT_MEDIA_DISPLAY_MODES)
   mediaDisplayMode: EventMediaDisplayMode = 'hero';
+
+  @Matches(/^#[0-9A-Fa-f]{6}$/, { message: 'heroShadeColor deve usar uma cor hexadecimal completa.' })
+  heroShadeColor = DEFAULT_EVENT_HERO_SHADE_COLOR;
 
   @IsOptional()
   @IsUUID('4')

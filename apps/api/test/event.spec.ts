@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canTransitionEvent, isRegistrationOpen } from '../src/domain/entities/event';
+import { canTransitionEvent, EventDraft, isRegistrationOpen } from '../src/domain/entities/event';
 import type { EventRepository } from '../src/application/ports/event.port';
 import { CancelEventUseCase, ListLinkableGalleriesUseCase, UpdateEventUseCase } from '../src/application/use-cases/event.use-cases';
 import { AuthorizationError } from '../src/application/use-cases/errors';
@@ -22,6 +22,7 @@ const editableEvent = {
   registrationDeadline: undefined,
   capacity: undefined,
   mediaDisplayMode: 'hero' as const,
+  heroShadeColor: '#173D32',
   familyRegistrationEnabled: false,
   offerings: [],
   fields: [],
@@ -49,6 +50,18 @@ describe('abertura de inscrições', () => {
       startsAt: new Date(`${startsAt}T12:00:00.000Z`),
       registrationDeadline: new Date(`${deadline}T12:00:00.000Z`),
     }, now)).toBe(false);
+  });
+});
+
+describe('identidade visual do evento', () => {
+  it('normaliza a cor hexadecimal configurada pelo criador', () => {
+    const draft = EventDraft.create({ ...editableEvent, heroShadeColor: '#6a3e24', publish: false });
+    expect(draft.props.heroShadeColor).toBe('#6A3E24');
+  });
+
+  it('rejeita uma cor fora do formato hexadecimal completo', () => {
+    expect(() => EventDraft.create({ ...editableEvent, heroShadeColor: 'verde', publish: false }))
+      .toThrow('formato hexadecimal completo');
   });
 });
 

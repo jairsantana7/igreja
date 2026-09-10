@@ -10,6 +10,7 @@ interface ManagedEvent {
   capacity: number | null;
   status: 'draft' | 'published' | 'registration_closed' | 'cancelled' | 'completed';
   mediaDisplayMode: 'hero' | 'carousel' | 'fixed';
+  heroShadeColor: string;
   familyRegistrationEnabled: boolean;
   fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>;
   offerings: Array<{ key: string; name: string; description: string; priceCents: number }>;
@@ -34,7 +35,7 @@ const errorMessage = ref('');
 const images = ref<File[]>([]);
 const previews = ref<string[]>([]);
 const originalLinkedGalleryId = ref('');
-const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as ManagedEvent['mediaDisplayMode'], linkedGalleryId: '', familyRegistrationEnabled: false, fields: [] as any[], offerings: [] as any[] });
+const form = reactive({ title: '', description: '', location: '', startsAt: '', registrationDeadline: '', capacity: undefined as number | undefined, mediaDisplayMode: 'hero' as ManagedEvent['mediaDisplayMode'], heroShadeColor: '#173D32', linkedGalleryId: '', familyRegistrationEnabled: false, fields: [] as any[], offerings: [] as any[] });
 const galleryOptions = computed(() => {
   const options = [...(linkableGalleries.value ?? [])];
   const current = event.value?.linkedGallery;
@@ -64,6 +65,7 @@ watch(event, (current) => {
     registrationDeadline: localDateTime(current.registrationDeadline),
     capacity: current.capacity ?? undefined,
     mediaDisplayMode: current.mediaDisplayMode,
+    heroShadeColor: current.heroShadeColor,
     linkedGalleryId: current.linkedGallery?.id ?? '',
     familyRegistrationEnabled: current.familyRegistrationEnabled,
     fields: current.fields.map((field) => ({ ...field, optionsText: field.options.join('\n') })),
@@ -134,10 +136,11 @@ async function cancelEvent() {
     <div v-if="pending" class="empty-card settings-loading">Carregando evento…</div>
     <div v-else-if="error || !event" class="empty-card settings-loading"><h3>Evento não encontrado</h3><p>Você pode não ter acesso ou o evento não pertence a esta comunidade.</p></div>
     <form v-else class="editor" @submit.prevent="save">
-      <section class="editor-card"><div class="editor-card__heading"><span>1</span><div><h2>Detalhes do evento</h2><p>Editar não altera o status atual: {{ event.status === 'published' ? 'publicado' : event.status === 'draft' ? 'rascunho' : 'cancelado' }}.</p></div></div><div class="form-grid"><label class="field field--wide"><span>Título</span><input v-model="form.title" maxlength="160" required></label><label class="field"><span>Data e hora</span><input v-model="form.startsAt" type="datetime-local" required></label><label class="field"><span>Local</span><input v-model="form.location"></label><label class="field"><span>Inscrições até</span><input v-model="form.registrationDeadline" type="datetime-local"></label><label class="field"><span>Capacidade</span><input v-model.number="form.capacity" type="number" min="1" placeholder="Sem limite"></label><label class="field field--wide"><span>Descrição</span><textarea v-model="form.description" rows="5"></textarea></label></div></section>
+      <section class="editor-card"><div class="editor-card__heading"><span>1</span><div><h2>Detalhes do evento</h2><p>Editar não altera o status atual: {{ event.status === 'published' ? 'publicado' : event.status === 'draft' ? 'rascunho' : 'cancelado' }}.</p></div></div><div class="form-grid"><label class="field field--wide"><span>Título</span><input v-model="form.title" maxlength="160" required></label><label class="field"><span>Data e hora</span><input v-model="form.startsAt" type="datetime-local" required></label><label class="field"><span>Local e endereço</span><input v-model="form.location" placeholder="Rua, número, bairro, cidade - UF"><small>Informe o endereço completo para posicionar o mapa.</small></label><label class="field"><span>Inscrições até</span><input v-model="form.registrationDeadline" type="datetime-local"></label><label class="field"><span>Capacidade</span><input v-model.number="form.capacity" type="number" min="1" placeholder="Sem limite"></label><label class="field field--wide"><span>Descrição</span><textarea v-model="form.description" rows="5"></textarea></label></div></section>
       <section class="editor-card">
         <div class="editor-card__heading"><span>2</span><div><h2>Imagens</h2><p>As imagens existentes são preservadas; os novos arquivos serão acrescentados.</p></div></div>
         <div class="media-editor"><label class="media-upload"><input type="file" accept="image/jpeg,image/png,image/webp" multiple @change="selectImages"><span>＋ Adicionar imagens</span><small>JPEG, PNG ou WebP · até 5 MiB</small></label><fieldset class="media-layout-options"><legend>Modo de exibição</legend><label v-for="option in [{ key: 'hero', label: 'Hero', hint: 'Capa ampla' }, { key: 'carousel', label: 'Carrossel', hint: 'Galeria navegável' }, { key: 'fixed', label: 'Fixa', hint: 'Fundo da página' }]" :key="option.key" :class="{ active: form.mediaDisplayMode === option.key }"><input v-model="form.mediaDisplayMode" type="radio" :value="option.key"><strong>{{ option.label }}</strong><small>{{ option.hint }}</small></label></fieldset></div>
+        <EventHeroThemePicker v-model="form.heroShadeColor" />
         <div v-if="previews.length" class="media-preview-list"><figure v-for="(preview, index) in previews" :key="preview"><img :src="preview" :alt="`Nova imagem ${index + 1}`"><figcaption>Nova imagem {{ index + 1 }}</figcaption></figure></div>
         <div v-if="canLinkGallery" class="gallery-link-picker">
           <div><p class="eyebrow">Memórias de outros encontros</p><h3>Destacar uma galeria anterior</h3><p>Você pode apresentar na página pública qualquer galeria publicada desta comunidade.</p></div>

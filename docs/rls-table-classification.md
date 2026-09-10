@@ -16,7 +16,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `roles` | tenant-direct | papel é configurado pela comunidade | RLS direta |
 | `role_permissions` | tenant-direct | associação pertence à comunidade | RLS direta + FK composta para papel |
 | `user_roles` | tenant-direct | atribuição pertence à comunidade | RLS direta + FKs compostas |
-| `events` | tenant-direct | evento pertence à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita; galeria vinculada usa FK composta com `tenant_id` |
+| `events` | tenant-direct | evento e sua identidade visual pertencem à comunidade | `tenant_id = current_tenant_id()` em leitura e escrita; galeria vinculada usa FK composta com `tenant_id` |
 | `event_collaborators` | tenant-direct | colaboração relaciona evento e usuário da mesma comunidade | RLS direta + FKs compostas para evento e usuário |
 | `event_form_fields` | tenant-direct | campo pertence a evento e comunidade | RLS direta + FK composta para evento |
 | `event_media` | tenant-direct | imagem pertence ao evento da comunidade | RLS direta + FK composta para evento; conteúdo binário fica fora do banco |

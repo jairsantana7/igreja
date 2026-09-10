@@ -14,6 +14,10 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 ## Eventos
 
 - O pastor cria título, descrição, local, início, limite de inscrição, capacidade opcional e formulário.
+- Quando o evento publicado possui local, sua página pública exibe uma seção de mapa e um atalho para traçar rota no Google Maps; o endereço é usado como termo de busca e continua sendo a fonte de verdade do evento.
+- Eventos sem local informado não exibem mapa. A incorporação é carregada sob demanda pelo navegador e não exige chave de API no MVP.
+- Cada evento pode definir a cor hexadecimal da sobreposição do hero de sua página pública. A personalização não altera o tema do dashboard nem os demais componentes do design system.
+- O verde `#173D32` é o padrão e o fallback visual. A camada mantém opacidade suficiente para preservar a leitura dos textos sobre a imagem.
 - O formulário aceita inicialmente texto curto, texto longo, seleção única e caixa de confirmação.
 - Um evento pode estar em `draft`, `published`, `registration_closed`, `cancelled` ou `completed`.
 - Somente `published` é acessível pelo link público.
