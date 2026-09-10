@@ -60,7 +60,7 @@ async function save() {
       images.value.forEach((image) => body.append('images', image));
       await api(`/events/${event.id}/media`, { method: 'POST', body });
     }
-    await navigateTo('/dashboard');
+    await navigateTo(`/events/${event.id}?created=1`);
   } catch (error: any) { errorMessage.value = createdEvent.value ? 'O evento foi criado, mas não foi possível enviar as imagens. Tente novamente para concluir o upload.' : Array.isArray(error?.data?.message) ? error.data.message.join(' ') : error?.data?.message ?? 'Não foi possível salvar.'; }
   finally { saving.value = false; }
 }

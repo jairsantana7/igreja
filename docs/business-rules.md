@@ -18,6 +18,9 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Eventos sem local informado não exibem mapa. A incorporação é carregada sob demanda pelo navegador e não exige chave de API no MVP.
 - Cada evento pode definir a cor hexadecimal da sobreposição do hero de sua página pública. A personalização não altera o tema do dashboard nem os demais componentes do design system.
 - O verde `#173D32` é o padrão e o fallback visual. A camada mantém opacidade suficiente para preservar a leitura dos textos sobre a imagem.
+- Ao concluir a criação de um evento publicado, o criador é direcionado à gestão e encontra o link público e seu QR Code prontos para copiar ou baixar.
+- O QR Code é derivado no navegador a partir da URL pública do ambiente e não é persistido. Ele só aparece na gestão enquanto o evento está publicado.
+- A visualização do card de compartilhamento segue o mesmo `events.read` e o mesmo escopo de propriedade/colaboração da gestão; o QR Code não cria uma permissão administrativa nova.
 - O formulário aceita inicialmente texto curto, texto longo, seleção única e caixa de confirmação.
 - Um evento pode estar em `draft`, `published`, `registration_closed`, `cancelled` ou `completed`.
 - Somente `published` é acessível pelo link público.
