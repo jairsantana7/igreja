@@ -10,7 +10,7 @@ const { data: event, error } = await useAsyncData(`public-event-${publicId}`, ()
 );
 useHead({ title: computed(() => event.value?.title ?? 'Evento') });
 
-const mode = ref<'signup' | 'login'>('signup');
+const mode = ref<'signup' | 'login'>('login');
 const name = ref('');
 const email = ref('');
 const password = ref('');
