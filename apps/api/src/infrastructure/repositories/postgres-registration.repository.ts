@@ -11,12 +11,13 @@ import type { RegistrationParticipantSnapshot } from '../../domain/entities/even
 import type { MemberProfileDraft } from '../../domain/entities/member-profile';
 import { ConflictError } from '../../application/use-cases/errors';
 import { PostgresDatabase } from '../database/postgres.database';
+import { withIdentityUniqueConflict } from './postgres-identity-errors';
 
 export class PostgresRegistrationRepository implements EventRegistrationRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
   signUpAndRegister(input: Parameters<EventRegistrationRepository['signUpAndRegister']>[0]) {
-    return this.database.withTenant(input.event.tenantId, async (client) => {
+    return withIdentityUniqueConflict(this.database.withTenant(input.event.tenantId, async (client) => {
       const existing = await client.query('SELECT 1 FROM users WHERE email = $1', [input.email]);
       if (existing.rowCount) throw new ConflictError('Já existe uma conta com este e-mail. Entre para continuar.');
 
@@ -42,11 +43,11 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         identity: await this.loadIdentity(client, input.event.tenantId, userId),
         registrationId,
       };
-    });
+    }), 'Já existe uma conta com este e-mail. Entre para continuar.');
   }
 
   register(input: Parameters<EventRegistrationRepository['register']>[0]) {
-    return this.database.withTenant(input.principal, async (client) => {
+    return withIdentityUniqueConflict(this.database.withTenant(input.principal, async (client) => {
       if (input.profile) await this.saveProfile(
         client, input.principal.tenantId, input.principal.userId, input.profile, input.event.familyRegistrationEnabled,
       );
@@ -54,20 +55,21 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         client, input.event, input.principal.userId, input.answers, input.participants, input.offeringIds,
         input.pixPaymentDeclared,
       );
-    });
+    }));
   }
 
   context(principal: Parameters<EventRegistrationRepository['context']>[0], event: PublicEventView) {
     return this.database.withTenant(principal, async (client): Promise<RegistrationContextView> => {
       const profileResult = await client.query<{
         phone: string | null;
+        phone_verified_at: Date | null;
         whatsapp_communication_opt_in: boolean;
         birth_date: string | null;
         spouse_name: string | null;
         marriage_date: string | null;
         children: Array<{ name: string; birthDate: string | null }>;
       }>(`
-        SELECT profiles.phone, profiles.whatsapp_communication_opt_in,
+        SELECT profiles.phone, profiles.phone_verified_at, profiles.whatsapp_communication_opt_in,
           to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
           profiles.spouse_name,
           to_char(profiles.marriage_date, 'YYYY-MM-DD') AS marriage_date,
@@ -104,6 +106,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
           selectedOfferingIds: [],
           pixPaymentDeclared: false,
           hasSavedProfile: Boolean(row),
+          phoneLoginEnabled: Boolean(row?.phone_verified_at),
           alreadyRegistered: false,
         };
       }
@@ -134,6 +137,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         selectedOfferingIds: offerings.rows.map((offering) => offering.offering_id),
         pixPaymentDeclared: Boolean(registration.rows[0].pix_payment_declared_at),
         hasSavedProfile: Boolean(row),
+        phoneLoginEnabled: Boolean(row?.phone_verified_at),
         alreadyRegistered: true,
       };
     });

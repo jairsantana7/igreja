@@ -3,6 +3,7 @@ import type { MemberProfileRepository, MemberProfileView } from '../../applicati
 import type { MemberProfileDraft } from '../../domain/entities/member-profile';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { PostgresDatabase } from '../database/postgres.database';
+import { withIdentityUniqueConflict } from './postgres-identity-errors';
 
 export class PostgresMemberProfileRepository implements MemberProfileRepository {
   constructor(private readonly database: PostgresDatabase) {}
@@ -12,7 +13,7 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
   }
 
   save(principal: AuthenticatedPrincipal, memberId: string, draft: MemberProfileDraft): Promise<MemberProfileView | null> {
-    return this.database.withTenant(principal, async (client) => {
+    return withIdentityUniqueConflict(this.database.withTenant(principal, async (client) => {
       if (!(await client.query('SELECT 1 FROM users WHERE id = $1', [memberId])).rowCount) return null;
       const address = draft.props.address;
       const profile = await client.query<{ id: string }>(`
@@ -59,12 +60,12 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
         `, [principal.tenantId, profileId, memberId, child.name, child.birthDate ?? null]);
       }
       return this.findWithClient(client, memberId);
-    });
+    }));
   }
 
   private async findWithClient(client: PoolClient, memberId: string): Promise<MemberProfileView | null> {
     const result = await client.query<{
-      id: string; name: string; email: string; phone: string | null; birth_date: string | null;
+      id: string; name: string; email: string; phone: string | null; phone_verified_at: Date | null; birth_date: string | null;
       whatsapp_communication_opt_in: boolean | null; whatsapp_communication_opted_in_at: Date | null;
       whatsapp_communication_opted_out_at: Date | null;
       spouse_name: string | null; marriage_date: string | null; postal_code: string | null; street: string | null;
@@ -72,7 +73,7 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
       city: string | null; state: string | null; updated_at: Date | null;
       children: Array<{ id: string; name: string; birthDate: string | null }>;
     }>(`
-      SELECT users.id, users.name, users.email, profiles.phone,
+      SELECT users.id, users.name, users.email, profiles.phone, profiles.phone_verified_at,
         profiles.whatsapp_communication_opt_in, profiles.whatsapp_communication_opted_in_at,
         profiles.whatsapp_communication_opted_out_at,
         to_char(profiles.birth_date, 'YYYY-MM-DD') AS birth_date,
@@ -96,6 +97,7 @@ export class PostgresMemberProfileRepository implements MemberProfileRepository 
     return {
       member: { id: row.id, name: row.name, email: row.email },
       phone: row.phone,
+      phoneLoginEnabled: Boolean(row.phone_verified_at),
       whatsappCommunication: {
         allowed: row.whatsapp_communication_opt_in ?? false,
         optedInAt: row.whatsapp_communication_opted_in_at?.toISOString() ?? null,

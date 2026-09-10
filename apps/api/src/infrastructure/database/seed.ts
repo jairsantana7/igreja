@@ -168,15 +168,16 @@ async function seed(): Promise<void> {
     })]);
     await client.query(`
       INSERT INTO member_profiles (
-        id, tenant_id, user_id, phone, birth_date, spouse_name, marriage_date,
+        id, tenant_id, user_id, phone, phone_verified_at, birth_date, spouse_name, marriage_date,
         postal_code, street, address_number, neighborhood, city, state,
         whatsapp_communication_opt_in, whatsapp_communication_opted_in_at, updated_by_user_id
       ) VALUES (
-        $1, $2, $3, '+5513999990002', DATE '1988-04-12', 'Alex Demonstração', DATE '2014-06-21',
+        $1, $2, $3, '+5513999990002', now(), DATE '1988-04-12', 'Alex Demonstração', DATE '2014-06-21',
         '11000-000', 'Rua da Comunidade', '100', 'Centro', 'Santos', 'SP', true, now(), $3
       )
       ON CONFLICT (user_id, tenant_id) DO UPDATE SET
-        phone = EXCLUDED.phone, birth_date = EXCLUDED.birth_date, spouse_name = EXCLUDED.spouse_name,
+        phone = EXCLUDED.phone, phone_verified_at = COALESCE(member_profiles.phone_verified_at, now()),
+        birth_date = EXCLUDED.birth_date, spouse_name = EXCLUDED.spouse_name,
         marriage_date = EXCLUDED.marriage_date, postal_code = EXCLUDED.postal_code,
         street = EXCLUDED.street, address_number = EXCLUDED.address_number,
         neighborhood = EXCLUDED.neighborhood, city = EXCLUDED.city, state = EXCLUDED.state,

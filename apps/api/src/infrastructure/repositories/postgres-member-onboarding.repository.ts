@@ -1,8 +1,10 @@
 import type { MemberOnboardingDeliveryView, MemberOnboardingRepository } from '../../application/ports/member-onboarding.port';
 import { ConflictError } from '../../application/use-cases/errors';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
+import { PhoneNumber } from '../../domain/value-objects/phone-number';
 import { PostgresDatabase } from '../database/postgres.database';
 import type { PoolClient } from 'pg';
+import { identityUniqueConflict, withIdentityUniqueConflict } from './postgres-identity-errors';
 
 export class PostgresMemberOnboardingRepository implements MemberOnboardingRepository {
   constructor(private readonly database: PostgresDatabase) {}
@@ -47,7 +49,8 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
         const delivery = await this.insertDelivery(client, principal, member.id, input.delivery);
         return { ...member, delivery };
       } catch (error: any) {
-        if (error?.code === '23505') throw new ConflictError('Já existe um usuário com este e-mail.');
+        const conflict = identityUniqueConflict(error, 'Já existe um usuário com este e-mail.');
+        if (conflict) throw conflict;
         throw error;
       }
     });
@@ -98,8 +101,8 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
         `, [principal.tenantId, member.id, memberRole.rows[0].id]);
         await client.query(`
           INSERT INTO member_profiles (
-            tenant_id, user_id, phone, whatsapp_communication_opt_in, updated_by_user_id
-          ) VALUES ($1, $2, $3, false, $4)
+            tenant_id, user_id, phone, phone_verified_at, whatsapp_communication_opt_in, updated_by_user_id
+          ) VALUES ($1, $2, $3, now(), false, $4)
         `, [principal.tenantId, member.id, `+${phoneDigits}`, principal.userId]);
         await client.query(`
           UPDATE conversations SET member_user_id = $2, updated_at = now() WHERE id = $1
@@ -118,7 +121,8 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
         });
         return { ...member, delivery };
       } catch (error: any) {
-        if (error?.code === '23505') throw new ConflictError('Já existe um usuário com este e-mail. O vínculo com membros existentes ainda precisa de um fluxo próprio.');
+        const conflict = identityUniqueConflict(error, 'Já existe um usuário com este e-mail. O vínculo com membros existentes ainda precisa de um fluxo próprio.');
+        if (conflict) throw conflict;
         throw error;
       }
     });
@@ -241,9 +245,9 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
   }
 
   completePublicDelivery(input: Parameters<MemberOnboardingRepository['completePublicDelivery']>[0]): Promise<boolean> {
-    return this.database.withTenant({ tenantId: input.tenantId, userId: input.memberUserId }, async (client) => {
-      const locked = await client.query<{ member_user_id: string }>(`
-        SELECT member_user_id FROM member_onboarding_deliveries
+    return withIdentityUniqueConflict(this.database.withTenant({ tenantId: input.tenantId, userId: input.memberUserId }, async (client) => {
+      const locked = await client.query<{ member_user_id: string; phone: string }>(`
+        SELECT member_user_id, phone FROM member_onboarding_deliveries
         WHERE id = $1 AND token_hash = $2 AND member_user_id = $3
           AND status IN ('pending', 'revealed', 'delivered')
           AND expires_at > now() AND encrypted_payload IS NOT NULL
@@ -253,19 +257,27 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
 
       const draft = input.profile;
       const address = draft.props.address;
+      const phoneVerified = Boolean(draft.props.phone)
+        && draft.props.phone === PhoneNumber.create(locked.rows[0].phone).value;
       await client.query(`
         UPDATE users SET password_hash = $2, temporary_password_expires_at = NULL, updated_at = now()
         WHERE id = $1
       `, [input.memberUserId, input.passwordHash]);
       const profile = await client.query<{ id: string }>(`
         INSERT INTO member_profiles (
-          tenant_id, user_id, phone, birth_date, spouse_name, marriage_date,
+          tenant_id, user_id, phone, phone_verified_at, birth_date, spouse_name, marriage_date,
           postal_code, street, address_number, complement, neighborhood, city, state,
           whatsapp_communication_opt_in, whatsapp_communication_opted_in_at, updated_by_user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        ) VALUES ($1, $2, $3, CASE WHEN $15 THEN now() ELSE NULL END, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
           CASE WHEN $14 THEN now() ELSE NULL END, $2)
         ON CONFLICT (user_id, tenant_id) DO UPDATE SET
-          phone = EXCLUDED.phone, birth_date = EXCLUDED.birth_date,
+          phone = EXCLUDED.phone,
+          phone_verified_at = CASE
+            WHEN $15 THEN now()
+            WHEN member_profiles.phone IS DISTINCT FROM EXCLUDED.phone THEN NULL
+            ELSE member_profiles.phone_verified_at
+          END,
+          birth_date = EXCLUDED.birth_date,
           spouse_name = EXCLUDED.spouse_name, marriage_date = EXCLUDED.marriage_date,
           postal_code = EXCLUDED.postal_code, street = EXCLUDED.street,
           address_number = EXCLUDED.address_number, complement = EXCLUDED.complement,
@@ -280,7 +292,7 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
         draft.props.spouseName ?? null, draft.props.marriageDate ?? null,
         address.postalCode ?? null, address.street ?? null, address.number ?? null,
         address.complement ?? null, address.neighborhood ?? null, address.city ?? null,
-        address.state ?? null, draft.props.whatsappCommunicationOptIn ?? false,
+        address.state ?? null, draft.props.whatsappCommunicationOptIn ?? false, phoneVerified,
       ]);
       await client.query('DELETE FROM member_children WHERE profile_id = $1', [profile.rows[0]!.id]);
       for (const child of draft.props.children) {
@@ -295,7 +307,7 @@ export class PostgresMemberOnboardingRepository implements MemberOnboardingRepos
         WHERE id = $1
       `, [input.deliveryId]);
       return true;
-    });
+    }));
   }
 
   private async insertDelivery(

@@ -25,7 +25,7 @@ Abra `http://localhost:3100`. O seed local cria:
 
 - comunidade: `comunidade-demo`
 - administrador inicial: `Admin Inicial` — `admin@comunidade.local` / `Comunidade#2026`
-- membro com WhatsApp e família já cadastrados para testar confirmações sem repetir dados: `Membro Demonstração` — `membro@comunidade.local` / `Membro#2026`
+- membro com WhatsApp verificado e família já cadastrados para testar confirmações sem repetir dados: `Membro Demonstração` — `membro@comunidade.local` ou `(13) 99999-0002` / `Membro#2026`
 - evento futuro com café da manhã opcional e PIX manual de demonstração: `Encontro de boas-vindas`
 - evento concluído: `Domingo em comunidade`
 - galeria pública com três fotos sintéticas: `http://localhost:3100/g/65000000-0000-4000-8000-000000000001`
@@ -49,7 +49,7 @@ pnpm db:down    # encerra containers
 
 ## Escopo do MVP
 
-- login do pastor por comunidade;
+- login por comunidade com e-mail ou telefone verificado;
 - usuário admin inicial para criar os demais papéis e acessos;
 - dashboard de eventos;
 - central operacional por evento com inscrições, presença, formulário, comunicação e auditoria;

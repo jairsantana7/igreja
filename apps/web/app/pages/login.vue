@@ -7,7 +7,7 @@ const api = useApi();
 const auth = useAuth();
 const route = useRoute();
 const tenantSlug = ref(import.meta.dev ? 'comunidade-demo' : '');
-const email = ref(import.meta.dev ? 'admin@comunidade.local' : '');
+const identifier = ref(import.meta.dev ? 'admin@comunidade.local' : '');
 const password = ref(import.meta.dev ? 'Comunidade#2026' : '');
 const showPassword = ref(false);
 const loading = ref(false);
@@ -18,7 +18,7 @@ async function login() {
   errorMessage.value = '';
   try {
     const response = await api<{ sessionProof: string; user: any }>('/auth/login', {
-      method: 'POST', body: { tenantSlug: tenantSlug.value, email: email.value, password: password.value },
+      method: 'POST', body: { tenantSlug: tenantSlug.value, identifier: identifier.value, password: password.value },
     });
     auth.setSession(response);
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/g/') ? route.query.redirect : '/dashboard';
@@ -61,7 +61,7 @@ async function login() {
         <p class="muted">Entre para continuar no {{ config.public.appName }}.</p>
 
         <label class="field"><span>Comunidade</span><input v-model="tenantSlug" autocomplete="organization" placeholder="codigo-da-comunidade" required></label>
-        <label class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" placeholder="voce@exemplo.com" required></label>
+        <label class="field"><span>E-mail ou WhatsApp</span><input v-model="identifier" type="text" autocomplete="username" placeholder="nome@exemplo.com ou (00) 00000-0000" required></label>
         <label class="field"><span>Senha</span><span class="password-wrap"><input v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" placeholder="Digite sua senha" required><button type="button" @click="showPassword = !showPassword">{{ showPassword ? 'Ocultar' : 'Mostrar' }}</button></span></label>
 
         <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p>

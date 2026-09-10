@@ -1,6 +1,17 @@
 import type { AuthenticationRepository, PasswordHasher, SessionClientContext, SessionRepository, SessionSecurity, TokenService } from '../ports/authentication.port';
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
+import { PhoneNumber } from '../../domain/value-objects/phone-number';
 import { AuthenticationError } from './errors';
+
+function normalizeLoginIdentifier(value: string): string {
+  const identifier = value.trim();
+  if (identifier.includes('@')) return identifier.toLowerCase();
+  try {
+    return PhoneNumber.create(identifier).value;
+  } catch {
+    return identifier;
+  }
+}
 
 export class LoginUseCase {
   constructor(
@@ -11,13 +22,13 @@ export class LoginUseCase {
     private readonly sessionSecurity: SessionSecurity,
   ) {}
 
-  async execute(input: { tenantSlug: string; email: string; password: string }, context: SessionClientContext) {
-    const identity = await this.authentication.findForLogin(input.tenantSlug, input.email.toLowerCase().trim());
+  async execute(input: { tenantSlug: string; identifier: string; password: string }, context: SessionClientContext) {
+    const identity = await this.authentication.findForLogin(input.tenantSlug, normalizeLoginIdentifier(input.identifier));
     return this.authenticate(identity, input.password, context);
   }
 
-  async executeForTenant(input: { tenantId: string; email: string; password: string }, context: SessionClientContext) {
-    const identity = await this.authentication.findForTenantLogin(input.tenantId, input.email.toLowerCase().trim());
+  async executeForTenant(input: { tenantId: string; identifier: string; password: string }, context: SessionClientContext) {
+    const identity = await this.authentication.findForTenantLogin(input.tenantId, normalizeLoginIdentifier(input.identifier));
     return this.authenticate(identity, input.password, context);
   }
 

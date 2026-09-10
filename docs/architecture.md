@@ -31,7 +31,7 @@ O Nuxt é um cliente da API. O frontend não é uma fronteira de autorização; 
 
 ## Contexto de tenant
 
-O login exige o slug da comunidade e resolve somente a identidade necessária por uma função estreita. Após validar a senha, o JWT assinado carrega `tenantId` e `userId`. O guard valida assinatura, emissor e audiência. O repositório abre uma transação e executa `set_config('app.tenant_id', tenantId, true)` antes de qualquer SQL protegido.
+O login exige o slug da comunidade e resolve somente a identidade necessária por uma função estreita. O identificador é um e-mail normalizado ou um telefone E.164 previamente verificado. O resolver descobre o tenant, instala o contexto RLS e só então consulta `users` e `member_profiles`; o telefone nunca abre uma busca global. Após validar a senha, o JWT assinado carrega `tenantId` e `userId`. O guard valida assinatura, emissor e audiência. O repositório abre uma transação e executa `set_config('app.tenant_id', tenantId, true)` antes de qualquer SQL protegido.
 
 O valor é local à transação, portanto não permanece na conexão devolvida ao pool.
 
@@ -65,7 +65,7 @@ Configurações de login social e pagamentos formam um contexto separado de even
 
 ## Bounded context: Membros
 
-A identidade básica em `users` continua suficiente para autenticação e inscrição. `member_profiles` e `member_children` formam um perfil complementar opcional, acessado por casos de uso e portas próprios. Essa separação permite aplicar permissões mais restritas à data de nascimento, ao endereço e aos dados de menores sem ampliar implicitamente `users.read`.
+A identidade básica em `users` continua sendo a raiz da autenticação e da inscrição. `member_profiles` oferece o telefone verificado apenas como identificador alternativo e `member_children` mantém dados familiares opcionais; nenhum familiar vira identidade implicitamente. O domínio normaliza o telefone e o banco mantém a representação E.164, a unicidade por tenant e a revogação da verificação quando o número muda. Essa separação permite aplicar permissões mais restritas à data de nascimento, ao endereço e aos dados de menores sem ampliar implicitamente `users.read`.
 
 O cadastro administrativo usa `MemberOnboardingRepository` como porta específica para persistir identidade, papéis, perfil e entrega temporária em uma única transação. `MemberOnboardingSecurity` gera frase-senha/token e protege o payload; o caso de uso não conhece AES nem PostgreSQL. A fila de entrega é estado persistente do contexto de Membros e não transporta segredos pelo `JobQueue`.
 

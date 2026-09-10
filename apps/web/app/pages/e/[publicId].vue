@@ -15,6 +15,7 @@ useHead({ title: computed(() => event.value?.title ?? 'Evento') });
 const mode = ref<'signup' | 'login'>('login');
 const name = ref('');
 const email = ref('');
+const loginIdentifier = ref('');
 const password = ref('');
 const answers = reactive<Record<string, any>>({});
 const profile = reactive({
@@ -29,6 +30,7 @@ const selectedParticipantKeys = ref<string[]>(['registrant']);
 const selectedOfferingIds = ref<string[]>([]);
 const pixPaymentDeclared = ref(false);
 const hasSavedProfile = ref(false);
+const phoneLoginEnabled = ref(false);
 const profileEditorOpen = ref(true);
 const hydratingSelection = ref(false);
 const loading = ref(false);
@@ -95,6 +97,7 @@ async function loadRegistrationContext() {
     selectedOfferingIds.value = context.selectedOfferingIds;
     pixPaymentDeclared.value = context.pixPaymentDeclared;
     hasSavedProfile.value = context.hasSavedProfile;
+    phoneLoginEnabled.value = context.phoneLoginEnabled;
     profileEditorOpen.value = !context.hasSavedProfile;
     alreadyRegistered.value = context.alreadyRegistered;
     await nextTick();
@@ -154,7 +157,7 @@ async function submit() {
       confirmed.value = true;
     } else {
       const response = await api<{ sessionProof: string; user: any }>(`/public/events/${publicId}/login`, {
-        method: 'POST', body: { email: email.value, password: password.value },
+        method: 'POST', body: { identifier: loginIdentifier.value, password: password.value },
       });
       auth.setSession(response);
       await loadRegistrationContext();
@@ -252,11 +255,12 @@ const selectedPaidAmountCents = computed(() => (event.value?.offerings ?? [])
                 <button type="button" :class="{ active: mode === 'login' }" @click="mode = 'login'">Já tenho conta</button>
               </div>
               <label v-if="!visibleSession && mode === 'signup'" class="field"><span>Nome completo</span><input v-model="name" autocomplete="name" required></label>
-              <label v-if="!visibleSession" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="username" required></label>
+              <label v-if="!visibleSession && mode === 'signup'" class="field"><span>E-mail</span><input v-model="email" type="email" autocomplete="email" placeholder="nome@exemplo.com" required></label>
+              <label v-if="!visibleSession && mode === 'login'" class="field"><span>E-mail ou WhatsApp</span><input v-model="loginIdentifier" autocomplete="username" placeholder="nome@exemplo.com ou (00) 00000-0000" required></label>
               <label v-if="!visibleSession" class="field"><span>Senha</span><input v-model="password" type="password" :autocomplete="mode === 'signup' ? 'new-password' : 'current-password'" minlength="8" required></label>
 
               <div v-if="visibleSession && hasSavedProfile && !profileEditorOpen" class="saved-profile-summary">
-                <div><p class="eyebrow">Dados já cadastrados</p><h3>Seu perfil está pronto</h3><p><span v-if="profile.phone">WhatsApp {{ profile.phone }}</span><span v-if="profile.spouseName"> · família de {{ profile.children.length + 2 }} pessoas</span></p></div>
+                <div><p class="eyebrow">Dados já cadastrados</p><h3>Seu perfil está pronto</h3><p><span v-if="profile.phone">WhatsApp {{ profile.phone }}</span><span v-if="phoneLoginEnabled"> · acesso por telefone ativo</span><span v-if="profile.spouseName"> · família de {{ profile.children.length + 2 }} pessoas</span></p></div>
                 <button class="button button--small" type="button" @click="profileEditorOpen = true">Revisar/editar meus dados</button>
               </div>
 

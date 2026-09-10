@@ -7,8 +7,9 @@ export class LoginDto {
   @Matches(/^[a-z0-9][a-z0-9-]{2,62}$/)
   tenantSlug!: string;
 
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @Length(3, 254)
+  identifier!: string;
 
   @IsString()
   @MinLength(8)
@@ -16,8 +17,9 @@ export class LoginDto {
 }
 
 export class EventLoginDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @Length(3, 254)
+  identifier!: string;
 
   @IsString()
   @MinLength(8)

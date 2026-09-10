@@ -11,6 +11,16 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Somente usuários com `users.read` podem visualizar a lista de membros.
 - Usuários com `users.create` e acesso à lista de papéis podem cadastrar uma pessoa com senha inicial e ao menos um papel.
 
+## Autenticação local
+
+- O campo de acesso aceita e-mail ou WhatsApp e exige a senha da conta. A resposta de erro não revela qual identificador existe.
+- O telefone pode ser digitado com ou sem formatação, mas é normalizado para E.164 e precisa conter DDD. O telefone normalizado é único dentro da comunidade.
+- Somente um telefone verificado pode identificar uma conta. Consentimento para receber conversas não vale como verificação de posse.
+- Concluir o convite cadastral entregue ao mesmo WhatsApp ou criar o membro a partir de uma conversa recebida verifica o número atual. Alterá-lo fora desses fluxos remove a verificação.
+- O login no convite do evento usa o tenant já resolvido pelo identificador público do evento; o login administrativo continua exigindo o código da comunidade.
+- O MVP não usa o telefone para recuperação de senha nem envia código OTP. Esses recursos exigirão um fluxo de verificação próprio.
+- Cônjuge e filhos do perfil familiar não são contas e não podem entrar com o telefone do responsável.
+
 ## Eventos
 
 - O pastor cria título, descrição, local, início, limite de inscrição, capacidade opcional e formulário.

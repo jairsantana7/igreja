@@ -83,6 +83,7 @@ export interface RegistrationContextView {
   selectedOfferingIds: string[];
   pixPaymentDeclared: boolean;
   hasSavedProfile: boolean;
+  phoneLoginEnabled: boolean;
   alreadyRegistered: boolean;
 }
 

@@ -84,12 +84,14 @@ describeDatabase('PostgreSQL RLS', () => {
         ('${sessionB}', '${tenantB}', '${userB}', now() + interval '1 hour', repeat('b', 64), repeat('2', 64))
       ON CONFLICT DO NOTHING;
       INSERT INTO member_profiles (
-        id, tenant_id, user_id, phone, whatsapp_communication_opt_in,
+        id, tenant_id, user_id, phone, phone_verified_at, whatsapp_communication_opt_in,
         whatsapp_communication_opted_in_at, birth_date, city, state, updated_by_user_id
       ) VALUES
-        ('${profileA}', '${tenantA}', '${userA}', '+551100000001', true, now(), DATE '1990-01-01', 'Cidade A', 'SP', '${userA}'),
-        ('${profileB}', '${tenantB}', '${userB}', '+551100000002', true, now(), DATE '1991-02-02', 'Cidade B', 'RJ', '${userB}')
-      ON CONFLICT DO NOTHING;
+        ('${profileA}', '${tenantA}', '${userA}', '+551100000001', now(), true, now(), DATE '1990-01-01', 'Cidade A', 'SP', '${userA}'),
+        ('${profileB}', '${tenantB}', '${userB}', '+551100000001', now(), true, now(), DATE '1991-02-02', 'Cidade B', 'RJ', '${userB}')
+      ON CONFLICT (id) DO UPDATE SET
+        phone = EXCLUDED.phone,
+        phone_verified_at = EXCLUDED.phone_verified_at;
       INSERT INTO member_children (tenant_id, profile_id, member_user_id, name) VALUES
         ('${tenantA}', '${profileA}', '${userA}', 'Filho A'),
         ('${tenantB}', '${profileB}', '${userB}', 'Filho B')
@@ -691,6 +693,65 @@ describeDatabase('PostgreSQL RLS', () => {
       await admin.query(`
         UPDATE users SET password_hash = NULL, temporary_password_expires_at = NULL WHERE id = $1
       `, [userA]);
+    }
+  });
+
+  it('resolve telefone verificado somente dentro da comunidade informada', async () => {
+    const tenantAResult = await runtime.query<{ user_id: string }>(
+      'SELECT user_id FROM app.resolve_login_identity($1, $2)',
+      ['rls-tenant-a', '+551100000001'],
+    );
+    const tenantBResult = await runtime.query<{ user_id: string }>(
+      'SELECT user_id FROM app.resolve_login_identity($1, $2)',
+      ['rls-tenant-b', '+551100000001'],
+    );
+    expect(tenantAResult.rows).toEqual([{ user_id: userA }]);
+    expect(tenantBResult.rows).toEqual([{ user_id: userB }]);
+  });
+
+  it('permite o mesmo telefone em comunidades distintas, mas rejeita duplicidade no tenant', async () => {
+    const client = await runtime.connect();
+    try {
+      await expect(inTenant(client, tenantA, async () => {
+        const duplicateUser = 'a1010000-0000-4000-8000-000000000003';
+        await client.query(`
+          INSERT INTO users (id, tenant_id, name, email)
+          VALUES ($1, $2, 'Outro usuário', 'outro@a.test')
+        `, [duplicateUser, tenantA]);
+        await client.query(`
+          INSERT INTO member_profiles (tenant_id, user_id, phone, updated_by_user_id)
+          VALUES ($1, $2, '(11) 0000-0001', $3)
+        `, [tenantA, duplicateUser, userA]);
+      })).rejects.toMatchObject({
+        code: '23505',
+        constraint: 'member_profiles_tenant_phone_normalized_key',
+      });
+    } finally {
+      client.release();
+    }
+  });
+
+  it('revoga a verificação quando o telefone muda e não usa o novo número no login', async () => {
+    const client = await runtime.connect();
+    try {
+      await inTenant(client, tenantB, async () => {
+        await client.query("UPDATE member_profiles SET phone = '(11) 90000-0003' WHERE id = $1", [profileB]);
+      });
+      const profile = await inTenant(client, tenantB, async () => client.query<{
+        phone_normalized: string;
+        verified: boolean;
+      }>('SELECT phone_normalized, phone_verified_at IS NOT NULL AS verified FROM member_profiles WHERE id = $1', [profileB]));
+      expect(profile.rows).toEqual([{ phone_normalized: '+5511900000003', verified: false }]);
+      const result = await client.query<{ user_id: string }>(
+        'SELECT user_id FROM app.resolve_login_identity($1, $2)',
+        ['rls-tenant-b', '+5511900000003'],
+      );
+      expect(result.rows).toEqual([]);
+    } finally {
+      await inTenant(client, tenantB, async () => {
+        await client.query("UPDATE member_profiles SET phone = '+551100000001', phone_verified_at = now() WHERE id = $1", [profileB]);
+      });
+      client.release();
     }
   });
 

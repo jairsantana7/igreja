@@ -4,6 +4,7 @@ import type { MemberProfileDraft } from '../../domain/entities/member-profile';
 export interface MemberProfileView {
   member: { id: string; name: string; email: string };
   phone: string | null;
+  phoneLoginEnabled: boolean;
   whatsappCommunication: {
     allowed: boolean;
     optedInAt: string | null;

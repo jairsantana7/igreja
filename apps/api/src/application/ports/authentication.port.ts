@@ -11,8 +11,8 @@ export interface LoginIdentity {
 }
 
 export interface AuthenticationRepository {
-  findForLogin(tenantSlug: string, email: string): Promise<LoginIdentity | null>;
-  findForTenantLogin(tenantId: string, email: string): Promise<LoginIdentity | null>;
+  findForLogin(tenantSlug: string, identifier: string): Promise<LoginIdentity | null>;
+  findForTenantLogin(tenantId: string, identifier: string): Promise<LoginIdentity | null>;
 }
 
 export interface PasswordHasher {

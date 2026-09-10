@@ -2,6 +2,7 @@
 interface MemberProfile {
   member: { id: string; name: string; email: string };
   phone: string | null;
+  phoneLoginEnabled: boolean;
   whatsappCommunication: { allowed: boolean; optedInAt: string | null; optedOutAt: string | null };
   birthDate: string | null;
   spouseName: string | null;
@@ -147,7 +148,7 @@ async function pullConversation() {
       </form>
 
       <div v-else class="member-profile-grid">
-        <section class="operation-card"><p class="eyebrow">Dados pessoais</p><h2>{{ profile.birthDate ? formatter.format(new Date(`${profile.birthDate}T00:00:00`)) : 'Nascimento não informado' }}</h2><p>{{ profile.phone || 'WhatsApp não informado' }}</p></section>
+        <section class="operation-card"><p class="eyebrow">Dados pessoais</p><h2>{{ profile.birthDate ? formatter.format(new Date(`${profile.birthDate}T00:00:00`)) : 'Nascimento não informado' }}</h2><p>{{ profile.phone || 'WhatsApp não informado' }}</p><span v-if="profile.phone" class="status-badge" :class="profile.phoneLoginEnabled ? 'status-badge--published' : 'status-badge--draft'">{{ profile.phoneLoginEnabled ? 'Acesso por telefone ativo' : 'Telefone ainda não verificado' }}</span></section>
         <section class="operation-card member-communication-card">
           <p class="eyebrow">Comunicação</p>
           <div class="member-communication-status"><h2>WhatsApp</h2><span class="status-badge" :class="profile.whatsappCommunication.allowed ? 'status-badge--published' : 'status-badge--draft'">{{ profile.whatsappCommunication.allowed ? 'Autorizada pelo membro' : 'Não autorizada' }}</span></div>

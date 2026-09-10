@@ -6,7 +6,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 |---|---|---|---|
 | `tenants` | tenant root | representa a própria comunidade | `id = current_tenant_id()` |
 | `users` | tenant-direct | possui `tenant_id` | `tenant_id = current_tenant_id()` em leitura e escrita |
-| `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; telefone, autorização de comunicação, nascimento e endereço são dados pessoais protegidos por permissão específica |
+| `member_profiles` | tenant-direct | perfil complementar pertence a um usuário da comunidade | RLS direta + FK composta para usuário; telefone normalizado/verificado, autorização de comunicação, nascimento e endereço são dados pessoais; a unicidade do telefone é limitada ao tenant |
 | `member_children` | tenant-direct | filho informado pertence ao perfil de um membro da comunidade | RLS direta + FK composta para perfil/usuário; dados de menores não entram na auditoria |
 | `member_onboarding_deliveries` | tenant-direct | entrega temporária pertence ao membro e à comunidade | RLS direta + FKs compostas para membro e criador; payload cifrado não entra em logs ou auditoria |
 | `member_onboarding_directory` | global catalog | resolve UUID público opaco para o tenant da entrega | sem acesso direto do runtime; mantido por trigger e consultado somente por função resolver estreita |
@@ -58,7 +58,7 @@ As colunas `events.pix_integration_id` e `event_registrations.pix_integration_id
 
 ## Funções estreitas sem contexto prévio
 
-- `app.resolve_login_identity`: resolve somente a identidade mínima do login a partir do slug público e entra no contexto do tenant antes de consultar tabelas protegidas.
+- `app.resolve_login_identity`: resolve somente a identidade mínima do login por e-mail ou telefone verificado; parte do slug público e entra no contexto do tenant antes de consultar `users` e `member_profiles` protegidas.
 - `app.resolve_member_onboarding_tenant`: resolve somente o tenant de uma entrega ativa a partir de UUID público opaco e entra no contexto antes de consultar a tabela protegida.
 - `app.resolve_public_gallery` e `app.resolve_public_gallery_photo`: resolvem uma galeria pública por UUID opaco, entram no tenant correto e retornam somente metadados ou a chave da mídia publicada.
 - `app.resolve_public_event_linked_gallery`: resolve somente a galeria pública vinculada a um evento publicado, entrando no tenant pelo diretório opaco do evento.

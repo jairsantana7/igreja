@@ -39,7 +39,10 @@ describe('perfil complementar do membro', () => {
 
   it('exige um número para autorizar conversas pelo WhatsApp', () => {
     expect(() => MemberProfileDraft.create({ whatsappCommunicationOptIn: true })).toThrow('Informe o WhatsApp');
-    expect(MemberProfileDraft.create({ phone: '13999999999', whatsappCommunicationOptIn: true }).props.whatsappCommunicationOptIn).toBe(true);
+    const profile = MemberProfileDraft.create({ phone: '(13) 99999-9999', whatsappCommunicationOptIn: true });
+    expect(profile.props.phone).toBe('+5513999999999');
+    expect(profile.props.whatsappCommunicationOptIn).toBe(true);
+    expect(() => MemberProfileDraft.create({ phone: '99999999' })).toThrow('DDD válido');
   });
 
   it('separa permissões de perfil das permissões gerais de usuário', async () => {

@@ -1,4 +1,5 @@
 import { DomainError } from './errors';
+import { PhoneNumber } from '../value-objects/phone-number';
 
 export interface MemberAddress {
   postalCode?: string;
@@ -32,8 +33,8 @@ export class MemberProfileDraft {
       if (normalized && normalized.length > max) throw new DomainError(`Um campo do endereço excede ${max} caracteres.`);
       return normalized;
     };
-    const phone = clean(input.phone, 32);
-    if (phone && phone.length < 8) throw new DomainError('O telefone deve ter entre 8 e 32 caracteres.');
+    const rawPhone = clean(input.phone, 32);
+    const phone = rawPhone ? PhoneNumber.create(rawPhone).value : undefined;
     if (input.whatsappCommunicationOptIn && !phone) {
       throw new DomainError('Informe o WhatsApp antes de autorizar a comunicação.');
     }
