@@ -19,7 +19,7 @@ O nome exibido na instalação vem de `APP_NAME`. Os menus aparecem conforme as 
 5. Vincule uma configuração PIX se houver adicionais pagos. A marca “já efetuei o PIX” é autodeclaração; o MVP não concilia pagamento automaticamente.
 6. Revise a página pública, publique e compartilhe o link ou QR Code.
 
-Quem já possui conta entra por e-mail ou telefone verificado. O contexto de inscrição preenche os dados disponíveis e permite selecionar as pessoas da família; campos ausentes podem ser completados progressivamente.
+Quem já possui conta entra por e-mail ou telefone verificado. Antes da primeira confirmação, o contexto preenche os dados disponíveis e permite selecionar as pessoas da família; campos ausentes podem ser completados progressivamente. Se o membro já estiver inscrito, o cartão mostra o comprovante e o botão **Revisar minha inscrição** abre participantes, opções, respostas e declaração PIX somente para leitura.
 
 ## Acompanhar inscrições e presença
 
@@ -58,4 +58,3 @@ Crie uma galeria a partir de um evento concluído, escolha visibilidade, capa, o
 ## Auditoria e sessões
 
 **Auditoria** mostra criações, alterações e exclusões com paginação por cursor e filtros. Ela não deve exibir segredos nem conteúdo pessoal sensível. Em **Sessões**, encerre outros acessos quando houver troca ou perda de dispositivo; fechar a aba exige novo login porque a prova da sessão não é persistida fora dela.
-

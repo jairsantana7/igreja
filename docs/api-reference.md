@@ -45,7 +45,7 @@ Permissões listadas são cumulativas quando separadas por `+` e alternativas qu
 | `POST /public/events/:publicId/login` | público, 5/min/IP | `EventLoginDto`; cria sessão |
 | `POST /public/events/:publicId/signup` | público, 5/min/IP | `EventSignUpDto`; cria conta, inscrição e sessão |
 | `GET /public/events/:publicId/registration-context` | `events.register` | perfil e família reutilizáveis |
-| `POST /public/events/:publicId/registrations` | `events.register` | `RegistrationDto` |
+| `POST /public/events/:publicId/registrations` | `events.register` | `RegistrationDto`; responde `409` se o membro já estiver confirmado |
 | `GET /public/events/:publicId/media/:mediaId` | público | mídia publicada do evento |
 | `GET /public/galleries/:publicId` | público | galeria publicada conforme visibilidade |
 | `GET /public/galleries/:publicId/photos/:photoId/:variant` | público | variante autorizada da foto |
@@ -184,4 +184,3 @@ Os limites exatos são validados pelos DTOs em `apps/api/src/presentation/http/d
 - DTOs de conversa, comunicação, galeria e acompanhamento seguem as rotas acima.
 
 Enquanto não houver um artefato OpenAPI gerado e validado na CI, os controllers e DTOs são a fonte executável. Toda alteração de rota ou variável pública deve atualizar esta referência no mesmo pull request.
-

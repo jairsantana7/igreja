@@ -55,7 +55,8 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 
 - O membro precisa de uma identidade autenticada antes de confirmar.
 - Se ainda não tiver conta naquela comunidade, pode registrar nome, e-mail e senha no fluxo do evento.
-- A combinação membro/evento é única. Repetir a confirmação devolve a inscrição existente sem duplicar.
+- A combinação membro/evento é única. Se já existir uma inscrição confirmada, uma nova tentativa responde conflito e não altera perfil, participantes, respostas, adicionais ou declaração PIX.
+- Após o login, o cartão público substitui o formulário pelo estado “Você já está inscrito”. “Revisar minha inscrição” abre somente os dados já confirmados; editar ou cancelar exigirá um caso de uso futuro, separado e auditado.
 - O backend valida campos obrigatórios e opções permitidas.
 - Capacidade esgotada, lista de espera e cancelamento ainda precisam de definição detalhada.
 - A contagem exibida na gestão representa inscrições confirmadas, não presença física no evento.
@@ -179,7 +180,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Quando o evento habilita inscrição familiar, o responsável pela inscrição assinala quais pessoas irão: ele próprio, cônjuge e filhos já apresentados no perfil.
 - A inscrição pertence ao responsável, mas cada pessoa assinalada vira um participante do evento. A lista guarda uma fotografia do nome e da relação no momento da confirmação.
 - O responsável pode corrigir seu perfil durante a inscrição; os dados salvos serão sugeridos em eventos futuros para evitar perguntas repetidas.
-- Quando o perfil já existe, a inscrição mostra primeiro um resumo e mantém a edição recolhida. O membro abre “Revisar/editar meus dados” somente quando precisar alterar o cadastro; a seleção de participantes continua visível.
+- Antes da primeira confirmação, quando o perfil já existe, a inscrição mostra um resumo e mantém a edição recolhida. Depois de confirmada, o formulário não é mais exibido e a revisão da inscrição é somente leitura.
 - Deve existir ao menos um participante por inscrição. Em eventos sem seleção familiar, a própria pessoa autenticada é confirmada automaticamente.
 - Não haverá no MVP convite, aprovação do cônjuge ou conciliação complexa entre confirmações feitas pelas duas pessoas do casal. A família coordena quem fará a confirmação.
 - Capacidade e total de pessoas consideram participantes confirmados, não apenas a quantidade de inscrições.
@@ -215,7 +216,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O objetivo principal do login social é reduzir o atrito do membro na página pública do evento: autenticar, recuperar seu perfil e continuar a confirmação de presença no mesmo fluxo.
 - Os botões sociais pertencem ao cartão de inscrição do evento. Eles não são habilitados automaticamente no login administrativo da equipe.
 - O retorno do provedor deve preservar o evento de origem e levar o membro de volta à revisão de participantes, adicionais e respostas antes da confirmação final.
-- Autenticar socialmente não confirma presença sozinho. A inscrição somente é criada ou atualizada após a confirmação explícita do membro.
+- Autenticar socialmente não confirma presença sozinho. A primeira inscrição somente é criada após a confirmação explícita do membro; se ela já existir, o fluxo mostra sua revisão sem reenviar a confirmação.
 - Provedores sociais são opcionais e configuráveis por implantação.
 - A aplicação só confia em e-mail/subject após validação OIDC no backend.
 - Admin e pastor podem configurar quais provedores sociais a comunidade pretende habilitar.

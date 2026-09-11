@@ -11,6 +11,10 @@ Todas as mudanças relevantes serão documentadas neste arquivo. O formato segue
 - guias de implantação, operação, API, usuário, releases e solução de problemas;
 - templates de issue para bugs e documentação.
 
+### Alterado
+
+- a página pública trata a inscrição confirmada como somente leitura e impede uma nova confirmação para a mesma combinação de membro e evento.
+
 ### Segurança
 
 - documentação operacional de backups, segredos, proxy confiável, escala e resposta a vulnerabilidades.

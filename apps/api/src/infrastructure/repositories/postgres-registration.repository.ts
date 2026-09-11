@@ -16,6 +16,19 @@ import { withIdentityUniqueConflict } from './postgres-identity-errors';
 export class PostgresRegistrationRepository implements EventRegistrationRepository {
   constructor(private readonly database: PostgresDatabase) {}
 
+  hasConfirmedRegistration(
+    principal: Parameters<EventRegistrationRepository['hasConfirmedRegistration']>[0],
+    event: Parameters<EventRegistrationRepository['hasConfirmedRegistration']>[1],
+  ) {
+    return this.database.withTenant(principal, async (client) => {
+      const result = await client.query(`
+        SELECT 1 FROM event_registrations
+        WHERE event_id = $1 AND user_id = $2 AND status = 'confirmed'
+      `, [event.id, principal.userId]);
+      return Boolean(result.rowCount);
+    });
+  }
+
   signUpAndRegister(input: Parameters<EventRegistrationRepository['signUpAndRegister']>[0]) {
     return withIdentityUniqueConflict(this.database.withTenant(input.event.tenantId, async (client) => {
       const existing = await client.query('SELECT 1 FROM users WHERE email = $1', [input.email]);
@@ -104,6 +117,7 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
           profile,
           selectedParticipantKeys: ['registrant'],
           selectedOfferingIds: [],
+          answers: [],
           pixPaymentDeclared: false,
           hasSavedProfile: Boolean(row),
           phoneLoginEnabled: Boolean(row?.phone_verified_at),
@@ -131,10 +145,16 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
         WHERE registration_id = $1
         ORDER BY offering_id
       `, [registrationId]);
+      const answers = await client.query<{ field_id: string; value: unknown }>(`
+        SELECT field_id, value FROM registration_answers
+        WHERE registration_id = $1
+        ORDER BY created_at, id
+      `, [registrationId]);
       return {
         profile,
         selectedParticipantKeys: [...new Set(participantKeys)],
         selectedOfferingIds: offerings.rows.map((offering) => offering.offering_id),
+        answers: answers.rows.map((answer) => ({ fieldId: answer.field_id, value: answer.value })),
         pixPaymentDeclared: Boolean(registration.rows[0].pix_payment_declared_at),
         hasSavedProfile: Boolean(row),
         phoneLoginEnabled: Boolean(row?.phone_verified_at),
@@ -217,8 +237,8 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       throw new ConflictError('O prazo de inscrição terminou.');
     }
 
-    const current = await client.query<{ id: string; checked_in: boolean; participant_count: string }>(`
-      SELECT registrations.id,
+    const current = await client.query<{ id: string; status: 'confirmed' | 'cancelled'; checked_in: boolean; participant_count: string }>(`
+      SELECT registrations.id, registrations.status,
         EXISTS (
           SELECT 1 FROM event_registration_participants AS participants
           WHERE participants.registration_id = registrations.id AND participants.checked_in_at IS NOT NULL
@@ -229,6 +249,9 @@ export class PostgresRegistrationRepository implements EventRegistrationReposito
       WHERE registrations.event_id = $1 AND registrations.user_id = $2
       FOR UPDATE
     `, [eventView.id, userId]);
+    if (current.rows[0]?.status === 'confirmed') {
+      throw new ConflictError('Você já está inscrito neste evento. Revise sua inscrição para consultar os detalhes.');
+    }
     if (current.rows[0]?.checked_in) {
       throw new ConflictError('A presença desta inscrição já foi registrada e não pode mais ser alterada.');
     }

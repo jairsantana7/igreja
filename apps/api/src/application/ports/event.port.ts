@@ -81,6 +81,7 @@ export interface RegistrationContextView {
   };
   selectedParticipantKeys: string[];
   selectedOfferingIds: string[];
+  answers: RegistrationAnswerInput[];
   pixPaymentDeclared: boolean;
   hasSavedProfile: boolean;
   phoneLoginEnabled: boolean;
@@ -110,6 +111,7 @@ export interface RegistrationAnswerInput {
 }
 
 export interface EventRegistrationRepository {
+  hasConfirmedRegistration(principal: AuthenticatedPrincipal, event: PublicEventView): Promise<boolean>;
   signUpAndRegister(input: {
     event: PublicEventView;
     name: string;

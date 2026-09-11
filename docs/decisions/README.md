@@ -37,6 +37,7 @@ Crie um arquivo numerado a partir do template para decisões que alterem domíni
 | [0029](0029-pix-manual-por-evento.md) | PIX manual por evento | aceita |
 | [0030](0030-login-por-email-ou-telefone.md) | Login por e-mail ou telefone | aceita |
 | [0031](0031-migrations-versionadas-e-forward-only.md) | Migrations versionadas e forward-only | aceita |
+| [0032](0032-inscricao-confirmada-nao-e-reenviada.md) | Inscrição confirmada não é reenviada | aceita |
 
 ## Template
 

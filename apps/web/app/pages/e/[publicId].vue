@@ -38,6 +38,7 @@ const contextLoading = ref(false);
 const message = ref('');
 const confirmed = ref(false);
 const alreadyRegistered = ref(false);
+const reviewingRegistration = ref(false);
 
 function payloadAnswers() {
   return (event.value?.fields ?? []).flatMap((field: any) => {
@@ -95,11 +96,14 @@ async function loadRegistrationContext() {
       ? context.selectedParticipantKeys
       : ['registrant'];
     selectedOfferingIds.value = context.selectedOfferingIds;
+    for (const key of Object.keys(answers)) delete answers[key];
+    for (const answer of context.answers ?? []) answers[answer.fieldId] = answer.value;
     pixPaymentDeclared.value = context.pixPaymentDeclared;
     hasSavedProfile.value = context.hasSavedProfile;
     phoneLoginEnabled.value = context.phoneLoginEnabled;
     profileEditorOpen.value = !context.hasSavedProfile;
     alreadyRegistered.value = context.alreadyRegistered;
+    reviewingRegistration.value = false;
     await nextTick();
     hydratingSelection.value = false;
   } catch (requestError: any) {
@@ -161,7 +165,9 @@ async function submit() {
       });
       auth.setSession(response);
       await loadRegistrationContext();
-      message.value = 'Dados carregados. Revise quem vai participar e confirme sua inscrição.';
+      if (!alreadyRegistered.value) {
+        message.value = 'Dados carregados. Revise quem vai participar e confirme sua inscrição.';
+      }
     }
   } catch (requestError: any) {
     message.value = Array.isArray(requestError?.data?.message)
@@ -200,6 +206,28 @@ const mapsDirectionsUrl = computed(() => event.value?.location
   : '');
 const priceLabel = (priceCents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(priceCents / 100);
 const selectedPeopleCount = computed(() => selectedParticipantKeys.value.length);
+const registeredParticipantNames = computed(() => selectedParticipantKeys.value.flatMap((key) => {
+  if (key === 'registrant') return [visibleSession.value?.user.name || name.value || 'Você'];
+  if (key === 'spouse') return profile.spouseName ? [profile.spouseName] : [];
+  if (key.startsWith('child:')) {
+    const child = profile.children[Number(key.slice(6))];
+    return child?.name ? [child.name] : [];
+  }
+  return [];
+}));
+const registeredOfferings = computed(() => (event.value?.offerings ?? [])
+  .filter((offering: any) => selectedOfferingIds.value.includes(offering.id)));
+const registeredAnswers = computed(() => (event.value?.fields ?? []).flatMap((field: any) => (
+  Object.prototype.hasOwnProperty.call(answers, field.id)
+    ? [{ id: field.id, label: field.label, value: answers[field.id] }]
+    : []
+)));
+function registrationAnswerLabel(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  if (value === null || value === undefined || value === '') return 'Não informado';
+  return String(value);
+}
 const selectedPaidAmountCents = computed(() => (event.value?.offerings ?? [])
   .filter((offering: any) => selectedOfferingIds.value.includes(offering.id))
   .reduce((total: number, offering: any) => total + Math.max(0, Number(offering.priceCents)), 0));
@@ -233,20 +261,40 @@ const selectedPaidAmountCents = computed(() => (event.value?.offerings ?? [])
           </section>
 
           <section class="registration-card registration-card--overlay">
-            <div v-if="confirmed" class="success-state">
-              <span>✓</span><p class="eyebrow">Inscrição confirmada</p><h2>Esperamos por você!</h2>
-              <p>Sua participação em <strong>{{ event.title }}</strong> foi registrada para {{ selectedPeopleCount }} {{ selectedPeopleCount === 1 ? 'pessoa' : 'pessoas' }}.</p>
-              <div v-if="selectedPaidAmountCents > 0 && event.pix && pixPaymentDeclared" class="pix-confirmation">
-                <strong>✓ PIX informado por você</strong>
-                <span>{{ priceLabel(selectedPaidAmountCents) }}</span>
-                <small>A equipe ainda poderá conferir o recebimento no banco.</small>
+            <div v-if="confirmed || alreadyRegistered" class="success-state" :class="{ 'success-state--reviewing': reviewingRegistration }">
+              <span>✓</span>
+              <p class="eyebrow">{{ confirmed ? 'Inscrição confirmada' : 'Presença garantida' }}</p>
+              <h2>{{ confirmed ? 'Esperamos por você!' : 'Você já está inscrito' }}</h2>
+              <p>Sua participação em <strong>{{ event.title }}</strong> está confirmada para {{ selectedPeopleCount }} {{ selectedPeopleCount === 1 ? 'pessoa' : 'pessoas' }}. Não é necessário preencher o formulário novamente.</p>
+              <button class="button button--primary registration-review-toggle" type="button" :aria-expanded="reviewingRegistration" @click="reviewingRegistration = !reviewingRegistration">
+                {{ reviewingRegistration ? 'Ocultar detalhes' : 'Revisar minha inscrição' }}
+              </button>
+
+              <div v-if="reviewingRegistration" class="registration-review">
+                <section>
+                  <span>Participantes confirmados</span>
+                  <ul><li v-for="participant in registeredParticipantNames" :key="participant">{{ participant }}</li></ul>
+                </section>
+                <section>
+                  <span>Opções do evento</span>
+                  <ul v-if="registeredOfferings.length"><li v-for="offering in registeredOfferings" :key="offering.id"><strong>{{ offering.name }}</strong><small>{{ offering.priceCents ? priceLabel(offering.priceCents) : 'Grátis' }}</small></li></ul>
+                  <p v-else>Nenhuma opção adicional selecionada.</p>
+                </section>
+                <section v-if="registeredAnswers.length">
+                  <span>Respostas do formulário</span>
+                  <dl><div v-for="answer in registeredAnswers" :key="answer.id"><dt>{{ answer.label }}</dt><dd>{{ registrationAnswerLabel(answer.value) }}</dd></div></dl>
+                </section>
+                <div v-if="selectedPaidAmountCents > 0 && event.pix && pixPaymentDeclared" class="pix-confirmation">
+                  <strong>✓ PIX informado por você</strong>
+                  <span>{{ priceLabel(selectedPaidAmountCents) }}</span>
+                  <small>A equipe ainda poderá conferir o recebimento no banco.</small>
+                </div>
               </div>
             </div>
 
             <form v-else @submit.prevent="submit">
               <div class="registration-card__heading">
                 <div><p class="eyebrow">Confirme sua presença</p><h2>{{ visibleSession ? `Olá, ${visibleSession.user.name.split(' ')[0]}` : 'Faça sua inscrição' }}</h2></div>
-                <span v-if="alreadyRegistered" class="status-badge status-badge--published">Já inscrito</span>
               </div>
               <p class="muted">{{ visibleSession ? 'Revise os dados e escolha quem vai participar.' : 'Crie uma conta ou entre se você já participou antes.' }}</p>
 
@@ -338,7 +386,7 @@ const selectedPaidAmountCents = computed(() => (event.value?.offerings ?? [])
               <p v-if="contextLoading" class="muted">Carregando seus dados…</p>
               <p v-if="message" class="alert" role="status">{{ message }}</p>
               <button class="button button--primary button--large" type="submit" :disabled="loading || contextLoading">
-                {{ loading ? 'Aguarde…' : !visibleSession && mode === 'login' ? 'Entrar e continuar' : alreadyRegistered ? 'Atualizar inscrição' : 'Confirmar inscrição' }}
+                {{ loading ? 'Aguarde…' : !visibleSession && mode === 'login' ? 'Entrar e continuar' : 'Confirmar inscrição' }}
               </button>
               <p class="privacy-note">Seus dados são usados somente por esta comunidade para organizar o evento.</p>
             </form>

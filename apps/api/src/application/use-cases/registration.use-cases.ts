@@ -1,6 +1,6 @@
 import type { AuthenticatedPrincipal } from '../../domain/entities/permission';
 import { PERMISSIONS } from '../../domain/entities/permission';
-import { AuthorizationError } from './errors';
+import { AuthorizationError, ConflictError } from './errors';
 import type { PasswordHasher, SessionClientContext, SessionRepository, SessionSecurity, TokenService } from '../ports/authentication.port';
 import type { EventRegistrationRepository, RegistrationAnswerInput } from '../ports/event.port';
 import { GetPublicEventUseCase, validateAnswers } from './event.use-cases';
@@ -92,6 +92,9 @@ export class RegisterForEventUseCase {
     }
     const event = await this.publicEvents.resolve(publicId);
     if (principal.tenantId !== event.tenantId) throw new Error('Esta conta pertence a outra comunidade.');
+    if (await this.registrations.hasConfirmedRegistration(principal, event)) {
+      throw new ConflictError('Você já está inscrito neste evento. Revise sua inscrição para consultar os detalhes.');
+    }
     const answers = answeredFields(input.answers);
     validateAnswers(event.fields, answers);
     return { registrationId: await this.registrations.register({ principal, event, answers, ...prepareRegistration(event, principal.name, input) }) };
