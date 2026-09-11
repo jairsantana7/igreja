@@ -13,6 +13,7 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 | `tenant_directory` | global catalog | mapeia slug público para UUID no fluxo mínimo de login | sem acesso direto do runtime; somente função resolver |
 | `event_public_directory` | global catalog | resolve um UUID público opaco para evento/tenant | sem acesso direto do runtime; somente função resolver |
 | `permissions` | global catalog | chaves estáveis compartilhadas pelo produto | runtime somente leitura |
+| `schema_migrations` | platform-privileged | ledger operacional de versões e checksums do schema | sem RLS e sem acesso do runtime; escrita somente pelo owner através do papel migrator |
 | `roles` | tenant-direct | papel é configurado pela comunidade | RLS direta |
 | `role_permissions` | tenant-direct | associação pertence à comunidade | RLS direta + FK composta para papel |
 | `user_roles` | tenant-direct | atribuição pertence à comunidade | RLS direta + FKs compostas |

@@ -14,6 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:rls": "vitest run test/rls.integration.spec.ts",
+    "db:migrate": "tsx src/infrastructure/database/migrate.ts",
+    "db:migrate:adopt": "tsx src/infrastructure/database/migrate.ts --adopt-existing",
     "db:seed": "tsx src/infrastructure/database/seed.ts"
   },
   "dependencies": {

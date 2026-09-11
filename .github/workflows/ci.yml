@@ -45,7 +45,7 @@ jobs:
         run: |
           docker exec -i -e APP_RUNTIME_PASSWORD -e APP_MIGRATOR_PASSWORD ${{ job.services.postgres.id }} sh /dev/stdin < database/bootstrap/00-roles.sh
           docker cp database/migrations/. ${{ job.services.postgres.id }}:/migrations
-          docker exec ${{ job.services.postgres.id }} sh -c 'for migration in /migrations/*.sql; do psql -v ON_ERROR_STOP=1 -1 -U postgres -d igreja -f "$migration"; done'
+          docker exec -i ${{ job.services.postgres.id }} sh /dev/stdin < database/bootstrap/10-schema.sh
       - run: pnpm typecheck
       - run: pnpm test
         env:
