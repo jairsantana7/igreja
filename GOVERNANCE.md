@@ -7,7 +7,13 @@ O projeto é mantido de forma aberta. Discussões de produto acontecem em issues
 - **Contribuidor:** qualquer pessoa que abre issue, documentação ou pull request.
 - **Mantenedor:** revisa alterações, organiza releases e cuida das políticas de segurança.
 
-O primeiro grupo de mantenedores será registrado quando o repositório ganhar colaboradores. Até lá, o proprietário do repositório faz a triagem.
+## Mantenedores atuais
+
+| Mantenedor | Responsabilidade |
+|---|---|
+| [@jairsantana7](https://github.com/jairsantana7) | triagem, revisão, releases e segurança |
+
+O projeto reconhece que possui um único mantenedor neste estágio. Novos mantenedores são convidados após contribuições recorrentes, aderência às decisões arquiteturais e participação respeitosa em revisões. A inclusão ou saída é registrada por pull request neste arquivo.
 
 ## Tomada de decisão
 

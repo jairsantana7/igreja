@@ -1,0 +1,30 @@
+name: Melhoria de documentação
+description: Aponte conteúdo ausente, desatualizado ou difícil de seguir.
+title: "docs: "
+labels: [documentation]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Página ou arquivo
+      placeholder: README.md, docs/deployment.md ou URL
+    validations:
+      required: true
+  - type: textarea
+    id: audience
+    attributes:
+      label: Quem precisa desta informação?
+      description: Exemplo: membro, pastor, operador ou contribuidor.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que está confuso ou ausente?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Sugestão
+

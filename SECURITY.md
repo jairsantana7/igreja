@@ -1,6 +1,17 @@
 # Política de segurança
 
-Não publique vulnerabilidades em issues. Envie um relato privado aos mantenedores do repositório, incluindo impacto, reprodução mínima e versão afetada. Não inclua credenciais ou dados pessoais.
+Não publique vulnerabilidades em issues. Use o [relato privado de vulnerabilidade do GitHub](https://github.com/jairsantana7/igreja/security/advisories/new), incluindo impacto, reprodução mínima e versão/commit afetado. Se o formulário estiver indisponível, contate o proprietário pelo [perfil do mantenedor](https://github.com/jairsantana7) sem revelar detalhes publicamente. Não inclua credenciais ou dados pessoais reais.
+
+O mantenedor deve manter o Private Vulnerability Reporting habilitado antes de divulgar uma instalação a terceiros. A meta é confirmar o recebimento em até sete dias corridos; prazo de correção e divulgação coordenada depende do impacto e será combinado pelo canal privado.
+
+## Versões suportadas
+
+| Versão | Suporte de segurança |
+|---|---|
+| `main` e a release mais recente | sim |
+| versões anteriores | não; atualize antes de solicitar correção |
+
+O projeto buscará confirmar o recebimento em até sete dias corridos. Prazo de correção e divulgação coordenada depende da gravidade e da disponibilidade dos mantenedores; não há SLA comercial. O crédito ao relator será combinado antes da publicação.
 
 O projeto ainda está em fase inicial e não passou por auditoria independente. Um teste local aprovado não autoriza implantação em produção.
 
@@ -26,3 +37,5 @@ O projeto ainda está em fase inicial e não passou por auditoria independente. 
 - revogue todas as sessões e rotacione os dois segredos se houver suspeita de vazamento das chaves do servidor.
 
 O vínculo ao `User-Agent` e a prova dividida reduzem replay de cookie roubado, mas não substituem TLS, MFA, correção de XSS, proteção do dispositivo ou resposta a incidentes.
+
+Consulte `docs/deployment.md` para o checklist de implantação e `docs/database-migrations.md` para backup, atualização e recuperação.

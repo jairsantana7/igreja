@@ -1,0 +1,53 @@
+name: Relato de bug
+description: Informe um comportamento reproduzível sem incluir dados reais ou segredos.
+title: "fix: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Vulnerabilidades não pertencem a issues. Use o canal privado indicado em SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Versão ou commit
+      placeholder: v0.x.y ou SHA do commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Como reproduzir
+      description: Use somente dados sintéticos e descreva os passos mínimos.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado observado
+      description: Remova cookies, tokens, telefones, mensagens e outros dados pessoais dos logs.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      description: Sistema operacional, navegador, Node.js, PostgreSQL e modo de instalação relevantes.
+    validations:
+      required: true
+  - type: dropdown
+    id: tenancy
+    attributes:
+      label: Pode envolver isolamento entre comunidades?
+      options:
+        - Não
+        - Não sei
+        - Sim — não fornecerei detalhes públicos e usarei o canal de segurança
+    validations:
+      required: true
+

@@ -2,6 +2,8 @@
 
 Base open source para uma plataforma de gestão de comunidades. O primeiro MVP permite ao pastor criar eventos com formulários de inscrição e compartilhar um link no qual membros entram ou criam conta para confirmar presença.
 
+`Igreja` é somente o nome técnico deste repositório. A marca exibida na interface vem de `APP_NAME` e pode ser definida por cada instalação.
+
 ## Stack
 
 - Nuxt 4 + Vue 3 no frontend
@@ -17,6 +19,7 @@ Requisitos: Node.js 22.19+, pnpm 11+ e Docker com Compose.
 cp .env.example .env
 pnpm install
 pnpm infra:up
+pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
@@ -41,6 +44,7 @@ pnpm dev        # web e API
 pnpm check      # tipos, testes e builds
 pnpm db:up      # inicia PostgreSQL
 pnpm infra:up   # inicia PostgreSQL e Redis
+pnpm db:migrate # aplica somente migrations pendentes e valida checksums
 pnpm worker     # inicia o consumidor BullMQ em outro terminal
 pnpm whatsapp:worker # mantém as sessões do WhatsApp Web em outro processo
 pnpm db:seed    # cria dados sintéticos locais
@@ -76,25 +80,30 @@ pnpm db:down    # encerra containers
 - sessão dividida entre cookie `HttpOnly` e prova efêmera da aba, sem JWT no `localStorage`;
 - isolamento de todas as comunidades pelo PostgreSQL RLS.
 
-O adapter de mídia local é voltado ao desenvolvimento. Instalações de produção devem registrar um adapter de object storage e um backend compartilhado para cache/throttling quando houver múltiplas réplicas.
+## Limites operacionais atuais
 
-As galerias são criadas a partir de eventos concluídos no menu **Galerias**. Com BullMQ habilitado, `pnpm worker` produz versões WebP para exibição e miniatura; sem worker, o original validado continua disponível. Em produção, API e worker devem compartilhar o mesmo `MediaStorage` privado.
+- mídia em disco e throttling em memória servem somente a uma topologia simples; produção distribuída exige storage compartilhado;
+- BullMQ persiste jobs, mas não torna campanhas e lembretes entregáveis sem scheduler e adapter do canal;
+- WhatsApp via QR Code é não oficial, experimental, restrito a conversas individuais e exige um worker persistente com uma réplica;
+- a Meta Cloud API já sincroniza templates, mas Embedded Signup, webhook e envio oficial ainda estão no roadmap.
 
-O adapter BullMQ/Redis está disponível de forma opt-in. Para usá-lo, configure `JOB_QUEUE_DRIVER=bullmq`, execute `pnpm infra:up` e mantenha `pnpm worker` em outro processo. A fila não equivale a entrega: campanhas e lembretes continuam sem envio enquanto não houver scheduler e adapter do canal.
-
-Para testar conversas individuais com o WhatsApp via QR Code, gere uma chave com `openssl rand -base64 32`, preencha `CONVERSATION_SESSION_ENCRYPTION_KEY`, configure `WHATSAPP_WEB_DRIVER=baileys` e execute `pnpm whatsapp:worker`. No dashboard, abra **Conversas → Canais**, crie um canal do tipo **WhatsApp via QR Code** e leia o QR. Alternativamente, suba o worker isolado com `docker compose --profile whatsapp up -d --build whatsapp-worker`. A API também deve usar as mesmas variáveis e chave. Execute somente uma réplica desse worker até a instalação possuir um lock distribuído por canal. A carga inicial usa os limites `WHATSAPP_HISTORY_CHAT_LIMIT` e `WHATSAPP_HISTORY_MESSAGE_LIMIT`; um canal pareado antes de esse recurso existir precisa ser desconectado e pareado novamente uma vez para solicitar o histórico inicial.
-
-Esse conector é não oficial, experimental e limitado a conversas diretas iniciadas ou respondidas por uma pessoa. Não é usado por campanhas nem lembretes automáticos. Instalações que precisam de garantias operacionais devem preferir a Meta Cloud API. O contrato `ConversationProvider` permite substituir Baileys por outro adapter sem alterar casos de uso ou domínio.
-
-A central de conversas preserva canais, atendimentos e respostas pendentes. O adapter oficial já sincroniza templates pela WABA, mas Embedded Signup, envio e recebimento oficiais ainda exigem configuração da Meta e webhook validado. O adapter Baileys opcional oferece apenas o fluxo experimental por QR descrito acima.
+Consulte [Implantação e operação](docs/deployment.md) e [Integrações](docs/integrations.md) antes de habilitar workers ou fornecedores.
 
 ## Projeto
 
+- [Guia de uso do MVP](docs/user-guide.md)
 - [Arquitetura](docs/architecture.md)
 - [Regras de negócio](docs/business-rules.md)
+- [Referência da API](docs/api-reference.md)
+- [Implantação e operação](docs/deployment.md)
+- [Migrations e atualização do banco](docs/database-migrations.md)
 - [Como implementar integrações](docs/integrations.md)
 - [Regras de RLS](docs/rls-table-classification.md)
 - [Proxy, IP real e rate limit](docs/reverse-proxy-security.md)
+- [Solução de problemas](docs/troubleshooting.md)
+- [Releases e compatibilidade](docs/releases.md)
+- [Changelog](CHANGELOG.md)
+- [Registros de decisão](docs/decisions/README.md)
 - [Política de segurança](SECURITY.md)
 - [Como contribuir](CONTRIBUTING.md)
 - [Governança](GOVERNANCE.md)
