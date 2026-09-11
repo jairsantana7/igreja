@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sessionHomePath } from '~/utils/session-home';
+
 definePageMeta({ layout: 'login' });
 useHead({ title: 'Entrar' });
 
@@ -21,7 +23,9 @@ async function login() {
       method: 'POST', body: { tenantSlug: tenantSlug.value, identifier: identifier.value, password: password.value },
     });
     auth.setSession(response);
-    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/g/') ? route.query.redirect : '/dashboard';
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/g/')
+      ? route.query.redirect
+      : sessionHomePath(response.user);
     await navigateTo(redirect);
   } catch (error: any) {
     errorMessage.value = error?.data?.message ?? 'Não foi possível entrar.';
@@ -67,7 +71,7 @@ async function login() {
         <p v-if="errorMessage" class="alert" role="alert">{{ errorMessage }}</p>
         <button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? 'Entrando…' : 'Entrar no sistema' }}</button>
 
-        <div class="social-note"><span>Acesso da equipe</span><p>Esta entrada é destinada à administração da comunidade. O acesso simplificado dos membros acontece pelo convite de cada evento.</p></div>
+        <div class="social-note"><span>Um acesso para cada necessidade</span><p>A equipe entra na gestão. Membros consultam eventos disponíveis e revisam as próprias inscrições.</p></div>
         <footer><span>Ambiente protegido</span><span>{{ config.public.appName }}</span></footer>
       </form>
     </section>

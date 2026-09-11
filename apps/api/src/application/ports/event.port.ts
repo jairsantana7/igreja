@@ -88,6 +88,42 @@ export interface RegistrationContextView {
   alreadyRegistered: boolean;
 }
 
+export interface MemberAvailableEventView {
+  id: string;
+  publicId: string;
+  title: string;
+  description: string;
+  location: string;
+  startsAt: string;
+  registrationDeadline: string | null;
+  capacity: number | null;
+  participantCount: number;
+}
+
+export interface MemberRegisteredEventView {
+  registrationId: string;
+  publicId: string;
+  title: string;
+  description: string;
+  location: string;
+  startsAt: string;
+  eventStatus: EventStatus;
+  registeredAt: string;
+  participants: Array<{ id: string; name: string; sourceType: RegistrationParticipantSnapshot['sourceType'] }>;
+  offerings: Array<{ id: string; name: string; priceCents: number }>;
+  pixPaymentDeclaredAt: string | null;
+}
+
+export interface MemberEventsView {
+  community: { id: string; name: string };
+  available: MemberAvailableEventView[];
+  registered: MemberRegisteredEventView[];
+}
+
+export interface MemberEventRepository {
+  listForMember(principal: AuthenticatedPrincipal): Promise<MemberEventsView>;
+}
+
 export interface EventRepository {
   dashboard(principal: AuthenticatedPrincipal): Promise<DashboardView>;
   list(principal: AuthenticatedPrincipal): Promise<DashboardEvent[]>;

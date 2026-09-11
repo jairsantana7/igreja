@@ -5,6 +5,7 @@ export const PERMISSIONS = {
   eventsPublish: 'events.publish',
   registrationsRead: 'events.registrations_read',
   eventsRegister: 'events.register',
+  memberEventsRead: 'events.member_portal_read',
   eventsReadAll: 'events.read_all',
   eventsManageAll: 'events.manage_all',
   eventCollaboratorsManage: 'events.collaborators_manage',

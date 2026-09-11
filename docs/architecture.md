@@ -55,6 +55,8 @@ Invariantes iniciais:
 
 A central operacional do evento reúne visão geral, inscrições, formulário, comunicação, check-in e auditoria sem deslocar regras para o controller. Presença, versões de formulário, campanhas e modelos possuem portas próprias na aplicação e adaptadores PostgreSQL independentes. O detalhe do evento apenas compõe essas capacidades no cliente Nuxt.
 
+O portal do membro é uma projeção de leitura separada da gestão. `MemberEventRepository` recebe exclusivamente o principal autenticado e compõe eventos ainda disponíveis com o histórico de inscrições do próprio usuário na mesma transação RLS. A capacidade `events.member_portal_read` não implica `events.read`, `events.create` ou qualquer permissão administrativa.
+
 Autenticação social entra pela porta `ExternalIdentityProvider`. O fluxo nasce na página pública do evento, preserva o evento de origem durante o callback e vincula a identidade verificada a `external_accounts`; o domínio não conhece detalhes OAuth/OIDC. A autenticação estabelece a sessão, mas a confirmação explícita da inscrição continua no caso de uso de eventos.
 
 ## Bounded context: Configurações da comunidade

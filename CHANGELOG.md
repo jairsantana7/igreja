@@ -6,6 +6,8 @@ Todas as mudanças relevantes serão documentadas neste arquivo. O formato segue
 
 ### Adicionado
 
+- portal **Meus eventos** para membros consultarem eventos disponíveis e o histórico das próprias inscrições;
+- permissão granular `events.member_portal_read` e endpoint autenticado `GET /member/events`;
 - executor transacional de migrations com advisory lock, ledger e validação de checksum;
 - procedimento seguro para adoção de instalações anteriores ao ledger;
 - guias de implantação, operação, API, usuário, releases e solução de problemas;

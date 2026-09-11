@@ -2,6 +2,9 @@
 const auth = useAuth();
 const api = useApi();
 const route = useRoute();
+const canReadEvents = computed(() => auth.session.value?.user.permissions.includes('events.read'));
+const canCreateEvents = computed(() => auth.session.value?.user.permissions.includes('events.create'));
+const canReadMemberEvents = computed(() => auth.session.value?.user.permissions.includes('events.member_portal_read'));
 const canReadMembers = computed(() => auth.session.value?.user.permissions.includes('users.read'));
 const canManageMemberDeliveries = computed(() => auth.session.value?.user.permissions.includes('members.credentials_manage'));
 const canReadSettings = computed(() => auth.session.value?.user.permissions.includes('settings.read'));
@@ -28,14 +31,17 @@ async function leave() {
     <aside class="sidebar">
       <AppLogo light />
       <nav class="sidebar__nav" aria-label="Navegação principal">
-        <NuxtLink to="/dashboard" class="nav-link" :class="{ active: route.path === '/dashboard' }">
+        <NuxtLink v-if="canReadEvents" to="/dashboard" class="nav-link" :class="{ active: route.path === '/dashboard' }">
           <span aria-hidden="true">⌂</span> Visão geral
         </NuxtLink>
-        <NuxtLink to="/events" class="nav-link" :class="{ active: route.path === '/events' }">
+        <NuxtLink v-if="canReadEvents" to="/events" class="nav-link" :class="{ active: route.path === '/events' }">
           <span aria-hidden="true">◫</span> Eventos
         </NuxtLink>
-        <NuxtLink to="/events/new" class="nav-link" :class="{ active: route.path === '/events/new' }">
+        <NuxtLink v-if="canCreateEvents" to="/events/new" class="nav-link" :class="{ active: route.path === '/events/new' }">
           <span aria-hidden="true">＋</span> Novo evento
+        </NuxtLink>
+        <NuxtLink v-if="canReadMemberEvents && !canReadEvents" to="/my-events" class="nav-link" :class="{ active: route.path === '/my-events' }">
+          <span aria-hidden="true">◫</span> Meus eventos
         </NuxtLink>
         <NuxtLink v-if="canReadGalleries" to="/galleries" class="nav-link" :class="{ active: route.path.startsWith('/galleries') }">
           <span aria-hidden="true">▧</span> Galerias

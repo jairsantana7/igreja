@@ -57,6 +57,8 @@ Toda tabela de aplicação deve aparecer exatamente uma vez nesta lista.
 
 As colunas `events.pix_integration_id` e `event_registrations.pix_integration_id` referenciam `community_integrations` com `tenant_id` na chave estrangeira composta. Não criam uma nova tabela: o vínculo e a declaração de pagamento permanecem protegidos pelas políticas RLS já forçadas em `events`, `event_registrations` e `community_integrations`.
 
+O portal do membro introduz somente uma projeção de leitura sobre `tenants`, `events`, `event_registrations`, `event_registration_participants`, `registration_offering_selections` e `event_offerings`, todas já classificadas. A consulta roda com o tenant da sessão na mesma transação RLS e restringe inscrições por `user_id` do principal; a migration `028_member_event_portal.sql` cria apenas uma permissão global e não adiciona tabelas.
+
 ## Funções estreitas sem contexto prévio
 
 - `app.resolve_login_identity`: resolve somente a identidade mínima do login por e-mail ou telefone verificado; parte do slug público e entra no contexto do tenant antes de consultar `users` e `member_profiles` protegidas.

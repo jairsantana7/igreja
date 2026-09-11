@@ -14,6 +14,8 @@ const ids = {
   memberRole: '20000000-0000-4000-8000-000000000003',
   event: '30000000-0000-4000-8000-000000000001',
   eventPublic: '40000000-0000-4000-8000-000000000001',
+  availableEvent: '30000000-0000-4000-8000-000000000003',
+  availableEventPublic: '40000000-0000-4000-8000-000000000003',
   field: '50000000-0000-4000-8000-000000000001',
   reminderTemplate: '60000000-0000-4000-8000-000000000001',
   reminderTemplateVersion: '61000000-0000-4000-8000-000000000001',
@@ -30,6 +32,8 @@ const ids = {
   memberProfile: '6b000000-0000-4000-8000-000000000001',
   memberChildOne: '6c000000-0000-4000-8000-000000000001',
   memberChildTwo: '6c000000-0000-4000-8000-000000000002',
+  pastRegistration: '6d000000-0000-4000-8000-000000000001',
+  pastParticipant: '6e000000-0000-4000-8000-000000000001',
 };
 
 const galleryAssetsPath = resolve(__dirname, '../../../../../database/seed-assets/gallery-demo');
@@ -144,7 +148,11 @@ async function seed(): Promise<void> {
     `, [ids.tenant, ids.pastorRole]);
     await client.query(`
       INSERT INTO role_permissions (tenant_id, role_id, permission_key)
-      VALUES ($1, $2, 'events.register'), ($1, $2, 'sessions.manage'), ($1, $2, 'galleries.view')
+      VALUES
+        ($1, $2, 'events.register'),
+        ($1, $2, 'events.member_portal_read'),
+        ($1, $2, 'sessions.manage'),
+        ($1, $2, 'galleries.view')
       ON CONFLICT DO NOTHING
     `, [ids.tenant, ids.memberRole]);
     await client.query(`
@@ -217,6 +225,31 @@ async function seed(): Promise<void> {
     await client.query(`
       INSERT INTO events (
         id, tenant_id, created_by_user_id, public_id, slug, title, description,
+        location, starts_at, registration_deadline, capacity, family_registration_enabled, status
+      ) VALUES (
+        $1, $2, $3, $4, 'encontro-de-oracao', 'Encontro de oração',
+        'Uma noite para orar, ouvir e caminhar junto com a comunidade.',
+        'Sala de encontros', now() + interval '28 days', now() + interval '26 days', 80, false, 'published'
+      )
+      ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+        location = EXCLUDED.location, starts_at = EXCLUDED.starts_at,
+        registration_deadline = EXCLUDED.registration_deadline, capacity = EXCLUDED.capacity,
+        family_registration_enabled = EXCLUDED.family_registration_enabled,
+        status = EXCLUDED.status, updated_at = now()
+    `, [ids.availableEvent, ids.tenant, ids.admin, ids.availableEventPublic]);
+    await client.query(`
+      INSERT INTO event_public_directory (public_id, tenant_id, event_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (public_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, event_id = EXCLUDED.event_id
+    `, [ids.availableEventPublic, ids.tenant, ids.availableEvent]);
+    await client.query(`
+      INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id)
+      VALUES ($1, $2, 1, '[]'::jsonb, $3)
+      ON CONFLICT (event_id, tenant_id, version) DO NOTHING
+    `, [ids.tenant, ids.availableEvent, ids.admin]);
+    await client.query(`
+      INSERT INTO events (
+        id, tenant_id, created_by_user_id, public_id, slug, title, description,
         location, starts_at, registration_deadline, capacity, status
       ) VALUES (
         $1, $2, $3, $4, 'domingo-em-comunidade', 'Domingo em comunidade',
@@ -233,6 +266,25 @@ async function seed(): Promise<void> {
       VALUES ($1, $2, $3)
       ON CONFLICT (public_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, event_id = EXCLUDED.event_id
     `, [ids.pastEventPublic, ids.tenant, ids.pastEvent]);
+    await client.query(`
+      INSERT INTO event_form_versions (tenant_id, event_id, version, schema_snapshot, created_by_user_id)
+      VALUES ($1, $2, 1, '[]'::jsonb, $3)
+      ON CONFLICT (event_id, tenant_id, version) DO NOTHING
+    `, [ids.tenant, ids.pastEvent, ids.admin]);
+    await client.query(`
+      INSERT INTO event_registrations (id, tenant_id, event_id, user_id, status, form_version)
+      VALUES ($1, $2, $3, $4, 'confirmed', 1)
+      ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'confirmed', updated_at = now()
+    `, [ids.pastRegistration, ids.tenant, ids.pastEvent, ids.member]);
+    const pastRegistration = await client.query<{ id: string }>(`
+      SELECT id FROM event_registrations WHERE event_id = $1 AND user_id = $2
+    `, [ids.pastEvent, ids.member]);
+    await client.query(`
+      INSERT INTO event_registration_participants (
+        id, tenant_id, event_id, registration_id, source_type, name, position
+      ) VALUES ($1, $2, $3, $4, 'registrant', 'Membro Demonstração', 0)
+      ON CONFLICT (registration_id, position) DO UPDATE SET name = EXCLUDED.name, updated_at = now()
+    `, [ids.pastParticipant, ids.tenant, ids.pastEvent, pastRegistration.rows[0]!.id]);
     await client.query(`
       INSERT INTO event_galleries (
         id, tenant_id, event_id, public_id, created_by_user_id, title, description,

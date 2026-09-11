@@ -11,6 +11,7 @@ import { PostgresDatabase } from './infrastructure/database/postgres.database';
 import { PostgresAuthenticationRepository } from './infrastructure/repositories/postgres-authentication.repository';
 import { PostgresEventRepository } from './infrastructure/repositories/postgres-event.repository';
 import { PostgresRegistrationRepository } from './infrastructure/repositories/postgres-registration.repository';
+import { PostgresMemberEventRepository } from './infrastructure/repositories/postgres-member-event.repository';
 import { PostgresAccessControlRepository } from './infrastructure/repositories/postgres-access-control.repository';
 import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
 import { JoseTokenService } from './infrastructure/security/jose-token.service';
@@ -80,10 +81,12 @@ import { ConfiguredConversationProviderCatalog } from './infrastructure/integrat
 import { RoutedJobQueue } from './infrastructure/queue/routed-job.queue';
 import { InMemoryConversationRealtimeBus } from './infrastructure/realtime/in-memory-conversation-realtime.bus';
 import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-conversation-realtime.bus';
+import { ListMemberEventsUseCase } from './application/use-cases/member-events.use-case';
+import { MemberEventsController } from './presentation/http/controllers/member-events.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }])],
-  controllers: [AuthController, DashboardController, PublicEventsController, PublicMemberOnboardingController, EventMediaController, PublicEventMediaController, EventGalleryController, PublicEventGalleryController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, MemberOnboardingController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
+  controllers: [AuthController, DashboardController, PublicEventsController, MemberEventsController, PublicMemberOnboardingController, EventMediaController, PublicEventMediaController, EventGalleryController, PublicEventGalleryController, EventOperationsController, ConversationsController, CommunicationController, PastoralFollowupController, MemberProfilesController, MemberOnboardingController, SessionsController, AccessControlController, CommunitySettingsController, AuditTrailController, HealthController],
   providers: [
     PostgresDatabase,
     JwtAuthGuard,
@@ -148,6 +151,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
     {
       provide: TOKENS.registrationRepository,
       useFactory: (database: PostgresDatabase) => new PostgresRegistrationRepository(database),
+      inject: [PostgresDatabase],
+    },
+    {
+      provide: TOKENS.memberEventRepository,
+      useFactory: (database: PostgresDatabase) => new PostgresMemberEventRepository(database),
       inject: [PostgresDatabase],
     },
     {
@@ -441,6 +449,11 @@ import { RedisConversationRealtimeBus } from './infrastructure/realtime/redis-co
       useFactory: (publicEvents: GetPublicEventUseCase, registrations: PostgresRegistrationRepository) =>
         new GetEventRegistrationContextUseCase(publicEvents, registrations),
       inject: [TOKENS.publicEventUseCase, TOKENS.registrationRepository],
+    },
+    {
+      provide: TOKENS.listMemberEventsUseCase,
+      useFactory: (events: PostgresMemberEventRepository) => new ListMemberEventsUseCase(events),
+      inject: [TOKENS.memberEventRepository],
     },
     {
       provide: TOKENS.listSessionsUseCase,

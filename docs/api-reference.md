@@ -22,7 +22,7 @@ Content-Type: application/json
     "name": "Membro Demonstração",
     "email": "membro@comunidade.local",
     "roles": ["member"],
-    "permissions": ["events.register"]
+    "permissions": ["events.register", "events.member_portal_read"]
   }
 }
 ```
@@ -61,6 +61,7 @@ Permissões listadas são cumulativas quando separadas por `+` e alternativas qu
 | Método e rota | Permissão | Corpo/observação |
 |---|---|---|
 | `GET /dashboard` | `events.read` | indicadores do dashboard |
+| `GET /member/events` | `events.member_portal_read` | eventos disponíveis e inscrições confirmadas do próprio usuário |
 | `GET /events` | `events.read` | lista conforme escopo próprio/global |
 | `GET /events/linkable-galleries` | `galleries.link` | galerias que podem ser vinculadas |
 | `GET /events/:eventId` | `events.read` | detalhes operacionais |

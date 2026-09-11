@@ -51,6 +51,16 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - Permissões `events.read_all` e `events.manage_all` permitem supervisão transversal; essa capacidade não é inferida do nome do papel.
 - Transferência de responsabilidade ainda precisa de uma operação explícita e auditada; remover um pastor não transfere dados automaticamente.
 
+### Portal de eventos do membro
+
+- O papel de membro não cria, edita, publica, cancela nem acessa a gestão de eventos por padrão.
+- A permissão `events.member_portal_read` libera a área **Meus eventos**; ela não concede `events.read` nem qualquer operação administrativa.
+- **Eventos disponíveis** mostra eventos publicados, futuros e dentro do prazo de inscrição nos quais o usuário ainda não possui inscrição confirmada.
+- **Eventos registrados** mostra somente as inscrições confirmadas do próprio usuário, inclusive eventos encerrados, concluídos ou cancelados, preservando seu histórico.
+- O portal informa participantes, adicionais e a existência da declaração PIX, mas não permite editar nem cancelar uma inscrição confirmada.
+- O tenant e o usuário consultados sempre vêm da sessão autenticada. A API não aceita outro membro ou comunidade como parâmetro dessa listagem.
+- Na navegação padrão, usuários com `events.read` entram na gestão; membros que possuem apenas `events.member_portal_read` entram diretamente em **Meus eventos**.
+
 ## Inscrição
 
 - O membro precisa de uma identidade autenticada antes de confirmar.
@@ -260,7 +270,7 @@ Este documento registra o entendimento atual e deve evoluir antes do código qua
 - O seed de desenvolvimento cria somente um usuário `admin`.
 - A senha inicial do administrador de desenvolvimento deve ser alterada antes de produção. Novos membros recebem uma entrega temporária e escolhem outra senha ao concluir a atualização cadastral.
 - Papéis `pastor` e `member` são modelos de sistema; novos usuários recebem um ou mais papéis pelo módulo de acesso.
-- Migrações concedem capacidades novas ao papel administrativo de sistema para preservar a possibilidade de delegação; outros papéis não recebem ampliação automática fora do seed de desenvolvimento.
+- Migrações concedem capacidades novas ao papel administrativo de sistema para preservar a possibilidade de delegação. O portal do membro é uma exceção explícita: `events.member_portal_read` também é concedida ao papel de sistema `member`, pois materializa a função básica desse ator; demais ampliações continuam sem concessão automática.
 
 ## Controle de funcionalidades
 

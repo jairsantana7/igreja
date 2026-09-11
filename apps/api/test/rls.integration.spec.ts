@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool, type PoolClient } from 'pg';
 import { env } from '../src/infrastructure/config/env';
+import { PostgresDatabase } from '../src/infrastructure/database/postgres.database';
+import { PostgresMemberEventRepository } from '../src/infrastructure/repositories/postgres-member-event.repository';
+import { PERMISSIONS } from '../src/domain/entities/permission';
 
 const describeDatabase = env.databaseAdminUrl ? describe : describe.skip;
 const tenantA = 'a0000000-0000-4000-8000-000000000001';
 const tenantB = 'b0000000-0000-4000-8000-000000000002';
 const userA = 'a1000000-0000-4000-8000-000000000001';
 const userB = 'b1000000-0000-4000-8000-000000000002';
+const otherUserA = 'a1000000-0000-4000-8000-000000000003';
 const eventA = 'a2000000-0000-4000-8000-000000000001';
 const eventB = 'b2000000-0000-4000-8000-000000000002';
 const mediaA = 'a3000000-0000-4000-8000-000000000001';
@@ -14,6 +18,7 @@ const mediaB = 'b3000000-0000-4000-8000-000000000002';
 const publicEventA = 'a5000000-0000-4000-8000-000000000001';
 const registrationA = 'a6000000-0000-4000-8000-000000000001';
 const registrationB = 'b6000000-0000-4000-8000-000000000002';
+const otherRegistrationA = 'a6000000-0000-4000-8000-000000000003';
 const channelA = 'a7000000-0000-4000-8000-000000000001';
 const channelB = 'b7000000-0000-4000-8000-000000000002';
 const restorableChannelA = 'a7100000-0000-4000-8000-000000000001';
@@ -40,6 +45,7 @@ const offeringA = 'a1300000-0000-4000-8000-000000000001';
 const offeringB = 'b1300000-0000-4000-8000-000000000002';
 const participantA = 'a1400000-0000-4000-8000-000000000001';
 const participantB = 'b1400000-0000-4000-8000-000000000002';
+const otherParticipantA = 'a1400000-0000-4000-8000-000000000003';
 const conversationMessageA = 'a1500000-0000-4000-8000-000000000001';
 const conversationMessageB = 'b1500000-0000-4000-8000-000000000002';
 const conversationMediaA = 'a1600000-0000-4000-8000-000000000001';
@@ -563,6 +569,42 @@ describeDatabase('PostgreSQL RLS', () => {
         expect((await client.query('DELETE FROM event_registration_participants WHERE id = $1', [participantB])).rowCount).toBe(0);
       });
     } finally { client.release(); }
+  });
+
+  it('portal do membro limita o histórico ao usuário da sessão dentro do tenant', async () => {
+    await admin.query(
+      "INSERT INTO users (id, tenant_id, name, email) VALUES ($1, $2, 'Outro membro A', 'outro-membro@a.test')",
+      [otherUserA, tenantA],
+    );
+    await admin.query(`
+      INSERT INTO event_registrations (id, tenant_id, event_id, user_id, form_version)
+      VALUES ($1, $2, $3, $4, 1)
+    `, [otherRegistrationA, tenantA, eventA, otherUserA]);
+    await admin.query(`
+      INSERT INTO event_registration_participants (
+        id, tenant_id, event_id, registration_id, source_type, name, position
+      ) VALUES ($1, $2, $3, $4, 'registrant', 'Outro membro A', 0)
+    `, [otherParticipantA, tenantA, eventA, otherRegistrationA]);
+    const database = new PostgresDatabase();
+    try {
+      const repository = new PostgresMemberEventRepository(database);
+      const view = await repository.listForMember({
+        userId: userA,
+        tenantId: tenantA,
+        name: 'User A',
+        email: 'user@a.test',
+        roles: ['member'],
+        permissions: [PERMISSIONS.memberEventsRead],
+      });
+      expect(view.community).toEqual({ id: tenantA, name: 'Tenant A' });
+      expect(view.registered.map((registration) => registration.registrationId)).toEqual([registrationA]);
+      expect(view.registered[0]?.participants.map((participant) => participant.name)).toEqual(['User A']);
+    } finally {
+      await database.onModuleDestroy();
+      await admin.query('DELETE FROM event_registration_participants WHERE id = $1', [otherParticipantA]);
+      await admin.query('DELETE FROM event_registrations WHERE id = $1', [otherRegistrationA]);
+      await admin.query('DELETE FROM users WHERE id = $1', [otherUserA]);
+    }
   });
 
   it('auditoria é isolada por tenant e imutável para o runtime', async () => {

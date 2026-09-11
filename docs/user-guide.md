@@ -21,6 +21,16 @@ O nome exibido na instalação vem de `APP_NAME`. Os menus aparecem conforme as 
 
 Quem já possui conta entra por e-mail ou telefone verificado. Antes da primeira confirmação, o contexto preenche os dados disponíveis e permite selecionar as pessoas da família; campos ausentes podem ser completados progressivamente. Se o membro já estiver inscrito, o cartão mostra o comprovante e o botão **Revisar minha inscrição** abre participantes, opções, respostas e declaração PIX somente para leitura.
 
+## Área do membro
+
+Ao entrar pela tela principal, um membro sem acesso administrativo é direcionado a **Meus eventos**. Nessa área:
+
+- **Eventos disponíveis** reúne os encontros publicados que ainda aceitam inscrição e nos quais ele ainda não confirmou presença;
+- **Eventos registrados** reúne as próprias inscrições confirmadas, inclusive as de eventos anteriores, concluídos ou cancelados;
+- **Revisar inscrição** abre novamente o evento publicado em modo somente leitura.
+
+O menu de membro não exibe dashboard, lista administrativa ou criação de evento. A separação também é aplicada pela API com `events.member_portal_read`; ocultar o menu, sozinho, não é considerado controle de acesso.
+
 ## Acompanhar inscrições e presença
 
 Abra o evento para consultar inscrições, participantes, adicionais e indicadores. O check-in é individual por participante e pode ser desfeito por quem possui `events.checkin`. Fechar inscrições impede novas confirmações; concluir e cancelar são ações distintas e ficam na auditoria.

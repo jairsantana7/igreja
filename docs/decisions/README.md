@@ -38,6 +38,7 @@ Crie um arquivo numerado a partir do template para decisões que alterem domíni
 | [0030](0030-login-por-email-ou-telefone.md) | Login por e-mail ou telefone | aceita |
 | [0031](0031-migrations-versionadas-e-forward-only.md) | Migrations versionadas e forward-only | aceita |
 | [0032](0032-inscricao-confirmada-nao-e-reenviada.md) | Inscrição confirmada não é reenviada | aceita |
+| [0033](0033-portal-de-eventos-do-membro.md) | Portal de eventos do membro separado da gestão | aceita |
 
 ## Template
 
